@@ -65,13 +65,32 @@ export function SignupForm() {
       toast({ title: 'Sucesso!', description: 'Sua conta foi criada.' });
       router.push(isAdmin ? '/admin' : '/dashboard');
     } catch (error: any) {
-      console.error(error);
+      console.error("Signup error:", error);
+      let description = 'Ocorreu um erro. Tente novamente mais tarde.';
+
+      if (error.code) {
+        switch (error.code) {
+          case 'auth/email-already-in-use':
+            description = 'Este email já está em uso por outra conta.';
+            break;
+          case 'auth/weak-password':
+            description = 'Sua senha é muito fraca. Use pelo menos 6 caracteres.';
+            break;
+          case 'auth/invalid-email':
+            description = 'O formato do email é inválido.';
+            break;
+          case 'firestore/permission-denied':
+            description = 'Não foi possível criar seu perfil. Verifique as permissões do banco de dados.';
+            break;
+          default:
+            description = `Erro: ${error.code}. Por favor, tente novamente.`;
+        }
+      }
+
       toast({
         variant: 'destructive',
         title: 'Erro no cadastro',
-        description: error.message.includes('auth/email-already-in-use')
-          ? 'Este email já está em uso.'
-          : 'Ocorreu um erro. Tente novamente.',
+        description: description,
       });
     } finally {
       setLoading(false);

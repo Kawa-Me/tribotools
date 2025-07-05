@@ -60,13 +60,23 @@ export function LoginForm() {
 
       toast({ title: 'Sucesso!', description: 'Login realizado com sucesso.' });
     } catch (error: any) {
-      console.error(error);
+      console.error("Login error:", error);
+      let description = 'Ocorreu um erro. Tente novamente mais tarde.';
+
+      if (error.code) {
+        if (error.code === 'auth/invalid-credential') {
+          description = 'Credenciais inválidas. Verifique seu email e senha.';
+        } else if (error.code.startsWith('firestore/')) {
+          description = 'Ocorreu um erro ao acessar os dados da sua conta. Contate o suporte.';
+        } else {
+          description = `Erro: ${error.code}. Por favor, tente novamente.`;
+        }
+      }
+      
       toast({
         variant: 'destructive',
         title: 'Erro de login',
-        description: error.message.includes('auth/invalid-credential')
-          ? 'Credenciais inválidas. Verifique seu email e senha.'
-          : 'Ocorreu um erro. Tente novamente.',
+        description: description,
       });
     } finally {
       setLoading(false);
