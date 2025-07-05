@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Module, Lesson } from '@/lib/types';
 import {
@@ -23,6 +23,10 @@ export function ModuleEditor() {
   const { toast } = useToast();
 
   useEffect(() => {
+    if (!db) {
+      setLoading(false);
+      return;
+    }
     const unsubscribe = onSnapshot(collection(db, 'modules'), (snapshot) => {
       const modulesData: Module[] = snapshot.docs
         .map((doc) => ({ id: doc.id, ...doc.data() } as Module))
@@ -62,6 +66,10 @@ export function ModuleEditor() {
   };
   
   const handleSaveChanges = async (module: Module) => {
+    if (!db) {
+        toast({ variant: 'destructive', title: 'Erro', description: 'Serviço de banco de dados indisponível.' });
+        return;
+    }
     try {
       const moduleRef = doc(db, 'modules', module.id);
       await setDoc(moduleRef, { ...module }, { merge: true });
@@ -73,6 +81,10 @@ export function ModuleEditor() {
   };
   
   const handleAddNewModule = async () => {
+    if (!db) {
+        toast({ variant: 'destructive', title: 'Erro', description: 'Serviço de banco de dados indisponível.' });
+        return;
+    }
     const newId = doc(collection(db, 'modules')).id;
     const newModule: Module = {
       id: newId,
@@ -91,6 +103,10 @@ export function ModuleEditor() {
   };
 
   const handleDeleteModule = async (moduleId: string) => {
+    if (!db) {
+        toast({ variant: 'destructive', title: 'Erro', description: 'Serviço de banco de dados indisponível.' });
+        return;
+    }
     if (!window.confirm("Tem certeza que deseja deletar este módulo? Esta ação não pode ser desfeita.")) return;
     try {
         await deleteDoc(doc(db, "modules", moduleId));
@@ -152,6 +168,11 @@ export function ModuleEditor() {
         <PlusCircle className="mr-2" />
         Adicionar Novo Módulo
       </Button>
+      {modules.length === 0 && !loading && (
+          <div className="text-center text-muted-foreground mt-8">
+              {db ? 'Nenhum módulo encontrado. Adicione um novo para começar.' : 'Serviço de banco de dados não disponível.'}
+          </div>
+      )}
       <Accordion type="single" collapsible className="w-full">
         {modules.map((mod) => (
           <AccordionItem value={mod.id} key={mod.id}>

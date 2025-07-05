@@ -44,7 +44,14 @@ export function UserTable({ users }: UserTableProps) {
   };
 
   const handleSaveChanges = async (newSubscription: UserSubscription) => {
-    if (!selectedUser) return;
+    if (!selectedUser || !db) {
+        toast({
+            variant: 'destructive',
+            title: 'Erro',
+            description: 'Não foi possível salvar. O serviço de banco de dados não está configurado.',
+        });
+        return;
+    }
 
     try {
       const userDocRef = doc(db, 'users', selectedUser.uid);
@@ -104,6 +111,13 @@ export function UserTable({ users }: UserTableProps) {
                 </TableCell>
               </TableRow>
             ))}
+             {users.length === 0 && (
+                <TableRow>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground">
+                        Nenhum usuário encontrado.
+                    </TableCell>
+                </TableRow>
+            )}
           </TableBody>
         </Table>
       </div>

@@ -24,6 +24,14 @@ export function UserNav() {
   const { toast } = useToast();
 
   const handleSignOut = async () => {
+    if (!auth) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro',
+        description: 'Serviço de autenticação indisponível.',
+      });
+      return;
+    }
     try {
       await signOut(auth);
       router.push('/login');

@@ -12,6 +12,10 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!db) {
+      setLoading(false);
+      return;
+    }
     const q = query(collection(db, 'users'));
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const usersData: UserData[] = [];
@@ -41,6 +45,9 @@ export default function AdminUsersPage() {
         </div>
       ) : (
         <UserTable users={users} />
+      )}
+       {!db && !loading && (
+          <p className="text-destructive text-center mt-4">Erro: Serviço de banco de dados não configurado.</p>
       )}
     </div>
   );

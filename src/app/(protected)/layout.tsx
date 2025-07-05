@@ -64,6 +64,7 @@ function Sidebar() {
     const [modules, setModules] = useState<Module[]>([]);
 
     useEffect(() => {
+        if (!db) return;
         const unsubscribe = onSnapshot(collection(db, "modules"), (snapshot) => {
             const modulesData = snapshot.docs.map(doc => {
                 const data = doc.data();
@@ -73,7 +74,7 @@ function Sidebar() {
             });
             setModules(modulesData);
         });
-        return () => unsubscribe();
+        return () => unsubscribe && unsubscribe();
     }, []);
   
     if (!user) return null;
@@ -137,6 +138,7 @@ function Sidebar() {
     const [modules, setModules] = useState<Module[]>([]);
 
     useEffect(() => {
+        if (!db) return;
         const unsubscribe = onSnapshot(collection(db, "modules"), (snapshot) => {
             const modulesData = snapshot.docs.map(doc => {
                  const data = doc.data();
@@ -146,7 +148,7 @@ function Sidebar() {
             });
             setModules(modulesData);
         });
-        return () => unsubscribe();
+        return () => unsubscribe && unsubscribe();
     }, []);
 
     if (!user) return null;

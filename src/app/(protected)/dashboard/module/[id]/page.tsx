@@ -27,6 +27,10 @@ export default function ModulePage({ params }: { params: { id: string } }) {
 
   useEffect(() => {
     if (params.id) {
+        if (!db) {
+            setLoading(false);
+            return;
+        }
         const fetchModule = async () => {
             const docRef = doc(db, 'modules', params.id);
             const docSnap = await getDoc(docRef);
@@ -60,6 +64,9 @@ export default function ModulePage({ params }: { params: { id: string } }) {
   }
 
   if (!module) {
+    if (!db) {
+        return <p className="text-destructive">Erro: Serviço de banco de dados não configurado.</p>
+    }
     return notFound();
   }
 

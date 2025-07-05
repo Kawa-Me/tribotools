@@ -29,6 +29,15 @@ export function ForgotPasswordForm() {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (!auth) {
+      toast({
+          variant: 'destructive',
+          title: 'Erro de Configuração',
+          description: 'O serviço de autenticação não está disponível. Contate o suporte.',
+      });
+      return;
+    }
+    
     setLoading(true);
     try {
       await sendPasswordResetEmail(auth, values.email);

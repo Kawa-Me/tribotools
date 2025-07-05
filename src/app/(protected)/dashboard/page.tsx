@@ -26,6 +26,10 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!db) {
+      setLoading(false);
+      return;
+    }
     const unsubscribe = onSnapshot(collection(db, "modules"), (snapshot) => {
       const modulesData = snapshot.docs.map(doc => {
         const data = doc.data();

@@ -1,12 +1,10 @@
 // Import the functions you need from the SDKs you need
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
+import { getAuth, type Auth } from 'firebase/auth';
+import { getFirestore, type Firestore } from 'firebase/firestore';
 
 // Your web app's Firebase configuration
 // These values are loaded from environment variables.
-// Create a .env.local file in the root of your project and add your Firebase credentials.
-// See .env.local.example for a template.
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -16,19 +14,30 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-// Check if the necessary Firebase config variables are provided
-if (!firebaseConfig.apiKey || !firebaseConfig.authDomain || !firebaseConfig.projectId) {
-  throw new Error(
-    'Firebase configuration is missing or incomplete. ' +
-    'Please create a .env.local file in the root of your project and add your Firebase project credentials. ' +
-    'You can use .env.local.example as a template. ' +
-    'Required variables are: NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN, NEXT_PUBLIC_FIREBASE_PROJECT_ID.'
-  );
-}
+let app: FirebaseApp | null = null;
+let auth: Auth | null = null;
+let db: Firestore | null = null;
 
-// Initialize Firebase
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-const auth = getAuth(app);
-const db = getFirestore(app);
+// Only initialize Firebase if essential config values are provided
+if (firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId) {
+  try {
+    app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+    auth = getAuth(app);
+    db = getFirestore(app);
+  } catch (e) {
+    console.error("Error initializing Firebase:", e);
+    // Set to null if initialization fails, preventing app crash
+    app = null;
+    auth = null;
+    db = null;
+  }
+} else {
+    // This warning will show in the server console during build/server-start
+    // and in the browser console.
+    console.warn(
+        "Firebase configuration is incomplete. The app will run in a limited mode. " +
+        "Please create a .env.local file with your Firebase credentials to enable all features."
+    );
+}
 
 export { app, auth, db };
