@@ -35,6 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               displayName: firebaseUser.displayName,
               photoURL: firebaseUser.photoURL,
               subscription,
+              role: data.role || 'user',
             });
           } else {
              // If no firestore doc, create a default user profile
@@ -44,7 +45,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               email: firebaseUser.email,
               displayName: firebaseUser.displayName,
               photoURL: firebaseUser.photoURL,
-              subscription: defaultSubscription
+              subscription: defaultSubscription,
+              role: 'user',
              });
           }
           setLoading(false);

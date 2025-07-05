@@ -29,6 +29,7 @@ export interface UserData {
   displayName: string | null;
   photoURL: string | null;
   subscription: UserSubscription;
+  role?: 'admin' | 'user';
 }
 
 export interface AuthContextType {

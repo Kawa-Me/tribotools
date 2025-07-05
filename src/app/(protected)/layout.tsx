@@ -4,14 +4,25 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks';
-import { modules } from '@/data/modules';
 import { cn } from '@/lib/utils';
 import { Loader } from '@/components/loader';
 import { Logo } from '@/components/logo';
 import { UserNav } from '@/components/dashboard/user-nav';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Menu, X } from 'lucide-react';
+import { Menu } from 'lucide-react';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import type { Module } from '@/lib/types';
+import * as lucideIcons from 'lucide-react';
+
+const iconComponents: { [key: string]: React.ComponentType<any> } = {
+  LayoutDashboard: lucideIcons.LayoutDashboard,
+  BookOpen: lucideIcons.BookOpen,
+  Users: lucideIcons.Users,
+  Settings: lucideIcons.Settings,
+  ShieldCheck: lucideIcons.ShieldCheck,
+};
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -21,9 +32,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!loading && !user) {
       router.replace('/login');
     }
+    if (!loading && user?.role === 'admin') {
+      router.replace('/admin');
+    }
   }, [user, loading, router]);
 
-  if (loading || !user) {
+  if (loading || !user || user.role === 'admin') {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader className="h-10 w-10 text-primary" />
@@ -47,6 +61,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 function Sidebar() {
     const pathname = usePathname();
     const { user } = useAuth();
+    const [modules, setModules] = useState<Module[]>([]);
+
+    useEffect(() => {
+        const unsubscribe = onSnapshot(collection(db, "modules"), (snapshot) => {
+            const modulesData = snapshot.docs.map(doc => {
+                const data = doc.data();
+                const iconName = data.icon as keyof typeof iconComponents;
+                const icon = iconComponents[iconName] || lucideIcons.HelpCircle;
+                return { id: doc.id, ...data, icon } as Module;
+            });
+            setModules(modulesData);
+        });
+        return () => unsubscribe();
+    }, []);
   
     if (!user) return null;
   
@@ -106,6 +134,21 @@ function Sidebar() {
   function Header() {
     const pathname = usePathname();
     const { user } = useAuth();
+    const [modules, setModules] = useState<Module[]>([]);
+
+    useEffect(() => {
+        const unsubscribe = onSnapshot(collection(db, "modules"), (snapshot) => {
+            const modulesData = snapshot.docs.map(doc => {
+                 const data = doc.data();
+                const iconName = data.icon as keyof typeof iconComponents;
+                const icon = iconComponents[iconName] || lucideIcons.HelpCircle;
+                return { id: doc.id, ...data, icon } as Module;
+            });
+            setModules(modulesData);
+        });
+        return () => unsubscribe();
+    }, []);
+
     if (!user) return null;
     const isUnlocked = user.subscription?.status === 'active';
   
@@ -169,4 +212,3 @@ function Sidebar() {
       </header>
     );
   }
-  

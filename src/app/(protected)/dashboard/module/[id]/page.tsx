@@ -1,22 +1,69 @@
 'use client';
 
 import { useAuth } from '@/lib/hooks';
-import { modules } from '@/data/modules';
 import { notFound } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Lock, PlayCircle, FileText } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import type { Module } from '@/lib/types';
+import { Skeleton } from '@/components/ui/skeleton';
+import * as lucideIcons from 'lucide-react';
+
+const iconComponents: { [key: string]: React.ComponentType<any> } = {
+    LayoutDashboard: lucideIcons.LayoutDashboard,
+    BookOpen: lucideIcons.BookOpen,
+    Users: lucideIcons.Users,
+    Settings: lucideIcons.Settings,
+    ShieldCheck: lucideIcons.ShieldCheck,
+  };
 
 export default function ModulePage({ params }: { params: { id: string } }) {
   const { user } = useAuth();
-  const module = modules.find((m) => m.id === params.id);
+  const [module, setModule] = useState<Module | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  if (!module) {
-    notFound();
+  useEffect(() => {
+    if (params.id) {
+        const fetchModule = async () => {
+            const docRef = doc(db, 'modules', params.id);
+            const docSnap = await getDoc(docRef);
+
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                const iconName = data.icon as keyof typeof iconComponents;
+                const icon = iconComponents[iconName] || lucideIcons.HelpCircle;
+                setModule({ id: docSnap.id, ...data, icon } as Module);
+            } else {
+                notFound();
+            }
+            setLoading(false);
+        };
+
+        fetchModule();
+    }
+  }, [params.id]);
+
+  if (loading) {
+      return (
+          <div className="space-y-8">
+              <Skeleton className="h-10 w-3/4" />
+              <Skeleton className="h-6 w-1/2" />
+              <div className="space-y-4">
+                  <Skeleton className="h-20 w-full" />
+                  <Skeleton className="h-20 w-full" />
+              </div>
+          </div>
+      )
   }
 
-  const isUnlocked = user?.subscription?.status === 'active';
+  if (!module) {
+    return notFound();
+  }
+
+  const isUnlocked = user?.subscription?.status === 'active' || user?.role === 'admin';
 
   return (
     <div className="space-y-8">

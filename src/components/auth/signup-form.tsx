@@ -39,6 +39,8 @@ export function SignupForm() {
       const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
       const user = userCredential.user;
 
+      const isAdmin = values.email === 'kawameller@gmail.com';
+
       // Create a user document in Firestore
       await setDoc(doc(db, 'users', user.uid), {
         email: user.email,
@@ -48,10 +50,11 @@ export function SignupForm() {
           startedAt: null,
           expiresAt: null,
         },
+        role: isAdmin ? 'admin' : 'user',
       });
 
       toast({ title: 'Sucesso!', description: 'Sua conta foi criada.' });
-      router.push('/dashboard');
+      router.push(isAdmin ? '/admin' : '/dashboard');
     } catch (error: any) {
       console.error(error);
       toast({
