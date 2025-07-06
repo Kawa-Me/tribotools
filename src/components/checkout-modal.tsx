@@ -174,12 +174,12 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
 
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <FormField
                 control={form.control}
                 name="plans"
                 render={() => (
-                    <FormItem className="space-y-4">
+                    <FormItem className="space-y-3">
                     {products.map((product) => (
                         <div key={product.id}>
                         <FormLabel className="text-foreground font-semibold">{product.name}</FormLabel>
@@ -190,7 +190,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
                                 control={form.control}
                                 name="plans"
                                 render={({ field }) => (
-                                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-4 rounded-md border border-input has-[:checked]:border-primary has-[:checked]:bg-muted/50 transition-all">
+                                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-3 rounded-md border border-input has-[:checked]:border-primary has-[:checked]:bg-muted/50 transition-all">
                                     <FormControl>
                                     <Checkbox
                                         checked={field.value?.includes(plan.id)}
@@ -218,7 +218,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
                                         </div>
                                         <p className="text-xs text-muted-foreground mt-1">{plan.description}</p>
                                         <div className="flex items-baseline gap-2 mt-2">
-                                            <span className="text-xl font-bold text-primary">
+                                            <span className="text-lg font-bold text-primary">
                                                 R${plan.price.toFixed(2).replace('.', ',')}
                                             </span>
                                             {plan.originalPrice && plan.originalPrice > plan.price && (
@@ -254,8 +254,8 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
                 )}
                 />
 
-                <div className="mt-4 space-y-2 border-t pt-4">
-                <div className="text-lg font-bold flex justify-between">
+                <div className="mt-2 space-y-1 border-t pt-2">
+                <div className="text-base font-bold flex justify-between">
                     <span>Total:</span>
                     <span>R$ {totalPrice.toFixed(2).replace('.', ',')}</span>
                 </div>
@@ -282,7 +282,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
         }
     }}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-sm bg-background/95 backdrop-blur-sm border-primary/20 font-body">
+      <DialogContent className="sm:max-w-xs bg-background/95 backdrop-blur-sm border-primary/20 font-body">
         <DialogHeader>
           <DialogTitle className="font-headline text-2xl text-primary">Plano de Assinatura</DialogTitle>
           <DialogDescription>
@@ -290,9 +290,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
           </DialogDescription>
         </DialogHeader>
         
-        <div className="py-4">
-            {renderContent()}
-        </div>
+        {renderContent()}
       </DialogContent>
     </Dialog>
   );
