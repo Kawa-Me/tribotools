@@ -15,6 +15,7 @@ import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Module } from '@/lib/types';
 import * as lucideIcons from 'lucide-react';
+import { Rotbar } from '@/components/rotbar';
 
 const iconComponents: { [key: string]: React.ComponentType<any> } = {
   LayoutDashboard: lucideIcons.LayoutDashboard,
@@ -51,15 +52,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
-      <Sidebar />
-      <div className="flex flex-col">
-        <Header />
-        <main className="flex-1 overflow-y-auto bg-background p-4 md:p-6 lg:p-8">
-            {children}
-        </main>
+    <>
+      <div className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
+        <Sidebar />
+        <div className="flex flex-col">
+          <Header />
+          <main className="flex-1 overflow-y-auto bg-background p-4 md:p-6 lg:p-8">
+              {children}
+          </main>
+        </div>
       </div>
-    </div>
+      <Rotbar />
+    </>
   );
 }
 

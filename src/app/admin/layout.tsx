@@ -11,6 +11,7 @@ import { UserNav } from '@/components/dashboard/user-nav';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Menu, Users, BookOpen, Shield } from 'lucide-react';
+import { Rotbar } from '@/components/rotbar';
 
 const adminNavItems = [
   { href: '/admin', label: 'Dashboard', icon: Shield },
@@ -41,15 +42,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
-      <Sidebar />
-      <div className="flex flex-col">
-        <Header />
-        <main className="flex-1 overflow-y-auto bg-background p-4 md:p-6 lg:p-8">
-            {children}
-        </main>
+    <>
+      <div className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
+        <Sidebar />
+        <div className="flex flex-col">
+          <Header />
+          <main className="flex-1 overflow-y-auto bg-background p-4 md:p-6 lg:p-8">
+              {children}
+          </main>
+        </div>
       </div>
-    </div>
+      <Rotbar />
+    </>
   );
 }
 
