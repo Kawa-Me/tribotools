@@ -23,6 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     // Wait until the initial auth state is determined.
@@ -46,21 +47,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       return;
     }
     
-    // If we have a user, check their status.
     // If a non-anonymous admin is verified, they should be in the admin panel.
-    if (user.role === 'admin' && !user.isAnonymous && user.emailVerified) {
+    // We check if they are NOT already in an admin path to prevent redirect loops.
+    if (user.role === 'admin' && !user.isAnonymous && user.emailVerified && !pathname.startsWith('/admin')) {
       router.replace('/admin');
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, pathname]);
 
   // If user is loaded but not verified, show verification screen
   if (!loading && user && !user.isAnonymous && !user.emailVerified) {
     return <VerifyEmailScreen />;
   }
 
-  // Show loader while auth is in progress, if there's no user yet,
-  // or if we are about to redirect an admin. This prevents content flashes.
-  if (loading || !user || (user.role === 'admin' && !user.isAnonymous && user.emailVerified)) {
+  // Show loader while auth is in progress or if we don't have a user yet.
+  // This prevents content flashes and handles the brief moment during anonymous sign-in.
+  if (loading || !user) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader className="h-10 w-10 text-primary" />
@@ -94,11 +95,11 @@ function VerifyEmailScreen() {
 
     useEffect(() => {
       const interval = setInterval(async () => {
-        if (auth.currentUser) {
+        if (auth.currentUser && !auth.currentUser.isAnonymous) {
           await auth.currentUser.reload();
           if (auth.currentUser.emailVerified) {
             clearInterval(interval);
-            router.refresh();
+            // No need to call router.refresh() as AuthProvider's onSnapshot will handle the state update.
             toast({
               title: "Email Verificado!",
               description: "Sua conta foi ativada com sucesso. Bem-vindo!",
@@ -108,11 +109,12 @@ function VerifyEmailScreen() {
       }, 3000); // Check every 3 seconds
 
       return () => clearInterval(interval);
-    }, [router, toast]);
+    }, [toast]);
 
     const handleSignOut = async () => {
         try {
             await auth.signOut();
+            router.push('/login');
         } catch (error) {
             toast({ variant: 'destructive', title: 'Erro ao sair.' });
         }
@@ -352,4 +354,3 @@ function Sidebar() {
       </header>
     );
   }
-    
