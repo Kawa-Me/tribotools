@@ -111,24 +111,23 @@ export function PlanEditor() {
   const handleDeleteProduct = async (productId: string) => {
     if (!window.confirm("Tem certeza que deseja deletar este produto e todos os seus planos? Esta ação não pode ser desfeita.")) return;
     
-    const originalProducts = [...products];
-
-    // Optimistically update UI
-    setProducts((prev) => prev.filter(p => p.id !== productId));
-    
     if (!db) {
         toast({ variant: 'destructive', title: 'Erro de Conexão', description: 'Serviço de banco de dados indisponível.' });
-        setProducts(originalProducts);
         return;
     }
     
     try {
         await deleteDoc(doc(db, "products", productId));
         toast({ title: 'Sucesso!', description: 'Produto deletado.' });
+        // The onSnapshot listener will automatically update the UI.
     } catch (error) {
         console.error("Error deleting product:", error);
-        toast({ variant: 'destructive', title: 'Erro ao Deletar', description: 'Não foi possível remover o produto. Verifique suas permissões e tente novamente.' });
-        setProducts(originalProducts);
+        toast({ 
+            variant: 'destructive', 
+            title: 'Erro ao Deletar', 
+            description: 'Não foi possível remover o produto. Verifique suas permissões no Firebase e tente novamente.',
+            duration: 9000,
+        });
     }
   };
   
