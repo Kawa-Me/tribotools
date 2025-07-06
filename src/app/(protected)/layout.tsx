@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -17,7 +16,7 @@ import { Menu, AlertTriangle, Package } from 'lucide-react';
 import { Rotbar } from '@/components/rotbar';
 import { CheckoutModal } from '@/components/checkout-modal';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { sendEmailVerification } from 'firebase/auth';
+import { sendEmailVerification, signInAnonymously } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 
@@ -26,15 +25,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading) {
-      // If auth is done and there's no user, it means anon sign-in failed. Redirect to login.
-      if (!user) {
+    // Wait until the initial auth state is determined.
+    if (loading) {
+      return;
+    }
+
+    // If auth state is resolved and there's no user, it means they are logged out.
+    // We now attempt to sign them in anonymously to view the dashboard.
+    if (!user) {
+      if (!auth) return; // Guard against uninitialized firebase
+      signInAnonymously(auth).catch((error) => {
+        // If anonymous sign-in fails (e.g., disabled in Firebase console),
+        // redirect to the login page as a fallback.
+        console.error("DashboardLayout: Anonymous sign-in failed, redirecting to login.", error);
         router.replace('/login');
-      } 
-      // If user is a non-anonymous admin, they should be on the admin pages.
-      else if (user.role === 'admin' && !user.isAnonymous && user.emailVerified) {
-        router.replace('/admin');
-      }
+      });
+      // After calling signInAnonymously, onAuthStateChanged will fire,
+      // the AuthProvider will update the user state, and this useEffect will re-run.
+      // We don't need to do anything else here.
+      return;
+    }
+    
+    // If we have a user, check their status.
+    // If a non-anonymous admin is verified, they should be in the admin panel.
+    if (user.role === 'admin' && !user.isAnonymous && user.emailVerified) {
+      router.replace('/admin');
     }
   }, [user, loading, router]);
 
@@ -43,8 +58,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return <VerifyEmailScreen />;
   }
 
-  // Show loader while auth is in progress, or if we are about to redirect.
-  if (loading || !user || (user && !user.isAnonymous && user.role === 'admin' && user.emailVerified)) {
+  // Show loader while auth is in progress, if there's no user yet,
+  // or if we are about to redirect an admin. This prevents content flashes.
+  if (loading || !user || (user.role === 'admin' && !user.isAnonymous && user.emailVerified)) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader className="h-10 w-10 text-primary" />
@@ -336,5 +352,4 @@ function Sidebar() {
       </header>
     );
   }
-
     
