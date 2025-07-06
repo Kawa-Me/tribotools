@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useEffect, useState, ReactNode } from 'react';
-import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
 import { doc, onSnapshot, Timestamp } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import type { UserData, UserSubscription, AuthContextType } from '@/lib/types';
@@ -36,9 +36,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           // Handle authenticated, non-anonymous user
           const userDocRef = doc(db, 'users', firebaseUser.uid);
-          const unsubFirestore = onSnapshot(userDocRef, (doc) => {
-            if (doc.exists()) {
-              const data = doc.data();
+          const unsubFirestore = onSnapshot(userDocRef, (docSnap) => {
+            if (docSnap.exists()) {
+              const data = docSnap.data();
               let subscriptions = data.subscriptions || {};
 
               // Legacy user migration on-the-fly from 'subscription' to 'subscriptions.ferramentas'
@@ -87,9 +87,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return () => unsubFirestore();
         }
       } else {
-        // User is signed out
-        setUser(null);
-        setLoading(false);
+        // No user is signed in, attempt anonymous sign-in
+        signInAnonymously(auth).catch((error) => {
+          console.error("AuthProvider: Anonymous sign-in failed. This can happen if it's disabled in the Firebase console.", error);
+          // If it fails, we have no user, and we stop loading.
+          setUser(null);
+          setLoading(false);
+        });
+        // We don't setLoading(false) here. We wait for onAuthStateChanged to be called again with the new anonymous user.
+        // If it fails, the .catch block will handle it.
       }
     });
 

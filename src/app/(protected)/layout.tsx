@@ -23,16 +23,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.replace('/');
-    }
-    
-    if (user && !user.isAnonymous && user.role === 'admin') {
-      router.replace('/admin');
+    if (!loading) {
+      // If auth is done and there's no user, it means anon sign-in failed. Redirect to login.
+      if (!user) {
+        router.replace('/login');
+      } 
+      // If user is a non-anonymous admin, they should be on the admin pages.
+      else if (user.role === 'admin' && !user.isAnonymous) {
+        router.replace('/admin');
+      }
     }
   }, [user, loading, router]);
 
-  if (loading || !user || (user.role === 'admin' && !user.isAnonymous)) {
+  // Show loader while auth is in progress, or if we are about to redirect.
+  if (loading || !user || (user && !user.isAnonymous && user.role === 'admin')) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader className="h-10 w-10 text-primary" />
