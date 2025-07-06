@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Trash2 } from 'lucide-react';
+import { PlusCircle, Trash2, ArrowUp, ArrowDown, Save } from 'lucide-react';
 import { Skeleton } from '../ui/skeleton';
 import { cn } from '@/lib/utils';
 
@@ -35,17 +35,17 @@ export function ModuleEditor() {
         setLoading(true);
         try {
           const batch = writeBatch(db);
-          seedModules.forEach((moduleData) => {
+          seedModules.forEach((moduleData, moduleIndex) => {
             const moduleRef = doc(collection(db, 'modules'));
-            const newLessons = moduleData.lessons.map(lesson => ({
+            const newLessons = moduleData.lessons.map((lesson, lessonIndex) => ({
                 ...lesson,
-                id: `lesson-${Date.now()}-${Math.random()}`
+                id: `lesson-${Date.now()}-${Math.random()}`,
+                order: lessonIndex,
             }));
-            batch.set(moduleRef, { ...moduleData, lessons: newLessons });
+            batch.set(moduleRef, { ...moduleData, lessons: newLessons, order: moduleIndex });
           });
           await batch.commit();
           toast({ title: 'Sucesso!', description: 'Módulos iniciais criados.' });
-          // The onSnapshot listener will pick up the new data automatically
         } catch (error) {
           console.error("Error seeding modules:", error);
           toast({ variant: 'destructive', title: 'Erro ao criar módulos iniciais.' });
@@ -53,8 +53,13 @@ export function ModuleEditor() {
         }
       } else {
         const modulesData: Module[] = snapshot.docs
-          .map((doc) => ({ id: doc.id, ...doc.data() } as Module))
-          .sort((a, b) => (a.title > b.title ? 1 : -1));
+          .map((doc) => ({ id: doc.id, ...doc.data() } as any))
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+        modulesData.forEach(mod => {
+            mod.lessons = (mod.lessons || []).sort((a: Lesson, b: Lesson) => (a.order ?? 0) - (b.order ?? 0));
+        });
+
         setModules(modulesData);
         setLoading(false);
       }
@@ -63,7 +68,7 @@ export function ModuleEditor() {
   }, [toast]);
   
 
-  const handleModuleChange = (moduleId: string, field: keyof Module, value: any) => {
+  const handleModuleChange = (moduleId: string, field: keyof Omit<Module, 'id' | 'lessons'>, value: any) => {
     setModules((prevModules) =>
       prevModules.map((mod) =>
         mod.id === moduleId ? { ...mod, [field]: value } : mod
@@ -91,41 +96,38 @@ export function ModuleEditor() {
     );
   };
   
-  const handleSaveChanges = async (module: Module) => {
+  const handleSaveAllChanges = async () => {
     if (!db) {
         toast({ variant: 'destructive', title: 'Erro', description: 'Serviço de banco de dados indisponível.' });
         return;
     }
     try {
-      const moduleRef = doc(db, 'modules', module.id);
-      await setDoc(moduleRef, { ...module }, { merge: true });
-      toast({ title: 'Sucesso!', description: `Módulo "${module.title}" salvo.` });
+      const batch = writeBatch(db);
+      modules.forEach(mod => {
+          const moduleRef = doc(db, 'modules', mod.id);
+          // The 'icon' property on the module object here is the string name,
+          // due to the 'as any' cast during data fetching. So it's safe to save.
+          const { icon, ...dataToSave } = mod;
+          batch.set(moduleRef, { ...dataToSave, icon: icon });
+      });
+      await batch.commit();
+      toast({ title: 'Sucesso!', description: 'Todas as alterações foram salvas.' });
     } catch (error) {
       console.error(error);
-      toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível salvar o módulo.' });
+      toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível salvar as alterações.' });
     }
   };
   
-  const handleAddNewModule = async () => {
-    if (!db) {
-        toast({ variant: 'destructive', title: 'Erro', description: 'Serviço de banco de dados indisponível.' });
-        return;
-    }
-    const newId = doc(collection(db, 'modules')).id;
-    const newModule: Module = {
-      id: newId,
+  const handleAddNewModule = () => {
+     const newModule: Module = {
+      id: doc(collection(db, 'modules')).id,
       title: 'Novo Módulo',
       description: 'Descrição do novo módulo.',
-      icon: 'LayoutDashboard', // Placeholder, ideally a selector
+      icon: 'LayoutDashboard' as any, // Placeholder
       lessons: [],
+      order: modules.length,
     };
-    try {
-      await setDoc(doc(db, 'modules', newId), newModule);
-      toast({ title: 'Sucesso!', description: 'Novo módulo adicionado.' });
-    } catch (error) {
-        console.error(error);
-        toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível adicionar o módulo.' });
-    }
+    setModules([...modules, newModule]);
   };
 
   const handleDeleteModule = async (moduleId: string) => {
@@ -136,6 +138,7 @@ export function ModuleEditor() {
     if (!window.confirm("Tem certeza que deseja deletar este módulo? Esta ação não pode ser desfeita.")) return;
     try {
         await deleteDoc(doc(db, "modules", moduleId));
+        // The local state will be updated by the onSnapshot listener
         toast({ title: 'Sucesso!', description: 'Módulo deletado.' });
     } catch (error) {
         console.error(error);
@@ -157,6 +160,7 @@ export function ModuleEditor() {
                   type: 'text',
                   content: 'Conteúdo da nova lição.',
                   imageUrl: '',
+                  order: mod.lessons.length,
                 },
               ],
             }
@@ -178,6 +182,30 @@ export function ModuleEditor() {
     );
   }
 
+  const handleMoveModule = (index: number, direction: 'up' | 'down') => {
+    const newModules = [...modules];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= newModules.length) return;
+    
+    [newModules[index], newModules[targetIndex]] = [newModules[targetIndex], newModules[index]];
+    
+    setModules(newModules.map((m, i) => ({ ...m, order: i })));
+  };
+
+  const handleMoveLesson = (moduleId: string, lessonIndex: number, direction: 'up' | 'down') => {
+    setModules(modules.map(mod => {
+        if (mod.id === moduleId) {
+            const newLessons = [...mod.lessons];
+            const targetIndex = direction === 'up' ? lessonIndex - 1 : lessonIndex + 1;
+            if (targetIndex < 0 || targetIndex >= newLessons.length) return mod;
+
+            [newLessons[lessonIndex], newLessons[targetIndex]] = [newLessons[targetIndex], newLessons[lessonIndex]];
+            
+            return { ...mod, lessons: newLessons.map((l, i) => ({ ...l, order: i })) };
+        }
+        return mod;
+    }));
+  };
 
   if (loading) {
     return (
@@ -191,21 +219,38 @@ export function ModuleEditor() {
 
   return (
     <div className="space-y-4">
-      <Button onClick={handleAddNewModule}>
-        <PlusCircle className="mr-2" />
-        Adicionar Novo Módulo
-      </Button>
+       <div className="flex justify-between items-center">
+        <Button onClick={handleAddNewModule}>
+            <PlusCircle className="mr-2" />
+            Adicionar Novo Módulo
+        </Button>
+        <Button onClick={handleSaveAllChanges}>
+            <Save className="mr-2" />
+            Salvar Todas as Alterações
+        </Button>
+      </div>
+
       {modules.length === 0 && !loading && (
           <div className="text-center text-muted-foreground mt-8">
               {db ? 'Nenhum módulo encontrado. Adicione um novo para começar.' : 'Serviço de banco de dados não disponível.'}
           </div>
       )}
       <Accordion type="single" collapsible className="w-full">
-        {modules.map((mod) => (
+        {modules.map((mod, index) => (
           <AccordionItem value={mod.id} key={mod.id}>
             <AccordionTrigger className="hover:no-underline">
                 <div className="flex justify-between items-center w-full pr-4">
-                    <span>{mod.title}</span>
+                    <div className="flex items-center gap-2">
+                         <div className="flex flex-col">
+                            <Button variant="ghost" size="icon" className="h-6 w-6" disabled={index === 0} onClick={(e) => { e.stopPropagation(); handleMoveModule(index, 'up'); }}>
+                                <ArrowUp className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" disabled={index === modules.length - 1} onClick={(e) => { e.stopPropagation(); handleMoveModule(index, 'down'); }}>
+                                <ArrowDown className="h-4 w-4" />
+                            </Button>
+                         </div>
+                        <span>{mod.title}</span>
+                    </div>
                      <div
                       role="button"
                       aria-label={`Deletar módulo ${mod.title}`}
@@ -237,7 +282,7 @@ export function ModuleEditor() {
                   placeholder="Título do Módulo"
                 />
                  <Input
-                  value={mod.icon}
+                  value={mod.icon as any}
                   onChange={(e) => handleModuleChange(mod.id, 'icon', e.target.value)}
                   placeholder="Nome do Ícone (Lucide React)"
                 />
@@ -251,10 +296,20 @@ export function ModuleEditor() {
                 
                 <h4 className="font-semibold mt-4">Lições</h4>
                 <div className="space-y-3">
-                    {mod.lessons.map((lesson, index) => (
+                    {mod.lessons.map((lesson, lessonIndex) => (
                         <div key={lesson.id} className="p-3 border rounded bg-background space-y-2">
                              <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium">Lição {index + 1}</span>
+                                <div className="flex items-center gap-2">
+                                    <div className="flex flex-col">
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={lessonIndex === 0} onClick={() => handleMoveLesson(mod.id, lessonIndex, 'up')}>
+                                            <ArrowUp className="h-4 w-4" />
+                                        </Button>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={lessonIndex === mod.lessons.length - 1} onClick={() => handleMoveLesson(mod.id, lessonIndex, 'down')}>
+                                            <ArrowDown className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                    <span className="text-sm font-medium">Lição {lessonIndex + 1}</span>
+                                </div>
                                 <Button variant="ghost" size="icon" onClick={() => handleDeleteLesson(mod.id, lesson.id)} className="text-destructive hover:text-destructive/80">
                                     <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -265,10 +320,8 @@ export function ModuleEditor() {
                         </div>
                     ))}
                 </div>
-
-                <div className="flex justify-between mt-4">
+                <div className="flex justify-start mt-4">
                     <Button variant="outline" onClick={() => handleAddNewLesson(mod.id)}>Adicionar Lição</Button>
-                    <Button onClick={() => handleSaveChanges(mod)}>Salvar Módulo</Button>
                 </div>
               </div>
             </AccordionContent>

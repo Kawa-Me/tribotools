@@ -7,6 +7,7 @@ export interface Lesson {
   type: 'video' | 'text';
   content: string; // URL for video, markdown string for text
   imageUrl?: string;
+  order: number;
 }
 
 export interface Module {
@@ -15,6 +16,7 @@ export interface Module {
   description: string;
   icon: React.ComponentType<{ className?: string }>;
   lessons: Lesson[];
+  order: number;
 }
 
 export interface UserSubscription {
