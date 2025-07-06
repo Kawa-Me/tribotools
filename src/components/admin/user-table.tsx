@@ -98,7 +98,7 @@ export function UserTable({ users }: UserTableProps) {
                 </TableCell>
                 <TableCell>
                   {user.subscription.expiresAt
-                    ? format(user.subscription.expiresAt.toDate(), 'dd/MM/yyyy')
+                    ? format(user.subscription.expiresAt.toDate(), 'dd/MM/yyyy HH:mm')
                     : 'N/A'}
                 </TableCell>
                 <TableCell className="text-right">
@@ -147,10 +147,10 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave }: EditUserDialogPr
   };
   
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const date = e.target.value;
-    if (date) {
-      const [year, month, day] = date.split('-').map(Number);
-      const timestamp = Timestamp.fromDate(new Date(year, month - 1, day));
+    const dateString = e.target.value;
+    if (dateString) {
+      const date = new Date(dateString);
+      const timestamp = Timestamp.fromDate(date);
       setSubscription({ ...subscription, expiresAt: timestamp });
     } else {
         setSubscription({ ...subscription, expiresAt: null });
@@ -208,9 +208,9 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave }: EditUserDialogPr
             </Label>
             <Input
               id="expiresAt"
-              type="date"
+              type="datetime-local"
               className="col-span-3"
-              value={subscription.expiresAt ? format(subscription.expiresAt.toDate(), 'yyyy-MM-dd') : ''}
+              value={subscription.expiresAt ? format(subscription.expiresAt.toDate(), "yyyy-MM-dd'T'HH:mm") : ''}
               onChange={handleDateChange}
             />
           </div>

@@ -6,7 +6,7 @@ import type { UserSubscription } from '@/lib/types';
 
 const PLANS_CONFIG: { [key: string]: { name: UserSubscription['plan'], days: number } } = {
   'Acesso Mensal': { name: 'mensal', days: 30 },
-  'Acesso Trimestral': { name: 'trimestral', days: 90 },
+  'Acesso Trimestral': { name: 'trimestral', days: 60 },
 };
 
 export async function POST(request: Request) {
