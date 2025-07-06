@@ -15,9 +15,9 @@ export const metadata: Metadata = {
   title: 'Tribo Tools',
   description: 'Sua área de membros exclusiva para ferramentas hacker.',
   icons: {
-    icon: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//tribo-logo.png',
-    shortcut: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//tribo-logo.png',
-    apple: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//tribo-logo.png',
+    icon: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo/tribo-logo.png',
+    shortcut: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo/tribo-logo.png',
+    apple: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo/tribo-logo.png',
   },
 };
 
