@@ -4,37 +4,57 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    // Helper function to check if the user is an admin.
+    // It safely checks for authentication and the existence of the user document.
     function isAdmin() {
       return request.auth != null &&
              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
-
-    match /modules/{moduleId} {
-      // Any authenticated user (including anonymous) can read modules.
-      allow get, list: if request.auth != null;
-      
-      // Only admins can write modules.
-      allow write: if isAdmin();
+    
+    // Helper function to check if user is authenticated (including anonymous).
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if the user is the owner of the document.
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
     }
 
+    // --- Rules for 'users' collection ---
     match /users/{userId} {
-      // User can create their own document on signup.
-      allow create: if request.auth.uid == userId;
+      // Admins can read any user document. Users can read their own.
+      allow get: if isAdmin() || isOwner(userId);
+      
+      // Users can create their own document on signup.
+      allow create: if isOwner(userId);
+      
+      // Admins can update any user profile (e.g., from the admin panel).
+      // Note: The webhook needs separate, secure handling, e.g., via a Cloud Function.
+      allow update: if isAdmin();
+      
+      // Nobody can delete user documents directly from the client.
+      allow delete: if false;
+    }
+    
+    // Explicitly allow admins to LIST all users for the admin panel.
+    match /users {
+        allow list: if isAdmin();
+    }
 
-      // User can read their own data. Admins can read any user's data.
-      allow get: if request.auth.uid == userId || isAdmin();
+    // --- Rules for 'modules' collection ---
+    match /modules/{moduleId} {
+      // Anyone authenticated (including anonymous) can GET a single module.
+      allow get: if isAuthenticated();
       
-      // A user can update their own data. Admins can update any user's data.
-      // NOTE: This rule is intentionally broad for simplicity. In a real-world scenario,
-      // you'd likely restrict which fields a user can update.
-      allow update: if request.auth.uid == userId || isAdmin();
-      
-      // Only admins can list all users for the admin panel.
-      allow list: if isAdmin();
-      
-      // Only admins can delete users.
-      allow delete: if isAdmin();
+      // Only admins can create, update, or delete modules.
+      allow write: if isAdmin();
+    }
+    
+    // Explicitly allow any authenticated user (including anonymous) to LIST all modules.
+    match /modules {
+        allow list: if isAuthenticated();
     }
   }
 }
