@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useAuth } from '@/lib/hooks';
@@ -46,7 +47,7 @@ export default function DashboardPage() {
               </h2>
               <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
                 {module.lessons.map((lesson) => (
-                  <ToolCard key={lesson.id} lesson={lesson} moduleId={module.id} isLocked={!isLocked} />
+                  <ToolCard key={lesson.id} lesson={lesson} moduleId={module.id} isLocked={!isUnlocked} />
                 ))}
               </div>
             </div>
