@@ -12,7 +12,7 @@ export const seedModules: (Omit<Module, 'id' | 'icon' | 'lessons'> & { icon: str
       { title: 'Canva PRO', type: 'text', content: 'Acesso ao Canva PRO.', imageUrl: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//canva.png' },
       { title: 'CapCut Pro', type: 'text', content: 'Acesso ao CapCut Pro.', imageUrl: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//cap%20cut.png' },
       { title: 'Leonardo A.I', type: 'text', content: 'Acesso ao Leonardo A.I.', imageUrl: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//leonardoia.png' },
-      { title: 'Midjourney', type: 'text', content: 'Acesso ao Midjourney.' },
+      { title: 'Midjourney', type: 'text', content: 'Acesso ao Midjourney.', imageUrl: 'https://placehold.co/400x240.png' },
     ],
   },
   {
@@ -21,12 +21,12 @@ export const seedModules: (Omit<Module, 'id' | 'icon' | 'lessons'> & { icon: str
     icon: 'BrainCircuit',
     lessons: [
       { title: 'ChatGPT 4.0', type: 'text', content: 'Acesso ao ChatGPT 4.0.', imageUrl: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//gpt.png' },
-      { title: 'Grok A.I.', type: 'text', content: 'Acesso ao Grok A.I.' },
-      { title: 'HeyGen', type: 'text', content: 'Acesso ao Heygen.' },
-      { title: 'Gamma App', type: 'text', content: 'Acesso ao Gamma App.' },
+      { title: 'Grok A.I.', type: 'text', content: 'Acesso ao Grok A.I.', imageUrl: 'https://placehold.co/400x240.png' },
+      { title: 'HeyGen', type: 'text', content: 'Acesso ao Heygen.', imageUrl: 'https://placehold.co/400x240.png' },
+      { title: 'Gamma App', type: 'text', content: 'Acesso ao Gamma App.', imageUrl: 'https://placehold.co/400x240.png' },
       { title: 'Voice Clone', type: 'text', content: 'Acesso à ferramenta de clonagem de voz.', imageUrl: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//voiceCLone.png' },
-      { title: 'Perplexity', type: 'text', content: 'Acesso ao Perplexity.' },
-      { title: 'Clicopy', type: 'text', content: 'Acesso ao Clicopy.' },
+      { title: 'Perplexity', type: 'text', content: 'Acesso ao Perplexity.', imageUrl: 'https://placehold.co/400x240.png' },
+      { title: 'Clicopy', type: 'text', content: 'Acesso ao Clicopy.', imageUrl: 'https://placehold.co/400x240.png' },
     ],
   },
   {
@@ -53,7 +53,7 @@ export const seedModules: (Omit<Module, 'id' | 'icon' | 'lessons'> & { icon: str
     description: 'Ferramentas para análise de concorrência e mineração de dados.',
     icon: 'SearchCode',
     lessons: [
-      { title: 'DropKiller', type: 'text', content: 'Acesso à ferramenta Dropkiller.' },
+      { title: 'DropKiller', type: 'text', content: 'Acesso à ferramenta Dropkiller.', imageUrl: 'https://placehold.co/400x240.png' },
       { title: 'Adsparo', type: 'text', content: 'Acesso à ferramenta Adsparo.', imageUrl: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//adsparo.png' },
       { title: 'SpyGuru', type: 'text', content: 'Acesso à ferramenta SpyGuru.', imageUrl: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//spyguru.png' },
     ],

@@ -20,7 +20,7 @@ export function ToolCard({ lesson, moduleId, isLocked }: ToolCardProps) {
     <Card
       className={cn(
         'group relative flex h-[240px] w-full flex-col overflow-hidden rounded-md border-2 border-transparent bg-[#111111] transition-all duration-300',
-        isUnlocked && 'hover:border-neon-green hover:shadow-lg'
+        isUnlocked && 'hover:border-neon-green hover:shadow-lg hover:shadow-neon-green/10'
       )}
     >
       <div className="relative h-3/5 w-full">
@@ -29,7 +29,7 @@ export function ToolCard({ lesson, moduleId, isLocked }: ToolCardProps) {
           alt={lesson.title}
           fill
           loading="lazy"
-          className="object-cover"
+          className="object-cover transition-transform duration-300 group-hover:scale-105"
         />
         {isLocked && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/70">
@@ -39,7 +39,7 @@ export function ToolCard({ lesson, moduleId, isLocked }: ToolCardProps) {
       </div>
 
       <div className="flex flex-grow flex-col items-center justify-center p-2 text-center">
-        <h3 className="text-md font-bold text-white">{lesson.title}</h3>
+        <h3 className="font-bold text-white">{lesson.title}</h3>
         {isUnlocked && (
           <div className="mt-1 flex items-center gap-1 text-xs font-bold text-neon-green">
             <span>ATIVO</span>
@@ -53,7 +53,7 @@ export function ToolCard({ lesson, moduleId, isLocked }: ToolCardProps) {
   return (
     <Link 
       href={isUnlocked ? `/dashboard/module/${moduleId}/lesson/${lesson.id}` : '#'} 
-      className={cn(!isUnlocked && 'pointer-events-none')}
+      className={cn(!isUnlocked && 'pointer-events-none cursor-not-allowed')}
       aria-label={lesson.title}
     >
       {cardContent}

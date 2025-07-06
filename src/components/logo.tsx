@@ -8,7 +8,7 @@ export function Logo({ className }: { className?: string }) {
         src="https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//tribo-logo.png"
         alt="Tribo Tools Logo"
         width={120}
-        height={22}
+        height={40}
         priority
         className="object-contain h-auto w-[80px] md:w-[120px]"
       />

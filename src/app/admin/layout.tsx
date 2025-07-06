@@ -63,7 +63,7 @@ function Sidebar() {
     return (
       <div className="hidden border-r bg-muted/40 md:block">
         <div className="flex h-full max-h-screen flex-col gap-2">
-          <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
+          <div className="flex h-[80px] items-center justify-center border-b px-4 lg:px-6">
             <Link href="/admin" className="flex items-center gap-2 font-semibold">
               <Logo />
               <span className="text-sm font-bold text-primary">(Admin)</span>
@@ -107,7 +107,7 @@ function Sidebar() {
           <nav className="grid gap-2 text-lg font-medium">
               <Link
                 href="/admin"
-                className="flex items-center gap-2 text-lg font-semibold mb-4"
+                className="flex items-center justify-center gap-2 text-lg font-semibold mb-4 h-[80px] border-b"
               >
                 <Logo />
                  <span className="text-sm font-bold text-primary">(Admin)</span>
