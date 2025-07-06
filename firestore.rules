@@ -1,37 +1,28 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function isAdmin() {
-      // Check if the user is authenticated and has an 'admin' role in their user document.
-      return request.auth != null &&
-             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-
-    // Rules for the 'modules' collection
+    
+    // Modules collection
     match /modules/{moduleId} {
-      // Any authenticated user can read the list of modules and individual module data.
-      allow read: if request.auth != null;
-
+      // Any authenticated user can list and get modules.
+      // 'list' is for collection queries (e.g., loading the dashboard).
+      // 'get' is for single document reads (e.g., viewing a specific module page).
+      allow list, get: if request.auth != null;
+      
       // Only admins can create, update, or delete modules.
-      allow write: if isAdmin();
+      allow write: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // Rules for the 'users' collection
+    // Users collection
     match /users/{userId} {
-      // A user can create their own document upon signup.
-      allow create: if request.auth.uid == userId;
-
-      // A user can read or update their own data.
-      // An admin can read, update, or delete any user's data.
-      allow get, update: if request.auth.uid == userId || isAdmin();
-      allow delete: if isAdmin();
-
-      // Only admins can get a list of all users.
-      allow list: if isAdmin();
+      // A user can read and update their own document. They cannot list all users.
+      allow get, update: if request.auth != null && request.auth.uid == userId;
+      
+      // Admins can perform any action on user documents.
+      // 'list' allows the admin panel to show all users.
+      // 'write' allows admins to edit user subscriptions.
+      allow list, write: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
   }
 }
