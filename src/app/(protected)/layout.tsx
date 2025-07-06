@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect } from 'react';
@@ -11,7 +12,7 @@ import { Logo } from '@/components/logo';
 import { UserNav } from '@/components/dashboard/user-nav';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
-import { Menu } from 'lucide-react';
+import { Menu, AlertTriangle } from 'lucide-react';
 import { Rotbar } from '@/components/rotbar';
 import { CheckoutModal } from '@/components/checkout-modal';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -58,12 +59,85 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   );
 }
 
+function SubscriptionCard() {
+    const { user } = useAuth();
+    const isUnlocked = user && !user.isAnonymous && (user.role === 'admin' || user.subscription?.status === 'active');
+
+    let daysLeft: number | null = null;
+    if (user && !user.isAnonymous && user.subscription?.status === 'active' && user.subscription.expiresAt) {
+        const now = new Date();
+        const expires = user.subscription.expiresAt.toDate();
+        now.setHours(0, 0, 0, 0);
+        expires.setHours(0, 0, 0, 0);
+        const diffTime = expires.getTime() - now.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays >= 0 && diffDays <= 7) {
+            daysLeft = diffDays;
+        }
+    }
+
+    return (
+        <Card className="bg-card/80 backdrop-blur-sm border-white/10">
+            <CardHeader className="p-4">
+                <CardTitle className="text-base">{user?.isAnonymous ? 'Nossos Planos' : 'Sua Assinatura'}</CardTitle>
+                <CardDescription className="text-xs">
+                    {user?.isAnonymous ? 'Faça um upgrade para ter acesso ilimitado.' : (user?.role === 'admin' ? 'Plano: Administrador' : (isUnlocked ? `Plano: ${user?.subscription?.plan}` : 'Nenhuma assinatura ativa.'))}
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+                {user?.isAnonymous ? (
+                    <div className="space-y-3">
+                        {plans.map(plan => (
+                            <div key={plan.id} className="text-xs flex justify-between items-center">
+                                <span>{plan.name}</span>
+                                <span className="font-semibold text-primary">R${plan.price.toFixed(2).replace('.',',')}</span>
+                            </div>
+                        ))}
+                        <CheckoutModal>
+                            <Button size="sm" className="w-full mt-2">Fazer Upgrade</Button>
+                        </CheckoutModal>
+                    </div>
+                ) : daysLeft !== null ? (
+                    <div className="space-y-2 rounded-md border border-amber-500/50 bg-amber-950/50 p-3">
+                        <div className="flex items-center gap-2 text-amber-300">
+                            <AlertTriangle className="h-5 w-5" />
+                            <p className="text-sm font-semibold">Atenção!</p>
+                        </div>
+                        <p className="text-xs text-amber-400">
+                            {daysLeft === 0
+                                ? 'Sua assinatura expira hoje. Renove para não perder o acesso.'
+                                : daysLeft === 1
+                                ? 'Sua assinatura expira amanhã. Renove para não perder o acesso.'
+                                : `Sua assinatura expira em ${daysLeft} dias. Renove para não perder o acesso.`
+                            }
+                        </p>
+                        <CheckoutModal>
+                            <Button size="sm" variant="destructive" className="w-full mt-2">
+                                Renovar Agora
+                            </Button>
+                        </CheckoutModal>
+                    </div>
+                ) : (
+                    <div className="text-xs text-muted-foreground">
+                        {user?.role === 'admin' ? (
+                            'Acesso vitalício'
+                        ) : isUnlocked && user?.subscription?.expiresAt ? (
+                            `Expira em: ${new Date(user.subscription.expiresAt.seconds * 1000).toLocaleDateString()}`
+                        ) : (
+                           <CheckoutModal>
+                             <Button size="sm" className="w-full">Fazer Upgrade</Button>
+                           </CheckoutModal>
+                        )}
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
 function Sidebar() {
     const pathname = usePathname();
-    const { user } = useAuth();
     const { modules, dbConfigured } = useModules();
-  
-    const isUnlocked = user && !user.isAnonymous && (user.role === 'admin' || user.subscription?.status === 'active');
   
     return (
       <div className="hidden border-r bg-muted/40 md:block">
@@ -100,41 +174,7 @@ function Sidebar() {
 
         {/* Fixed subscription card at the bottom of the viewport */}
         <div className="fixed bottom-5 z-50 p-4 md:w-[220px] lg:w-[280px]">
-          <Card className="bg-card/80 backdrop-blur-sm border-white/10">
-              <CardHeader className="p-4">
-                  <CardTitle className="text-base">{user?.isAnonymous ? 'Nossos Planos' : 'Sua Assinatura'}</CardTitle>
-                  <CardDescription className="text-xs">
-                      {user?.isAnonymous ? 'Faça um upgrade para ter acesso ilimitado.' : (user?.role === 'admin' ? 'Plano: Administrador' : (isUnlocked ? `Plano: ${user?.subscription?.plan}` : 'Nenhuma assinatura ativa.'))}
-                  </CardDescription>
-              </CardHeader>
-              <CardContent className="p-4 pt-0">
-                  {user?.isAnonymous ? (
-                    <div className="space-y-3">
-                        {plans.map(plan => (
-                            <div key={plan.id} className="text-xs flex justify-between items-center">
-                                <span>{plan.name}</span>
-                                <span className="font-semibold text-primary">R${plan.price.toFixed(2).replace('.',',')}</span>
-                            </div>
-                        ))}
-                        <CheckoutModal>
-                            <Button size="sm" className="w-full mt-2">Fazer Upgrade</Button>
-                        </CheckoutModal>
-                    </div>
-                  ) : (
-                    <div className="text-xs text-muted-foreground">
-                        {user?.role === 'admin' ? (
-                            'Acesso vitalício'
-                        ) : isUnlocked && user?.subscription?.expiresAt ? (
-                            `Expira em: ${new Date(user.subscription.expiresAt.seconds * 1000).toLocaleDateString()}`
-                        ) : (
-                           <CheckoutModal>
-                             <Button size="sm" className="w-full">Fazer Upgrade</Button>
-                           </CheckoutModal>
-                        )}
-                    </div>
-                  )}
-              </CardContent>
-          </Card>
+          <SubscriptionCard />
         </div>
       </div>
     );
@@ -142,10 +182,7 @@ function Sidebar() {
   
   function Header() {
     const pathname = usePathname();
-    const { user } = useAuth();
     const { modules, dbConfigured } = useModules();
-
-    const isUnlocked = user && !user.isAnonymous && (user.role === 'admin' || user.subscription?.status === 'active');
   
     return (
       <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-neutral-800 bg-background/95 px-4 shadow-md backdrop-blur-sm lg:h-[60px] lg:px-6">
@@ -188,41 +225,7 @@ function Sidebar() {
               ))}
             </nav>
             <div className="mt-auto">
-              <Card className="bg-card/80 backdrop-blur-sm border-white/10">
-                <CardHeader>
-                    <CardTitle>{user?.isAnonymous ? 'Nossos Planos' : 'Sua Assinatura'}</CardTitle>
-                    <CardDescription>
-                         {user?.isAnonymous ? 'Faça um upgrade para ter acesso ilimitado.' : (user?.role === 'admin' ? 'Plano: Administrador' : (isUnlocked ? `Plano: ${user?.subscription?.plan}` : 'Nenhuma assinatura ativa.'))}
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {user?.isAnonymous ? (
-                        <div className="space-y-3">
-                             {plans.map(plan => (
-                                <div key={plan.id} className="text-sm flex justify-between items-center">
-                                    <span>{plan.name}</span>
-                                    <span className="font-semibold text-primary">R${plan.price.toFixed(2).replace('.',',')}</span>
-                                </div>
-                            ))}
-                            <CheckoutModal>
-                                <Button size="sm" className="w-full mt-2">Fazer Upgrade</Button>
-                            </CheckoutModal>
-                        </div>
-                    ) : (
-                        <div className="text-sm text-muted-foreground">
-                            {user?.role === 'admin' ? (
-                                'Acesso vitalício'
-                            ) : isUnlocked && user?.subscription?.expiresAt ? (
-                                `Expira em: ${new Date(user.subscription.expiresAt.seconds * 1000).toLocaleDateString()}`
-                            ) : (
-                                <CheckoutModal>
-                                    <Button size="sm" className="w-full">Fazer Upgrade</Button>
-                                </CheckoutModal>
-                            )}
-                        </div>
-                    )}
-                </CardContent>
-              </Card>
+                <SubscriptionCard />
             </div>
           </SheetContent>
         </Sheet>
@@ -230,7 +233,9 @@ function Sidebar() {
         <div className="w-full flex-1">
           {/* Can add search bar here if needed */}
         </div>
-        {user ? <UserNav /> : <Button asChild><Link href="/login">Fazer Login</Link></Button>}
+        <UserNav />
       </header>
     );
   }
+
+    
