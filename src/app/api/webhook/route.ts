@@ -35,9 +35,12 @@ export async function POST(request: Request) {
 
     console.log('Processing "pix_approved" event.');
 
-    const { email } = pixData.customer;
+    const { email, name, document, phone } = pixData.customer;
     const paymentDescription = pixData.description;
     console.log(`Customer Email: ${email}`);
+    console.log(`Customer Name: ${name || 'N/A'}`);
+    console.log(`Customer Document: ${document || 'N/A'}`);
+    console.log(`Customer Phone: ${phone || 'N/A'}`);
     console.log(`Payment Description: ${paymentDescription}`);
 
     const allPlans = await getPlansFromFirestore();
@@ -81,7 +84,12 @@ export async function POST(request: Request) {
     const existingSubscriptions = userData.subscriptions || {};
     console.log('Existing user subscriptions:', JSON.stringify(existingSubscriptions, null, 2));
 
-    const updates: { [key: string]: any } = {};
+    const updates: { [key: string]: any } = {
+        // Save/update customer personal data on purchase
+        ...(name && { name }),
+        ...(document && { document }),
+        ...(phone && { phone }),
+    };
 
     for (const planId of planIds) {
         const matchedPlan = allPlans.find(p => p.id === planId);

@@ -59,6 +59,9 @@ export interface UserData {
   uid: string;
   email: string | null;
   displayName: string | null;
+  name?: string;
+  document?: string;
+  phone?: string;
   photoURL: string | null;
   subscriptions: { [key: string]: UserSubscription };
   role?: 'admin' | 'user';

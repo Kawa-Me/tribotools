@@ -62,6 +62,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 subscriptions,
                 role: data.role || 'user',
                 isAnonymous: false,
+                name: data.name,
+                document: data.document,
+                phone: data.phone,
               });
             } else {
              // If no firestore doc, create a default user profile
