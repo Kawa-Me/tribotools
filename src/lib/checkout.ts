@@ -35,6 +35,14 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
 
   const { plans: selectedPlanIds, name, email, document, phone } = validation.data;
 
+  // --- DIAGNOSTIC STEP ---
+  // Check if the API token is loaded from .env.local
+  const apiToken = process.env.PUSHINPAY_API_TOKEN;
+  if (!apiToken) {
+    console.error('CRITICAL ERROR: PUSHINPAY_API_TOKEN environment variable not found!');
+    return { error: 'Erro de configuração do servidor: Chave de API não encontrada.' };
+  }
+
   let allPlans;
   try {
     allPlans = await getPlansFromFirestore();
@@ -64,30 +72,14 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     return { error: 'O valor total não pode exceder R$ 150,00.' };
   }
 
-  // --- Based on your n8n example, the API expects the value in cents (integer)
   const totalPriceInCents = Math.round(totalPrice * 100);
 
   const apiUrl = 'https://api.pushinpay.com.br/api/pix/cashIn';
-  const apiToken = process.env.PUSHINPAY_API_TOKEN;
   const webhookUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/api/webhook`;
 
-  // --- DEBUG LOGGING ---
-  console.log('--- Iniciando Geração de PIX ---');
-  if (apiToken) {
-    console.log('API Token encontrado. Primeiros 5 caracteres:', apiToken.substring(0, 5));
-  } else {
-    console.error('ERRO CRÍTICO: Variável de ambiente PUSHINPAY_API_TOKEN não encontrada!');
-    return { error: 'Erro de configuração do servidor: Chave de API não encontrada.' };
-  }
-  // --- END DEBUG LOGGING ---
-
-  // --- The user's n8n example uses `webhook_url`. Let's use that.
-  // --- Also adding an expiration date, as in the example.
   const expirationDate = new Date();
-  expirationDate.setHours(expirationDate.getHours() + 1); // 1 hour expiration
+  expirationDate.setHours(expirationDate.getHours() + 1);
 
-  // The payment provider uses the 'name' field for the customer's name, but we also use it to track plans.
-  // We'll combine them, and the webhook will parse the plan IDs from this string.
   const paymentName = `${name} | Tribo Tools - Plans:[${selectedPlanIds.join(',')}]`;
 
   const payload = {
@@ -95,22 +87,17 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     email,
     document,
     phone,
-    value: totalPriceInCents, // Sending value in cents
-    webhook_url: webhookUrl, // Corrected field name
-    expires_at: expirationDate.toISOString(), // Adding expiration
+    value: totalPriceInCents,
+    webhook_url: webhookUrl,
+    expires_at: expirationDate.toISOString(),
   };
-
-  // --- NEW DEBUG LOGGING ---
-  console.log('--- Enviando Payload para PushInPay ---');
-  console.log(JSON.stringify(payload, null, 2));
-  // --- END NEW DEBUG LOGGING ---
 
   try {
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json', // Adding Accept header as in your example
+        'Accept': 'application/json',
         'Authorization': `Bearer ${apiToken}`,
       },
       body: JSON.stringify(payload),

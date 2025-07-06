@@ -25,12 +25,13 @@ export async function POST(request: Request) {
     const pixData = body.pix;
 
     if (event !== 'pix_approved' || !pixData || !pixData.customer || !pixData.customer.email) {
-      console.log('Webhook ignorado: evento não é "pix_approved" ou faltam dados essenciais.');
+      console.log('Webhook ignored: not a "pix_approved" event or missing essential data.');
       return NextResponse.json({ message: 'Webhook received but not processed' }, { status: 200 });
     }
 
     const { email } = pixData.customer;
-    const { name: receivedProductName } = pixData.customer;
+    // The name contains the user's real name and our plan metadata
+    const receivedProductName = pixData.customer.name; 
 
     const allPlans = await getPlansFromFirestore();
     if (allPlans.length === 0) {
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
     }
 
     let planIds: string[] = [];
+    // Regex to extract plan IDs from a string like "John Doe | Tribo Tools - Plans:[plan_id_1,plan_id_2]"
     const plansMatch = receivedProductName.match(/Plans:\[(.*?)\]/);
 
     if (plansMatch && plansMatch[1]) {
