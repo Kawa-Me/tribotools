@@ -18,6 +18,11 @@ const iconComponents: { [key: string]: React.ComponentType<any> } = {
     Users: lucideIcons.Users,
     Settings: lucideIcons.Settings,
     ShieldCheck: lucideIcons.ShieldCheck,
+    KeyRound: lucideIcons.KeyRound,
+    SearchCode: lucideIcons.SearchCode,
+    BrainCircuit: lucideIcons.BrainCircuit,
+    Paintbrush: lucideIcons.Paintbrush,
+    TrendingUp: lucideIcons.TrendingUp,
   };
 
 export default function ModulePage({ params }: { params: { id: string } }) {

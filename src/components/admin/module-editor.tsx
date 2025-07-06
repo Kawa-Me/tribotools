@@ -1,16 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Module, Lesson } from '@/lib/types';
+import { seedModules } from '@/data/seed-modules';
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
@@ -28,15 +29,39 @@ export function ModuleEditor() {
       setLoading(false);
       return;
     }
-    const unsubscribe = onSnapshot(collection(db, 'modules'), (snapshot) => {
-      const modulesData: Module[] = snapshot.docs
-        .map((doc) => ({ id: doc.id, ...doc.data() } as Module))
-        .sort((a, b) => (a.title > b.title ? 1 : -1)); // Simple sort
-      setModules(modulesData);
-      setLoading(false);
+    const unsubscribe = onSnapshot(collection(db, 'modules'), async (snapshot) => {
+      if (snapshot.empty && db) {
+        console.log("No modules found. Seeding initial data...");
+        setLoading(true);
+        try {
+          const batch = writeBatch(db);
+          seedModules.forEach((moduleData) => {
+            const moduleRef = doc(collection(db, 'modules'));
+            const newLessons = moduleData.lessons.map(lesson => ({
+                ...lesson,
+                id: `lesson-${Date.now()}-${Math.random()}`
+            }));
+            batch.set(moduleRef, { ...moduleData, lessons: newLessons });
+          });
+          await batch.commit();
+          toast({ title: 'Sucesso!', description: 'Módulos iniciais criados.' });
+          // The onSnapshot listener will pick up the new data automatically
+        } catch (error) {
+          console.error("Error seeding modules:", error);
+          toast({ variant: 'destructive', title: 'Erro ao criar módulos iniciais.' });
+          setLoading(false);
+        }
+      } else {
+        const modulesData: Module[] = snapshot.docs
+          .map((doc) => ({ id: doc.id, ...doc.data() } as Module))
+          .sort((a, b) => (a.title > b.title ? 1 : -1));
+        setModules(modulesData);
+        setLoading(false);
+      }
     });
     return () => unsubscribe();
-  }, []);
+  }, [toast]);
+  
 
   const handleModuleChange = (moduleId: string, field: keyof Module, value: any) => {
     setModules((prevModules) =>
@@ -180,24 +205,26 @@ export function ModuleEditor() {
             <AccordionTrigger className="hover:no-underline">
                 <div className="flex justify-between items-center w-full pr-4">
                     <span>{mod.title}</span>
-                    <div
-                        role="button"
-                        aria-label={`Deletar módulo ${mod.title}`}
-                        tabIndex={0}
-                        onClick={(e) => {
-                            e.stopPropagation(); 
-                            handleDeleteModule(mod.id);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleDeleteModule(mod.id);
-                          }
-                        }}
-                        className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "text-destructive hover:text-destructive/80 focus-visible:ring-1 focus-visible:ring-ring")}
+                     <div
+                      role="button"
+                      aria-label={`Deletar módulo ${mod.title}`}
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteModule(mod.id);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleDeleteModule(mod.id);
+                        }
+                      }}
+                      className={cn(
+                        'p-2 rounded-md hover:bg-destructive/20 focus-visible:ring-1 focus-visible:ring-ring text-destructive hover:text-destructive/80'
+                      )}
                     >
-                        <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-4 w-4" />
                     </div>
                 </div>
             </AccordionTrigger>
@@ -207,6 +234,11 @@ export function ModuleEditor() {
                   value={mod.title}
                   onChange={(e) => handleModuleChange(mod.id, 'title', e.target.value)}
                   placeholder="Título do Módulo"
+                />
+                 <Input
+                  value={mod.icon}
+                  onChange={(e) => handleModuleChange(mod.id, 'icon', e.target.value)}
+                  placeholder="Nome do Ícone (Lucide React)"
                 />
                 <Textarea
                   value={mod.description}

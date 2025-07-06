@@ -16,7 +16,11 @@ const iconComponents: { [key: string]: React.ComponentType<any> } = {
   Users: lucideIcons.Users,
   Settings: lucideIcons.Settings,
   ShieldCheck: lucideIcons.ShieldCheck,
-  // Add other icons used in your modules here
+  KeyRound: lucideIcons.KeyRound,
+  SearchCode: lucideIcons.SearchCode,
+  BrainCircuit: lucideIcons.BrainCircuit,
+  Paintbrush: lucideIcons.Paintbrush,
+  TrendingUp: lucideIcons.TrendingUp,
 };
 
 
