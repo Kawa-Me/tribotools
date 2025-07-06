@@ -19,16 +19,25 @@ export async function POST(request: Request) {
 
     const { email, name: receivedProductName } = body;
 
-    // Find the plan configuration that matches the product name from the webhook
-    const matchedPlan = allPlans.find(p => receivedProductName.includes(p.productName) && receivedProductName.includes(p.name));
+    let planIds: string[] = [];
+    // New format: "Tribo Tools - Plans:[plan_id_1,plan_id_2]"
+    const plansMatch = receivedProductName.match(/Plans:\[(.*?)\]/);
+
+    if (plansMatch && plansMatch[1]) {
+        planIds = plansMatch[1].split(',').filter(id => id.trim() !== '');
+    } else {
+        // Fallback for old payment format for backward compatibility
+        const matchedPlan = allPlans.find(p => receivedProductName.includes(p.productName) && receivedProductName.includes(p.name));
+        if (matchedPlan) {
+            planIds.push(matchedPlan.id);
+        }
+    }
     
-    if (!matchedPlan) {
-        console.error(`No plan found for product name: ${receivedProductName}`);
-        return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
+    if (planIds.length === 0) {
+        console.error(`No parsable plans found in product name: ${receivedProductName}`);
+        return NextResponse.json({ error: 'Plan not found in webhook payload' }, { status: 404 });
     }
 
-    const { productId, id: planId, days } = matchedPlan;
-    
     if (!db) {
       console.error('Firestore is not initialized.');
       return NextResponse.json({ error: 'Internal server error: DB not configured' }, { status: 500 });
@@ -47,23 +56,40 @@ export async function POST(request: Request) {
     const userDoc = querySnapshot.docs[0];
     const userRef = doc(db, 'users', userDoc.id);
 
-    // Calculate new expiration date
-    const now = new Date();
-    const expiresAt = new Date(now.setDate(now.getDate() + days));
+    // Prepare updates for all purchased plans
+    const updates: { [key: string]: any } = {};
 
-    const newSubscriptionData: UserSubscription = {
-      status: 'active',
-      plan: planId,
-      startedAt: Timestamp.fromDate(new Date()),
-      expiresAt: Timestamp.fromDate(expiresAt),
-    };
+    for (const planId of planIds) {
+        const matchedPlan = allPlans.find(p => p.id === planId);
 
-    // Update user document using dot notation for nested object
-    await updateDoc(userRef, {
-      [`subscriptions.${productId}`]: newSubscriptionData
-    });
-    
-    console.log(`Successfully updated subscription for ${email} to product ${productId}.`);
+        if (!matchedPlan) {
+            console.warn(`Webhook: Plan with ID '${planId}' not found. Skipping.`);
+            continue;
+        }
+
+        const { productId, id: matchedPlanId, days } = matchedPlan;
+        
+        // Calculate new expiration date
+        const now = new Date();
+        const expiresAt = new Date(new Date().setDate(now.getDate() + days));
+
+        const newSubscriptionData: UserSubscription = {
+            status: 'active',
+            plan: matchedPlanId,
+            startedAt: Timestamp.fromDate(new Date()),
+            expiresAt: Timestamp.fromDate(expiresAt),
+        };
+        
+        updates[`subscriptions.${productId}`] = newSubscriptionData;
+    }
+
+    // Atomically update all subscriptions in one go
+    if (Object.keys(updates).length > 0) {
+        await updateDoc(userRef, updates);
+        console.log(`Successfully updated subscriptions for ${email} with plans: ${planIds.join(', ')}.`);
+    } else {
+         console.log(`No valid plans to update for ${email}.`);
+    }
     
     return NextResponse.json({ success: true, message: 'User updated successfully' });
 

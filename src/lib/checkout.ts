@@ -7,7 +7,7 @@ import { allPlans, type PlanId } from '@/lib/plans';
 const planIds = allPlans.map(p => p.id) as [PlanId, ...PlanId[]];
 
 const CreatePixPaymentSchema = z.object({
-  plan: z.enum(planIds),
+  plans: z.array(z.enum(planIds)).min(1, { message: 'Selecione pelo menos um plano.' }),
   email: z.string().email(),
   phone: z.string().min(10),
 });
@@ -21,11 +21,19 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     return { error: 'Dados inválidos.', details: validation.error.format() };
   }
 
-  const { plan, email, phone } = validation.data;
-  const selectedPlan = allPlans.find(p => p.id === plan);
+  const { plans, email, phone } = validation.data;
+  
+  const selectedPlans = allPlans.filter(p => plans.includes(p.id));
 
-  if (!selectedPlan) {
-    return { error: 'Plano selecionado inválido.' };
+  if (selectedPlans.length !== plans.length) {
+    return { error: 'Um ou mais planos selecionados são inválidos.' };
+  }
+
+  const totalPrice = selectedPlans.reduce((sum, plan) => sum + plan.price, 0);
+
+  // Server-side validation for the total amount
+  if (totalPrice > 150) {
+    return { error: 'O valor total não pode exceder R$ 150,00.' };
   }
 
   const apiUrl = 'https://api.pushinpay.com.br/api/pix/cashIn';
@@ -37,11 +45,14 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     return { error: 'Erro de configuração do servidor.' };
   }
 
+  // Create a parsable name for the webhook to identify the purchased plans
+  const paymentName = `Tribo Tools - Plans:[${plans.join(',')}]`;
+
   const payload = {
-    name: `Tribo Tools - ${selectedPlan.productName} ${selectedPlan.name}`,
+    name: paymentName,
     email,
     phone,
-    value: selectedPlan.price,
+    value: totalPrice,
     webhook: webhookUrl,
   };
 

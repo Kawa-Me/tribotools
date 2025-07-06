@@ -25,15 +25,15 @@ import {
 } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ClipboardCopy } from 'lucide-react';
 import { products, allPlans, type PlanId } from '@/lib/plans';
 
 const planIds = allPlans.map(p => p.id) as [PlanId, ...PlanId[]];
 
 const FormSchema = z.object({
-  plan: z.enum(planIds, {
-    required_error: 'Você precisa selecionar um plano.',
+  plans: z.array(z.enum(planIds)).min(1, {
+    message: 'Você precisa selecionar pelo menos um plano.',
   }),
   phone: z.string().min(10, {
     message: 'O telefone deve ter pelo menos 10 dígitos.',
@@ -54,7 +54,14 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
   
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
+    defaultValues: {
+      plans: [],
+    },
   });
+
+  const selectedPlanIds = form.watch('plans') || [];
+  const selectedPlans = allPlans.filter(p => selectedPlanIds.includes(p.id));
+  const totalPrice = selectedPlans.reduce((sum, plan) => sum + plan.price, 0);
 
   const handleCopyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -67,12 +74,21 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    if (totalPrice > 150) {
+      toast({
+        variant: 'destructive',
+        title: 'Limite de Valor Excedido',
+        description: 'O valor total da compra não pode ultrapassar R$ 150,00. Por favor, ajuste sua seleção.',
+      });
+      return;
+    }
+
     setLoading(true);
     setPixData(null);
 
     try {
       const result = await createPixPayment({
-        plan: data.plan,
+        plans: data.plans,
         email: user.email,
         phone: data.phone,
       });
@@ -134,7 +150,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
         <DialogHeader>
           <DialogTitle className="font-headline text-2xl text-primary">Plano de Assinatura</DialogTitle>
           <DialogDescription>
-            {pixData ? 'Escaneie o QR Code ou copie o código para pagar.' : 'Escolha um plano e insira seu telefone para continuar.'}
+            {pixData ? 'Escaneie o QR Code ou copie o código para pagar.' : 'Escolha um ou mais planos e insira seu telefone.'}
           </DialogDescription>
         </DialogHeader>
         
@@ -157,41 +173,49 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
           ) : (
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                <FormField
+                 <FormField
                   control={form.control}
-                  name="plan"
-                  render={({ field }) => (
-                    <FormItem className="space-y-3">
-                      <FormControl>
-                        <RadioGroup
-                          onValueChange={field.onChange}
-                          defaultValue={field.value}
-                          className="flex flex-col space-y-4"
-                        >
-                          {Object.values(products).map((product) => (
-                             <div key={product.id}>
-                                <FormLabel className="text-foreground font-semibold">{product.name}</FormLabel>
-                                <div className="space-y-2 mt-2">
-                                  {product.plans.map(plan => (
-                                    <FormItem key={plan.id} className="flex items-center space-x-3 space-y-0 p-3 rounded-md border border-input has-[:checked]:border-primary transition-all">
-                                        <FormControl>
-                                        <RadioGroupItem value={plan.id} />
-                                        </FormControl>
-                                        <FormLabel className="font-normal flex-grow cursor-pointer">
-                                        {plan.name} - R${plan.price.toFixed(2).replace('.',',')}
-                                        <p className="text-xs text-muted-foreground">{plan.description}</p>
-                                        </FormLabel>
-                                    </FormItem>
-                                  ))}
-                                </div>
-                             </div>
-                          ))}
-                        </RadioGroup>
-                      </FormControl>
+                  name="plans"
+                  render={() => (
+                    <FormItem className="space-y-4">
+                      {Object.values(products).map((product) => (
+                        <div key={product.id}>
+                          <FormLabel className="text-foreground font-semibold">{product.name}</FormLabel>
+                          <div className="space-y-2 mt-2">
+                            {product.plans.map((plan) => (
+                              <FormField
+                                key={plan.id}
+                                control={form.control}
+                                name="plans"
+                                render={({ field }) => (
+                                  <FormItem className="flex items-center space-x-3 space-y-0 p-3 rounded-md border border-input has-[:checked]:border-primary transition-all">
+                                    <FormControl>
+                                      <Checkbox
+                                        checked={field.value?.includes(plan.id)}
+                                        onCheckedChange={(checked) => {
+                                          const currentValues = field.value || [];
+                                          return checked
+                                            ? field.onChange([...currentValues, plan.id])
+                                            : field.onChange(currentValues.filter(value => value !== plan.id));
+                                        }}
+                                      />
+                                    </FormControl>
+                                    <FormLabel className="font-normal flex-grow cursor-pointer">
+                                      {plan.name} - R${plan.price.toFixed(2).replace('.', ',')}
+                                      <p className="text-xs text-muted-foreground">{plan.description}</p>
+                                    </FormLabel>
+                                  </FormItem>
+                                )}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
                  <FormField
                   control={form.control}
                   name="phone"
@@ -205,7 +229,20 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
                     </FormItem>
                   )}
                 />
-                <Button type="submit" className="w-full" disabled={loading}>
+
+                <div className="mt-4 space-y-2 border-t pt-4">
+                  <div className="text-lg font-bold flex justify-between">
+                    <span>Total:</span>
+                    <span>R$ {totalPrice.toFixed(2).replace('.', ',')}</span>
+                  </div>
+                  {totalPrice > 150 && (
+                    <p className="text-sm text-destructive font-semibold text-center">
+                      O valor total não pode exceder R$ 150,00.
+                    </p>
+                  )}
+                </div>
+
+                <Button type="submit" className="w-full" disabled={loading || totalPrice > 150 || selectedPlanIds.length === 0}>
                   Gerar Pagamento Pix
                 </Button>
               </form>
