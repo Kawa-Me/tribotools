@@ -44,7 +44,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   // Show loader while auth is in progress, or if we are about to redirect.
-  if (loading || !user || (user && !user.isAnonymous && user.role === 'admin')) {
+  if (loading || !user || (user && !user.isAnonymous && user.role === 'admin' && user.emailVerified)) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader className="h-10 w-10 text-primary" />
@@ -73,7 +73,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 function VerifyEmailScreen() {
     const { user } = useAuth();
     const { toast } = useToast();
+    const router = useRouter();
     const [sending, setSending] = useState(false);
+
+    useEffect(() => {
+      const interval = setInterval(async () => {
+        if (auth.currentUser) {
+          await auth.currentUser.reload();
+          if (auth.currentUser.emailVerified) {
+            clearInterval(interval);
+            router.refresh();
+            toast({
+              title: "Email Verificado!",
+              description: "Sua conta foi ativada com sucesso. Bem-vindo!",
+            });
+          }
+        }
+      }, 3000); // Check every 3 seconds
+
+      return () => clearInterval(interval);
+    }, [router, toast]);
 
     const handleSignOut = async () => {
         try {
@@ -109,7 +128,7 @@ function VerifyEmailScreen() {
                 <CardHeader>
                     <CardTitle className="font-headline text-2xl text-primary">Verifique seu Endereço de Email</CardTitle>
                     <CardDescription>
-                        Enviamos um link de ativação para <strong>{user?.email}</strong>. Por favor, clique no link para acessar o painel.
+                        Enviamos um link de ativação para <strong>{user?.email}</strong>. Por favor, clique no link para ser liberado.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -317,3 +336,5 @@ function Sidebar() {
       </header>
     );
   }
+
+    
