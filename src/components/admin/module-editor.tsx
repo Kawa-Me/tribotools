@@ -11,7 +11,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
@@ -241,14 +241,58 @@ export function ModuleEditor() {
             <AccordionTrigger className="hover:no-underline">
                 <div className="flex justify-between items-center w-full pr-4">
                     <div className="flex items-center gap-2">
-                         <div className="flex flex-col">
-                            <Button variant="ghost" size="icon" className="h-6 w-6" disabled={index === 0} onClick={(e) => { e.stopPropagation(); handleMoveModule(index, 'up'); }}>
+                        <div className="flex flex-col">
+                            <div
+                                role="button"
+                                aria-label="Mover módulo para cima"
+                                tabIndex={index === 0 ? -1 : 0}
+                                className={cn(
+                                    buttonVariants({ variant: 'ghost', size: 'icon' }),
+                                    'h-6 w-6',
+                                    index === 0 && 'pointer-events-none opacity-50'
+                                )}
+                                onClick={(e) => {
+                                    if (index === 0) return;
+                                    e.stopPropagation();
+                                    handleMoveModule(index, 'up');
+                                }}
+                                onKeyDown={(e) => {
+                                    if (index === 0) return;
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleMoveModule(index, 'up');
+                                    }
+                                }}
+                                >
                                 <ArrowUp className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-6 w-6" disabled={index === modules.length - 1} onClick={(e) => { e.stopPropagation(); handleMoveModule(index, 'down'); }}>
+                            </div>
+                            <div
+                                role="button"
+                                aria-label="Mover módulo para baixo"
+                                tabIndex={index === modules.length - 1 ? -1 : 0}
+                                className={cn(
+                                    buttonVariants({ variant: 'ghost', size: 'icon' }),
+                                    'h-6 w-6',
+                                    index === modules.length - 1 && 'pointer-events-none opacity-50'
+                                )}
+                                onClick={(e) => {
+                                    if (index === modules.length - 1) return;
+                                    e.stopPropagation();
+                                    handleMoveModule(index, 'down');
+                                }}
+                                onKeyDown={(e) => {
+                                    if (index === modules.length - 1) return;
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleMoveModule(index, 'down');
+                                    }
+                                }}
+                                >
                                 <ArrowDown className="h-4 w-4" />
-                            </Button>
-                         </div>
+                            </div>
+                        </div>
                         <span>{mod.title}</span>
                     </div>
                      <div
