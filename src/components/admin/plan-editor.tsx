@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Trash2, Save } from 'lucide-react';
+import { PlusCircle, Trash2, Save, Loader2 } from 'lucide-react';
 import { Skeleton } from '../ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
@@ -25,12 +25,19 @@ import { useAuth } from '@/lib/hooks';
 export function PlanEditor() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
-    if (authLoading || !user || user.role !== 'admin') {
+    if (authLoading || !user) {
       if (!authLoading) setLoading(false);
+      return;
+    }
+    if (user.role !== 'admin') {
+      setLoading(false);
+      toast({ variant: 'destructive', title: 'Acesso Negado', description: 'Você não tem permissão para ver esta página.' });
       return;
     }
 
@@ -65,7 +72,7 @@ export function PlanEditor() {
       }
     }, (error) => {
       console.error("Error fetching plans:", error);
-      toast({ variant: 'destructive', title: 'Erro ao carregar planos.' });
+      toast({ variant: 'destructive', title: 'Erro ao carregar planos.', description: 'Verifique as permissões do Firestore.' });
       setLoading(false);
     });
     return () => unsubscribe();
@@ -93,10 +100,7 @@ export function PlanEditor() {
   };
   
   const handleAddNewProduct = () => {
-    if (!db) {
-      toast({ variant: 'destructive', title: 'Erro', description: 'Serviço de banco de dados indisponível.' });
-      return;
-    }
+    if (!db) return;
     const newId = doc(collection(db, 'products')).id;
     const newProduct: Product = {
       id: newId,
@@ -108,29 +112,27 @@ export function PlanEditor() {
   };
 
   const handleDeleteProduct = async (productId: string) => {
-    if (!window.confirm("Tem certeza que deseja deletar este produto e todos os seus planos? Esta ação não pode ser desfeita.")) return;
+    if (!window.confirm("Tem certeza que deseja deletar este produto? Esta ação não pode ser desfeita.")) return;
     
     if (!db) {
         toast({ variant: 'destructive', title: 'Erro', description: 'Serviço de banco de dados indisponível.' });
         return;
     }
-
+    
+    setDeletingProductId(productId);
     try {
         await deleteDoc(doc(db, 'products', productId));
-        toast({ title: 'Sucesso!', description: 'Produto excluído. A lista será atualizada.' });
-        // The onSnapshot listener will automatically update the UI.
+        toast({ title: 'Sucesso!', description: 'Produto excluído.' });
     } catch (error: any) {
         console.error('Failed to delete product:', error);
-        let description = 'Não foi possível excluir o produto do banco de dados.';
-        if (error.code === 'permission-denied') {
-            description = 'Falha na Exclusão. Você não tem permissão para realizar esta ação. Verifique as regras de segurança do Firestore.';
-        }
         toast({
             variant: 'destructive',
             title: 'Erro ao Excluir',
-            description: description,
+            description: `Falha: ${error.code} - ${error.message}. Verifique as regras de segurança do Firestore.`,
             duration: 9000,
         });
+    } finally {
+        setDeletingProductId(null);
     }
   };
   
@@ -165,11 +167,8 @@ export function PlanEditor() {
   };
 
   const handleSaveAllChanges = async () => {
-    if (!db) {
-      toast({ variant: 'destructive', title: 'Erro', description: 'Serviço de banco de dados indisponível.' });
-      return;
-    }
-
+    if (!db) return;
+    setIsSaving(true);
     try {
       const batch = writeBatch(db);
       
@@ -179,14 +178,20 @@ export function PlanEditor() {
       });
       
       await batch.commit();
-      toast({ title: 'Sucesso!', description: 'Todas as alterações nos planos foram salvas.' });
-    } catch (error) {
+      toast({ title: 'Sucesso!', description: 'Todas as alterações foram salvas.' });
+    } catch (error: any) {
       console.error("Error saving changes: ", error);
-      toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível salvar as alterações.' });
+      toast({ 
+        variant: 'destructive', 
+        title: 'Erro ao Salvar', 
+        description: `Falha: ${error.code} - ${error.message}.` 
+      });
+    } finally {
+        setIsSaving(false);
     }
   };
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-14 w-full" />
@@ -195,11 +200,18 @@ export function PlanEditor() {
     );
   }
 
+  if (!user || user.role !== 'admin') {
+      return <p className="text-destructive">Acesso negado.</p>
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <Button onClick={handleAddNewProduct}><PlusCircle className="mr-2" />Adicionar Produto</Button>
-        <Button onClick={handleSaveAllChanges}><Save className="mr-2" />Salvar Alterações</Button>
+        <Button onClick={handleSaveAllChanges} disabled={isSaving}>
+            {isSaving ? <Loader2 className="mr-2 animate-spin" /> : <Save className="mr-2" />}
+            {isSaving ? 'Salvando...' : 'Salvar Alterações'}
+        </Button>
       </div>
 
       <Accordion type="single" collapsible className="w-full">
@@ -208,16 +220,16 @@ export function PlanEditor() {
             <AccordionTrigger className="hover:no-underline">
               <div className="flex justify-between items-center w-full pr-4">
                 <span className="font-bold">{prod.name}</span>
-                 <div
-                      role="button"
-                      aria-label={`Deletar produto ${prod.name}`}
-                      tabIndex={0}
-                      onClick={(e) => { e.stopPropagation(); handleDeleteProduct(prod.id); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); handleDeleteProduct(prod.id); }}}
-                      className={cn('p-2 rounded-md hover:bg-destructive/20 text-destructive hover:text-destructive/80')}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </div>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Deletar produto ${prod.name}`}
+                    disabled={deletingProductId === prod.id}
+                    onClick={(e) => { e.stopPropagation(); handleDeleteProduct(prod.id); }}
+                    className="text-destructive hover:text-destructive/80 hover:bg-destructive/10"
+                >
+                    {deletingProductId === prod.id ? <Loader2 className="animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                </Button>
               </div>
             </AccordionTrigger>
             <AccordionContent>
@@ -235,7 +247,7 @@ export function PlanEditor() {
                 
                 <h4 className="font-semibold mt-4 border-t pt-4">Planos de Assinatura</h4>
                 <div className="space-y-3">
-                  {prod.plans.map((plan, planIndex) => (
+                  {prod.plans.map((plan) => (
                     <div key={plan.id} className="p-3 border rounded bg-background space-y-3">
                       <div className="flex justify-between items-center">
                           <span className="text-sm font-medium">{plan.name}</span>
@@ -244,22 +256,31 @@ export function PlanEditor() {
                           </Button>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input value={plan.name} onChange={(e) => handlePlanChange(prod.id, plan.id, 'name', e.target.value)} placeholder="Nome do plano (Ex: Mensal)" />
-                        <Input value={plan.id} placeholder="ID do Plano (não editável)" disabled />
+                         <div className="space-y-1">
+                            <Label className="text-xs">Nome do plano (Ex: Mensal)</Label>
+                            <Input value={plan.name} onChange={(e) => handlePlanChange(prod.id, plan.id, 'name', e.target.value)} />
+                         </div>
+                         <div className="space-y-1">
+                            <Label className="text-xs">ID do Plano (não editável)</Label>
+                            <Input value={plan.id} disabled />
+                        </div>
                       </div>
-                      <Textarea value={plan.description} onChange={(e) => handlePlanChange(prod.id, plan.id, 'description', e.target.value)} placeholder="Descrição do plano" />
+                      <div className="space-y-1">
+                        <Label className="text-xs">Descrição do plano</Label>
+                        <Textarea value={plan.description} onChange={(e) => handlePlanChange(prod.id, plan.id, 'description', e.target.value)} />
+                      </div>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                          <div className="space-y-1">
                             <Label className="text-xs">Preço (R$)</Label>
-                            <Input type="number" value={plan.price} onChange={(e) => handlePlanChange(prod.id, plan.id, 'price', parseFloat(e.target.value) || 0)} placeholder="Preço" />
+                            <Input type="number" value={plan.price} onChange={(e) => handlePlanChange(prod.id, plan.id, 'price', parseFloat(e.target.value) || 0)} />
                          </div>
                          <div className="space-y-1">
                             <Label className="text-xs">Preço Original (R$)</Label>
-                            <Input type="number" value={plan.originalPrice || 0} onChange={(e) => handlePlanChange(prod.id, plan.id, 'originalPrice', parseFloat(e.target.value) || 0)} placeholder="Preço Original" />
+                            <Input type="number" value={plan.originalPrice || 0} onChange={(e) => handlePlanChange(prod.id, plan.id, 'originalPrice', parseFloat(e.target.value) || 0)} />
                          </div>
                          <div className="space-y-1">
                             <Label className="text-xs">Dias de Validade</Label>
-                            <Input type="number" value={plan.days} onChange={(e) => handlePlanChange(prod.id, plan.id, 'days', parseInt(e.target.value) || 0)} placeholder="Dias" />
+                            <Input type="number" value={plan.days} onChange={(e) => handlePlanChange(prod.id, plan.id, 'days', parseInt(e.target.value) || 0)} />
                          </div>
                          <div className="flex items-end pb-2">
                              <div className="flex items-center space-x-2">

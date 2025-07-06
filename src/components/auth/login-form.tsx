@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 
 import { auth, db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -53,16 +53,23 @@ export function LoginForm() {
 
       // If the user is the admin, ensure their role is correctly set in Firestore.
       if (isAdmin) {
-        const userDocRef = doc(db, 'users', user.uid);
-        const userDoc = await getDoc(userDocRef);
-        // Ensure the admin role is set, creating or updating the document as needed.
-        if (!userDoc.exists() || userDoc.data()?.role !== 'admin') {
-           await setDoc(userDocRef, { 
-              email: user.email, 
-              role: 'admin',
-              // Preserve existing subscriptions if the document already exists
-              subscriptions: userDoc.exists() ? userDoc.data().subscriptions : {}
-          }, { merge: true });
+        try {
+            const userDocRef = doc(db, 'users', user.uid);
+            // This will create the document if it doesn't exist, or update it if it does.
+            // The merge: true option is crucial to avoid overwriting other fields like 'subscriptions'.
+            await setDoc(userDocRef, { 
+                email: user.email, 
+                role: 'admin'
+            }, { merge: true });
+            console.log("Admin role successfully set in Firestore.");
+        } catch (firestoreError: any) {
+            console.error("CRITICAL: Failed to set admin role in Firestore.", firestoreError);
+            toast({
+                variant: 'destructive',
+                title: 'Falha Crítica de Permissão',
+                description: `Não foi possível definir o status de admin. Erro: ${firestoreError.code}`,
+                duration: 9000,
+            });
         }
       }
       
