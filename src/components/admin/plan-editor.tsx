@@ -112,27 +112,23 @@ export function PlanEditor() {
   };
 
   const handleDeleteProduct = async (productId: string) => {
-    if (!window.confirm("Tem certeza que deseja deletar este produto? Esta ação não pode ser desfeita.")) return;
-    
-    if (!db) {
-        toast({ variant: 'destructive', title: 'Erro', description: 'Serviço de banco de dados indisponível.' });
-        return;
-    }
-    
     setDeletingProductId(productId);
     try {
-        await deleteDoc(doc(db, 'products', productId));
-        toast({ title: 'Sucesso!', description: 'Produto excluído.' });
+      if (!db) {
+        throw new Error('Serviço de banco de dados indisponível.');
+      }
+      await deleteDoc(doc(db, 'products', productId));
+      toast({ title: 'Sucesso!', description: 'Produto excluído.' });
     } catch (error: any) {
-        console.error('Failed to delete product:', error);
-        toast({
-            variant: 'destructive',
-            title: 'Erro ao Excluir',
-            description: `Falha: ${error.code} - ${error.message}. Verifique as regras de segurança do Firestore.`,
-            duration: 9000,
-        });
+      console.error('Failed to delete product:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao Excluir',
+        description: `Falha: ${error.message || 'Verifique as permissões do Firestore.'}`,
+        duration: 9000,
+      });
     } finally {
-        setDeletingProductId(null);
+      setDeletingProductId(null);
     }
   };
   
@@ -221,14 +217,17 @@ export function PlanEditor() {
               <div className="flex justify-between items-center w-full pr-4">
                 <span className="font-bold">{prod.name}</span>
                 <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Deletar produto ${prod.name}`}
-                    disabled={deletingProductId === prod.id}
-                    onClick={(e) => { e.stopPropagation(); handleDeleteProduct(prod.id); }}
-                    className="text-destructive hover:text-destructive/80 hover:bg-destructive/10"
+                  asChild
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Deletar produto ${prod.name}`}
+                  disabled={deletingProductId === prod.id}
+                  onClick={(e) => { e.stopPropagation(); handleDeleteProduct(prod.id); }}
+                  className="text-destructive hover:text-destructive/80 hover:bg-destructive/10"
                 >
+                  <div>
                     {deletingProductId === prod.id ? <Loader2 className="animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  </div>
                 </Button>
               </div>
             </AccordionTrigger>
