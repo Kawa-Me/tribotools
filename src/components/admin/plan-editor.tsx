@@ -111,23 +111,35 @@ export function PlanEditor() {
   const handleDeleteProduct = async (productId: string) => {
     if (!window.confirm("Tem certeza que deseja deletar este produto e todos os seus planos? Esta ação não pode ser desfeita.")) return;
     
+    const originalProducts = [...products];
+    const productToDelete = originalProducts.find(p => p.id === productId);
+
+    if (!productToDelete) return; // Should not happen in a normal flow
+
+    // Optimistic UI update: remove the product from the local state immediately
+    setProducts(prevProducts => prevProducts.filter(p => p.id !== productId));
+
     if (!db) {
-        toast({ variant: 'destructive', title: 'Erro de Conexão', description: 'Serviço de banco de dados indisponível.' });
-        return;
+      toast({ variant: 'destructive', title: 'Erro', description: 'Serviço de banco de dados indisponível. A exclusão foi revertida.' });
+      setProducts(originalProducts); // Revert UI change
+      return;
     }
     
     try {
-        await deleteDoc(doc(db, "products", productId));
-        toast({ title: 'Sucesso!', description: 'Produto deletado.' });
-        // The onSnapshot listener will automatically update the UI.
+      // Attempt to delete the document from Firestore
+      await deleteDoc(doc(db, 'products', productId));
+      toast({ title: 'Sucesso!', description: `Produto "${productToDelete.name}" foi excluído.` });
+      // The `onSnapshot` listener will ensure the state is consistent with the database.
     } catch (error) {
-        console.error("Error deleting product:", error);
-        toast({ 
-            variant: 'destructive', 
-            title: 'Erro ao Deletar', 
-            description: 'Não foi possível remover o produto. Verifique suas permissões no Firebase e tente novamente.',
-            duration: 9000,
-        });
+      console.error('Failed to delete product:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Falha na Exclusão',
+        description: `Não foi possível excluir o produto. A ação foi desfeita. Verifique as permissões do banco de dados.`,
+        duration: 9000,
+      });
+      // If the deletion fails, revert the UI to its original state
+      setProducts(originalProducts);
     }
   };
   
