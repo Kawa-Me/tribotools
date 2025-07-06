@@ -85,7 +85,8 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
   const expirationDate = new Date();
   expirationDate.setHours(expirationDate.getHours() + 1);
 
-  const paymentName = `${name} | Tribo Tools - Plans:[${selectedPlanIds.join(',')}]`;
+  // Simplified the name format to avoid issues with special characters.
+  const paymentName = `${name} - Tribo Tools - Plans: ${selectedPlanIds.join(',')}`;
 
   const payload = {
     name: paymentName,
@@ -111,6 +112,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     });
 
     const data = await response.json();
+    console.log("Resposta recebida da PushInPay:", JSON.stringify(data, null, 2));
     
     if (!response.ok) {
         console.error('Pushin Pay API Error Response:', data);
@@ -120,7 +122,8 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
 
     if (!data.qrcode_text || !data.qrcode_image_url) {
         console.error('Invalid success response from Pushin Pay:', data);
-        return { error: 'Resposta inválida do provedor de pagamento.' };
+        const errorDetails = JSON.stringify(data);
+        return { error: `O provedor retornou uma resposta inesperada. Detalhes: ${errorDetails}` };
     }
 
     return {
