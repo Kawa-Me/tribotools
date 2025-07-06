@@ -12,6 +12,7 @@ import type { Module } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import * as lucideIcons from 'lucide-react';
 import { CheckoutModal } from '@/components/checkout-modal';
+import Link from 'next/link';
 
 const iconComponents: { [key: string]: React.ComponentType<any> } = {
     LayoutDashboard: lucideIcons.LayoutDashboard,
@@ -101,7 +102,9 @@ export default function ModulePage({ params }: { params: { id: string } }) {
                   <h3 className="font-semibold">{lesson.title}</h3>
                   <p className="text-sm text-muted-foreground">{lesson.type === 'video' ? 'Vídeo' : 'Texto'}</p>
                 </div>
-                <Button>Acessar</Button>
+                <Button asChild>
+                  <Link href={`/dashboard/module/${params.id}/lesson/${lesson.id}`}>Acessar</Link>
+                </Button>
               </CardContent>
             </Card>
           ))}
