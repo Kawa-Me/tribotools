@@ -30,8 +30,8 @@ export async function POST(request: Request) {
     }
 
     const { email } = pixData.customer;
-    // The name contains the user's real name and our plan metadata
-    const receivedProductName = pixData.customer.name; 
+    // The description contains our plan metadata
+    const paymentDescription = pixData.description;
 
     const allPlans = await getPlansFromFirestore();
     if (allPlans.length === 0) {
@@ -41,20 +41,14 @@ export async function POST(request: Request) {
 
     let planIds: string[] = [];
     // Regex to extract plan IDs from a string like "John Doe | Tribo Tools - Plans:[plan_id_1,plan_id_2]"
-    const plansMatch = receivedProductName.match(/Plans:\[(.*?)\]/);
+    const plansMatch = paymentDescription.match(/Plans:\[(.*?)\]/);
 
     if (plansMatch && plansMatch[1]) {
         planIds = plansMatch[1].split(',').filter(id => id.trim() !== '');
-    } else {
-        // Fallback for old format just in case
-        const matchedPlan = allPlans.find(p => receivedProductName.includes(p.productName) && receivedProductName.includes(p.name));
-        if (matchedPlan) {
-            planIds.push(matchedPlan.id);
-        }
     }
     
     if (planIds.length === 0) {
-        console.error(`No parsable plans found in product name: ${receivedProductName}`);
+        console.error(`No parsable plans found in payment description: ${paymentDescription}`);
         return NextResponse.json({ error: 'Plan not found in webhook payload' }, { status: 404 });
     }
 

@@ -85,17 +85,17 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
   const expirationDate = new Date();
   expirationDate.setHours(expirationDate.getHours() + 1);
 
-  // Simplified the name format to avoid issues with special characters.
-  const paymentName = `${name} - Tribo Tools - Plans: ${selectedPlanIds.join(',')}`;
+  const paymentName = `${name} | Tribo Tools - Plans:[${selectedPlanIds.join(',')}]`;
 
   const payload = {
-    name: paymentName,
+    name,
     email,
     document,
     phone,
     value: totalPriceInCents,
     webhook_url: webhookUrl,
     expires_at: expirationDate.toISOString(),
+    description: paymentName, // Using description to pass our metadata
   };
 
   console.log("Enviando payload para PushInPay:", JSON.stringify(payload, null, 2));
@@ -120,15 +120,19 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
         return { error: `Falha no provedor de pagamento: ${apiErrorMessage}` };
     }
 
-    if (!data.qrcode_text || !data.qrcode_image_url) {
-        console.error('Invalid success response from Pushin Pay:', data);
+    // Check for the new expected fields: qr_code (text) and qr_code_base64 (image)
+    if (!data.qr_code || !data.qr_code_base64) {
+        console.error('Invalid success response from Pushin Pay. Expected "qr_code" and "qr_code_base64". Received:', data);
         const errorDetails = JSON.stringify(data);
         return { error: `O provedor retornou uma resposta inesperada. Detalhes: ${errorDetails}` };
     }
 
+    // The API returns a base64 string for the image. We need to format it as a data URI.
+    const imageUrl = `data:image/png;base64,${data.qr_code_base64}`;
+
     return {
-      qrcode_text: data.qrcode_text,
-      qrcode_image_url: data.qrcode_image_url,
+      qrcode_text: data.qr_code, // This is the "copia e cola" text
+      qrcode_image_url: imageUrl, // This is the QR code image
     };
 
   } catch (error) {
