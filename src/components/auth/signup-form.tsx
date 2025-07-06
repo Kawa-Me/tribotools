@@ -54,8 +54,8 @@ export function SignupForm() {
       await setDoc(doc(db, 'users', user.uid), {
         email: user.email,
         subscription: {
-          status: 'none',
-          plan: null,
+          status: isAdmin ? 'active' : 'none',
+          plan: isAdmin ? 'anual' : null,
           startedAt: null,
           expiresAt: null,
         },

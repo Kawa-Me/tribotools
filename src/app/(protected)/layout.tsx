@@ -88,7 +88,7 @@ function Sidebar() {
   
     if (!user) return null;
   
-    const isUnlocked = user.subscription?.status === 'active';
+    const isUnlocked = user.role === 'admin' || user.subscription?.status === 'active';
   
     return (
       <div className="hidden border-r bg-muted/40 md:block">
@@ -120,12 +120,14 @@ function Sidebar() {
                 <CardHeader className="p-4">
                     <CardTitle className="text-base">Sua Assinatura</CardTitle>
                     <CardDescription className="text-xs">
-                        {isUnlocked ? `Plano: ${user.subscription.plan}` : 'Nenhuma assinatura ativa.'}
+                        {user.role === 'admin' ? 'Plano: Administrador' : (isUnlocked ? `Plano: ${user.subscription.plan}` : 'Nenhuma assinatura ativa.')}
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="p-4 pt-0">
                     <div className="text-xs text-muted-foreground">
-                        {isUnlocked && user.subscription.expiresAt ? (
+                        {user.role === 'admin' ? (
+                            'Acesso vitalício'
+                        ) : isUnlocked && user.subscription.expiresAt ? (
                             `Expira em: ${new Date(user.subscription.expiresAt.seconds * 1000).toLocaleDateString()}`
                         ) : (
                             <Button size="sm" className="w-full">Fazer Upgrade</Button>
@@ -161,7 +163,7 @@ function Sidebar() {
     }, []);
 
     if (!user) return null;
-    const isUnlocked = user.subscription?.status === 'active';
+    const isUnlocked = user.role === 'admin' || user.subscription?.status === 'active';
   
     return (
       <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6">
@@ -199,12 +201,14 @@ function Sidebar() {
                 <CardHeader>
                     <CardTitle>Sua Assinatura</CardTitle>
                     <CardDescription>
-                         {isUnlocked ? `Plano: ${user.subscription.plan}` : 'Nenhuma assinatura ativa.'}
+                         {user.role === 'admin' ? 'Plano: Administrador' : (isUnlocked ? `Plano: ${user.subscription.plan}` : 'Nenhuma assinatura ativa.')}
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
                 <div className="text-sm text-muted-foreground">
-                        {isUnlocked && user.subscription.expiresAt ? (
+                        {user.role === 'admin' ? (
+                            'Acesso vitalício'
+                        ) : isUnlocked && user.subscription.expiresAt ? (
                             `Expira em: ${new Date(user.subscription.expiresAt.seconds * 1000).toLocaleDateString()}`
                         ) : (
                             <Button size="sm" className="w-full">Fazer Upgrade</Button>

@@ -50,7 +50,7 @@ export default function DashboardPage() {
 
   if (!user) return null;
 
-  const isUnlocked = user.subscription?.status === 'active';
+  const isUnlocked = user.role === 'admin' || user.subscription?.status === 'active';
 
   return (
     <div className="space-y-8">
