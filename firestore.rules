@@ -1,61 +1,39 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isAnonymous() {
-      return request.auth.token.firebase.sign_in_provider == 'anonymous';
-    }
-
-    function isUser(uid) {
-      return isSignedIn() && request.auth.uid == uid;
-    }
-    
-    function getUserData(uid) {
-        return get(/databases/$(database)/documents/users/$(uid)).data;
-    }
-
+    // Helper function to check if the user is an admin
     function isAdmin() {
-      // Checks if the user has the 'admin' role in their Firestore document.
-      // This is secure but cannot be used for `list` rules on the `users` collection.
-      return isSignedIn() && !isAnonymous() && getUserData(request.auth.uid).role == 'admin';
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    function isAdminByEmail() {
-      // This is a workaround for Firestore's limitation on using get() in list rules.
-      // It checks the admin's email directly from the auth token.
-      return isSignedIn() && !isAnonymous() && request.auth.token.email == 'kawameller@gmail.com';
+    // Users collection rules
+    match /users/{userId} {
+      // Users can read and update their own document. Admins can read any user document.
+      allow read, update: if request.auth.uid == userId || isAdmin();
+      // Users can create their own document (e.g., on signup).
+      allow create: if request.auth.uid == userId;
+      // Only admins can list all users.
+      allow list: if isAdmin();
+      // No one can delete user documents from the client.
+      allow delete: if false;
     }
 
-    // Modules collection
-    // Allow anyone (including anonymous and signed-in users) to list and read modules.
+    // Modules collection rules
     match /modules/{moduleId} {
-      allow list, read: if true;
-      // Only admins (verified by role in DB) can create, update, or delete modules.
+      // Any authenticated user can read modules.
+      allow read: if request.auth != null;
+      // Only admins can write (create, update, delete) modules.
       allow write: if isAdmin();
     }
 
-    // Users collection
-    match /users/{userId} {
-      // Use the email-based check for the list operation to avoid permission errors.
-      allow list: if isAdminByEmail();
-      
-      // Allow admins to read any user document.
-      // Allow users to read their own document.
-      allow read: if isAdmin() || isUser(userId);
-
-      // Allow users to update their own document.
-      // Allow admins to update any user document (e.g., subscription status).
-      allow update: if isAdmin() || isUser(userId);
-
-      // Only admins can create or delete user documents. (Creation happens at signup).
-      allow create, delete: if isAdmin();
+    // Products collection rules
+    match /products/{productId} {
+      // Any authenticated user can read products.
+      allow read: if request.auth != null;
+      // Only admins can write (create, update, delete) products.
+      allow write: if isAdmin();
     }
   }
 }

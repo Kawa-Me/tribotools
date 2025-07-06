@@ -5,6 +5,7 @@ import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Module, Lesson } from '@/lib/types';
 import * as lucideIcons from 'lucide-react';
+import { useAuth } from '@/lib/hooks';
 
 const iconComponents: { [key: string]: React.ComponentType<any> } = {
   LayoutDashboard: lucideIcons.LayoutDashboard,
@@ -24,8 +25,17 @@ export function useModules() {
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
   const [dbConfigured, setDbConfigured] = useState(true);
+  const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
+    if (authLoading) {
+      return; // Wait for auth to be ready
+    }
+    if (!user) {
+      setLoading(false); // No user, no data to fetch
+      return;
+    }
+
     if (!db) {
       setLoading(false);
       setDbConfigured(false);
@@ -57,7 +67,7 @@ export function useModules() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user, authLoading]);
 
   return { modules, loading, dbConfigured };
 }

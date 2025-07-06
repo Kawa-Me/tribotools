@@ -4,13 +4,23 @@ import { useEffect, useState, useMemo } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Product } from '@/lib/types';
+import { useAuth } from '@/lib/hooks';
 
 export function useProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [dbConfigured, setDbConfigured] = useState(true);
+  const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
+    if (authLoading) {
+      return; // Wait for auth to be ready
+    }
+    if (!user) {
+      setLoading(false); // No user, no data to fetch
+      return;
+    }
+
     if (!db) {
       setLoading(false);
       setDbConfigured(false);
@@ -30,7 +40,7 @@ export function useProducts() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user, authLoading]);
 
   const allPlans = useMemo(() => {
     return products.flatMap(p => 
