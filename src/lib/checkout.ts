@@ -1,4 +1,3 @@
-
 'use server';
 
 import { z } from 'zod';
@@ -68,10 +67,15 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
   const apiToken = process.env.PUSHINPAY_API_TOKEN;
   const webhookUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/api/webhook`;
 
-  if (!apiToken) {
-    console.error('Pushin Pay API token is not configured.');
-    return { error: 'Erro de configuração do servidor.' };
+  // --- DEBUG LOGGING ---
+  console.log('--- Iniciando Geração de PIX ---');
+  if (apiToken) {
+    console.log('API Token encontrado. Primeiros 5 caracteres:', apiToken.substring(0, 5));
+  } else {
+    console.error('ERRO CRÍTICO: Variável de ambiente PUSHINPAY_API_TOKEN não encontrada!');
+    return { error: 'Erro de configuração do servidor: Chave de API não encontrada.' };
   }
+  // --- END DEBUG LOGGING ---
 
   // The payment provider uses the 'name' field for the customer's name, but we also use it to track plans.
   // We'll combine them, and the webhook will parse the plan IDs from this string.
