@@ -37,7 +37,7 @@ export default function DashboardPage() {
         </Card>
       ) : (
         modules.map((module) => {
-          const hasAccess = user.role === 'admin' || (user.subscriptions && user.subscriptions[module.permission]?.status === 'active');
+          const hasAccess = user.role === 'admin' || module.permission === 'public' || (user.subscriptions && user.subscriptions[module.permission]?.status === 'active');
           
           return (
             (module.lessons && module.lessons.length > 0) && (

@@ -35,7 +35,7 @@ export const seedModules: (Omit<Module, 'id' | 'icon' | 'lessons'> & { icon: str
     title: 'Instruções de Acesso',
     description: 'Como acessar e baixar a extensão exclusiva.',
     icon: 'KeyRound',
-    permission: 'ferramentas',
+    permission: 'public',
     lessons: [
       { title: 'Vídeo de Instruções', type: 'video', content: 'https://www.youtube.com/embed/dQw4w9WgXcQ', isActive: true },
       { title: 'Download da Extensão', type: 'text', content: '## Link para Download\n\nClique no link abaixo para baixar a extensão. Lembre-se de seguir as instruções do vídeo para a instalação correta.', accessUrl: 'https://example.com/download', buttonText: 'Baixar Extensão', isActive: true },

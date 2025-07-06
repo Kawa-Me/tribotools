@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useAuth } from '@/lib/hooks';
@@ -79,7 +80,7 @@ export default function ModulePage({ params: paramsPromise }: { params: Promise<
     return notFound();
   }
 
-  const isUnlocked = user?.role === 'admin' || (user?.subscriptions && user.subscriptions[module.permission]?.status === 'active');
+  const isUnlocked = user?.role === 'admin' || module.permission === 'public' || (user?.subscriptions && user.subscriptions[module.permission]?.status === 'active');
 
   return (
     <div className="space-y-8">
