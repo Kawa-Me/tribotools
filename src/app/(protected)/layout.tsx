@@ -113,8 +113,10 @@ function VerifyEmailScreen() {
 
     const handleSignOut = async () => {
         try {
-            await auth.signOut();
-            router.push('/login');
+            if (auth) {
+                await auth.signOut();
+                router.push('/login');
+            }
         } catch (error) {
             toast({ variant: 'destructive', title: 'Erro ao sair.' });
         }
