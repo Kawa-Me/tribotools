@@ -1,27 +1,33 @@
+
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{userId} {
-      // Users can read their own data. Admins can read any user data.
-      allow read: if request.auth != null && (request.auth.uid == userId || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
-
-      // Users can write to their own document upon creation.
-      allow create: if request.auth.uid == userId;
-
-      // The webhook (unauthenticated) can update any user. Admins can also update any user.
-      // WARNING: This is insecure. In production, use a Cloud Function with a secret key for the webhook.
-      allow update: if request.auth == null || (request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
-
-      // Only admins can delete users.
-      allow delete: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    
+    // Function to check if a user is an admin by reading their document
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    match /modules/{moduleId} {
-      // Any authenticated user can read modules.
-      allow read: if request.auth != null;
+    // Rules for the 'users' collection
+    match /users/{userId} {
+      // Admins can read/write any user document
+      allow read, write: if request.auth != null && isAdmin();
+      
+      // Users can only read their own document
+      allow read: if request.auth != null && request.auth.uid == userId;
 
-      // Admins can create, update, and delete modules.
-      allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      // Allow the webhook to update user subscriptions without authentication
+      allow update: if request.auth == null;
+    }
+
+    // Rules for the 'modules' collection
+    match /modules/{moduleId} {
+      // Any authenticated user can read modules
+      allow read: if request.auth != null;
+      
+      // Only admins can write to modules
+      allow write: if request.auth != null && isAdmin();
     }
   }
 }
