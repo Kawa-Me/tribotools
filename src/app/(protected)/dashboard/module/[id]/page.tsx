@@ -29,7 +29,7 @@ const iconComponents: { [key: string]: React.ComponentType<any> } = {
 
 export default function ModulePage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
-  const { user, isGuest } = useAuth();
+  const { user } = useAuth();
   const [module, setModule] = useState<Module | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -78,7 +78,7 @@ export default function ModulePage({ params: paramsPromise }: { params: Promise<
     return notFound();
   }
 
-  const isUnlocked = !isGuest && (user?.subscription?.status === 'active' || user?.role === 'admin');
+  const isUnlocked = !user?.isAnonymous && (user?.subscription?.status === 'active' || user?.role === 'admin');
 
   return (
     <div className="space-y-8">
@@ -116,7 +116,7 @@ export default function ModulePage({ params: paramsPromise }: { params: Promise<
 }
 
 function LockedContent() {
-  const { isGuest } = useAuth();
+  const { user } = useAuth();
   return (
     <Card className="bg-destructive/10 border-destructive/50 text-center">
       <CardHeader>
@@ -130,12 +130,12 @@ function LockedContent() {
       </CardHeader>
       <CardContent>
         <p className="mb-4">
-          {isGuest
+          {user?.isAnonymous
             ? 'Crie uma conta e faça o upgrade do seu plano para desbloquear este e todos os outros módulos.'
             : 'Faça o upgrade do seu plano para desbloquear este e todos os outros módulos, e tenha acesso total a todos os recursos da plataforma.'
           }
         </p>
-        {isGuest ? (
+        {user?.isAnonymous ? (
           <Button asChild size="lg" variant="destructive">
             <Link href="/signup">Criar Conta Agora</Link>
           </Button>

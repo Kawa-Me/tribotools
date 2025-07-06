@@ -1,6 +1,7 @@
 'use client';
 
 import { signOut } from 'firebase/auth';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks';
 import { auth } from '@/lib/firebase';
@@ -50,6 +51,14 @@ export function UserNav() {
   };
 
   if (!user) return null;
+
+  if (user.isAnonymous) {
+    return (
+      <Button asChild>
+        <Link href="/signup">Criar Conta</Link>
+      </Button>
+    );
+  }
 
   return (
     <DropdownMenu>

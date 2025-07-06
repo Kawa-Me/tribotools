@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -20,6 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -28,7 +30,7 @@ import { ClipboardCopy } from 'lucide-react';
 
 const plans = [
     { id: 'mensal', name: 'Acesso Mensal', price: 57.90, description: '30 dias de acesso' },
-    { id: 'trimestral', name: 'Acesso Trimestral', price: 150.00, description: '90 dias de acesso' },
+    { id: 'trimestral', name: 'Acesso Trimestral', price: 150.00, description: '60 dias de acesso' },
 ] as const;
 
 type PlanId = typeof plans[number]['id'];
@@ -100,6 +102,31 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
     setLoading(false);
     setPixData(null);
     form.reset();
+  }
+
+  // Intercept anonymous users and prompt them to create an account
+  if (user?.isAnonymous) {
+    return (
+      <Dialog>
+        <DialogTrigger asChild>{children}</DialogTrigger>
+        <DialogContent className="sm:max-w-md bg-background/95 backdrop-blur-sm border-primary/20 font-body">
+          <DialogHeader>
+            <DialogTitle className="font-headline text-2xl text-primary">Crie sua conta para continuar</DialogTitle>
+            <DialogDescription>
+              Para realizar uma assinatura, você precisa de uma conta. É rápido e fácil!
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="!mt-4 flex-col sm:flex-col sm:space-x-0 gap-2">
+            <Button asChild className="w-full">
+              <Link href="/signup">Criar Conta Agora</Link>
+            </Button>
+            <Button asChild className="w-full" variant="outline">
+              <Link href="/login">Já tenho uma conta</Link>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
   }
 
   return (

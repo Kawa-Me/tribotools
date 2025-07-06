@@ -2,19 +2,38 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/lib/hooks';
+import { signInAnonymously } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
+import { useToast } from '@/hooks/use-toast';
 import { LoginForm } from '@/components/auth/login-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 
 export default function LoginPage() {
-  const { setGuest } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
 
-  const handleGuestAccess = () => {
-    setGuest(true);
-    router.push('/dashboard');
+  const handleGuestAccess = async () => {
+    if (!auth) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro de Configuração',
+        description: 'O serviço de autenticação não está disponível.',
+      });
+      return;
+    }
+    try {
+      await signInAnonymously(auth);
+      router.push('/dashboard');
+    } catch (error) {
+      console.error('Anonymous sign-in failed', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro',
+        description: 'Não foi possível acessar como visitante. Tente novamente.',
+      });
+    }
   };
 
   return (

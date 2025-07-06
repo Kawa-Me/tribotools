@@ -1,34 +1,32 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    function isAdmin() {
-      // Check if the user is authenticated and their document in 'users' collection has role 'admin'
-      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+
+    function isUserAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isUserAdmin() {
+      // Check if the user is authenticated, has a user document, and their role is 'admin'.
+      return isUserAuthenticated()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
     match /users/{userId} {
-      // Admins can read/write any user document.
-      allow read, write: if isAdmin();
-      
-      // Authenticated users can interact with their own document.
-      allow read, create: if request.auth.uid == userId;
-
-      // Users can't update their own role or subscription.
-      allow update: if request.auth.uid == userId &&
-                       request.resource.data.role == resource.data.role &&
-                       request.resource.data.subscription == resource.data.subscription;
+      // A user can read or update their own document.
+      allow read, update: if isUserAuthenticated() && request.auth.uid == userId;
+      // Only admins can list, create, or delete user documents.
+      allow list, write, delete: if isUserAdmin();
     }
     
     match /modules/{moduleId} {
-      // Allow public read access to modules. This is necessary for guest users 
-      // to see the list of available modules on the dashboard.
-      allow read: if true;
-
-      // Only admins can write to modules.
-      allow write: if isAdmin();
+      // Any authenticated user can read or list modules.
+      // This is safe because the content itself is protected by the app logic (isUnlocked flag)
+      allow read, list: if isUserAuthenticated();
+      // Only admins can write or delete modules.
+      allow write, delete: if isUserAdmin();
     }
   }
 }

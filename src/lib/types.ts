@@ -10,7 +10,7 @@ export interface Lesson {
 }
 
 export interface Module {
-  id: string;
+  id:string;
   title: string;
   description: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -31,11 +31,10 @@ export interface UserData {
   photoURL: string | null;
   subscription: UserSubscription;
   role?: 'admin' | 'user';
+  isAnonymous: boolean;
 }
 
 export interface AuthContextType {
   user: UserData | null;
   loading: boolean;
-  isGuest: boolean;
-  setGuest: (isGuest: boolean) => void;
 }

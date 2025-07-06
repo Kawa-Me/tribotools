@@ -17,27 +17,23 @@ import { CheckoutModal } from '@/components/checkout-modal';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading, isGuest, setGuest } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    // If we're done loading, have no user, and are not in guest mode, redirect to login.
-    if (!loading && !user && !isGuest) {
+    // If we're done loading and have no user (neither real nor anonymous), redirect to login.
+    if (!loading && !user) {
       router.replace('/login');
     }
     
-    // If a user is found (logged in), ensure we're not in guest mode.
-    if (user) {
-      setGuest(false);
-      // If the user is an admin, they should be on the admin panel.
-      if (user.role === 'admin') {
-        router.replace('/admin');
-      }
+    // If a logged-in user is an admin, they should be on the admin panel.
+    if (user && !user.isAnonymous && user.role === 'admin') {
+      router.replace('/admin');
     }
-  }, [user, loading, router, isGuest, setGuest]);
+  }, [user, loading, router]);
 
   // Show a loader during auth check, if we need to redirect, or if an admin lands here.
-  if (loading || (!user && !isGuest) || (user?.role === 'admin')) {
+  if (loading || !user || (user.role === 'admin' && !user.isAnonymous)) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader className="h-10 w-10 text-primary" />
@@ -63,10 +59,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
 function Sidebar() {
     const pathname = usePathname();
-    const { user, isGuest } = useAuth();
+    const { user } = useAuth();
     const { modules, dbConfigured } = useModules();
   
-    const isUnlocked = !isGuest && (user?.role === 'admin' || user?.subscription?.status === 'active');
+    const isUnlocked = user && !user.isAnonymous && (user.role === 'admin' || user.subscription?.status === 'active');
   
     return (
       <div className="hidden border-r bg-muted/40 md:block">
@@ -105,14 +101,14 @@ function Sidebar() {
         <div className="fixed bottom-5 z-50 p-4 md:w-[220px] lg:w-[280px]">
           <Card className="bg-card/80 backdrop-blur-sm border-white/10">
               <CardHeader className="p-4">
-                  <CardTitle className="text-base">{isGuest ? 'Visitante' : 'Sua Assinatura'}</CardTitle>
+                  <CardTitle className="text-base">{user?.isAnonymous ? 'Visitante' : 'Sua Assinatura'}</CardTitle>
                   <CardDescription className="text-xs">
-                      {isGuest ? 'Crie uma conta para acessar.' : (user?.role === 'admin' ? 'Plano: Administrador' : (isUnlocked ? `Plano: ${user?.subscription?.plan}` : 'Nenhuma assinatura ativa.'))}
+                      {user?.isAnonymous ? 'Crie uma conta para acessar.' : (user?.role === 'admin' ? 'Plano: Administrador' : (isUnlocked ? `Plano: ${user?.subscription?.plan}` : 'Nenhuma assinatura ativa.'))}
                   </CardDescription>
               </CardHeader>
               <CardContent className="p-4 pt-0">
                   <div className="text-xs text-muted-foreground">
-                      {isGuest ? (
+                      {user?.isAnonymous ? (
                           <Button asChild size="sm" className="w-full"><Link href="/signup">Criar Conta</Link></Button>
                       ) : user?.role === 'admin' ? (
                           'Acesso vitalício'
@@ -133,10 +129,10 @@ function Sidebar() {
   
   function Header() {
     const pathname = usePathname();
-    const { user, isGuest } = useAuth();
+    const { user } = useAuth();
     const { modules, dbConfigured } = useModules();
 
-    const isUnlocked = !isGuest && (user?.role === 'admin' || user?.subscription?.status === 'active');
+    const isUnlocked = user && !user.isAnonymous && (user.role === 'admin' || user.subscription?.status === 'active');
   
     return (
       <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-neutral-800 bg-background/95 px-4 shadow-md backdrop-blur-sm lg:h-[60px] lg:px-6">
@@ -181,14 +177,14 @@ function Sidebar() {
             <div className="mt-auto">
               <Card className="bg-card/80 backdrop-blur-sm border-white/10">
                 <CardHeader>
-                    <CardTitle>{isGuest ? 'Visitante' : 'Sua Assinatura'}</CardTitle>
+                    <CardTitle>{user?.isAnonymous ? 'Visitante' : 'Sua Assinatura'}</CardTitle>
                     <CardDescription>
-                         {isGuest ? 'Crie uma conta para acessar.' : (user?.role === 'admin' ? 'Plano: Administrador' : (isUnlocked ? `Plano: ${user?.subscription?.plan}` : 'Nenhuma assinatura ativa.'))}
+                         {user?.isAnonymous ? 'Crie uma conta para acessar.' : (user?.role === 'admin' ? 'Plano: Administrador' : (isUnlocked ? `Plano: ${user?.subscription?.plan}` : 'Nenhuma assinatura ativa.'))}
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
                 <div className="text-sm text-muted-foreground">
-                        {isGuest ? (
+                        {user?.isAnonymous ? (
                             <Button asChild size="sm" className="w-full"><Link href="/signup">Criar Conta</Link></Button>
                         ) : user?.role === 'admin' ? (
                             'Acesso vitalício'
