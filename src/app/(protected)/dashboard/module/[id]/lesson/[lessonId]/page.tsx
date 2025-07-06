@@ -12,21 +12,6 @@ import { Button } from '@/components/ui/button';
 import ReactMarkdown from 'react-markdown';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-// Refactored InfoField to be a presentational component that receives a copy handler
-function InfoField({ label, value, isPassword = false, onCopy }: { label: string, value: string, isPassword?: boolean, onCopy: () => void }) {
-  return (
-    <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-3 transition-colors">
-      <div>
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className={`font-mono text-sm text-foreground ${!isPassword && 'break-all'}`}>{isPassword ? '••••••••' : value}</p>
-      </div>
-      <Button variant="ghost" size="icon" onClick={onCopy} aria-label={`Copiar ${label}`}>
-        <ClipboardCopy className="h-4 w-4" />
-      </Button>
-    </div>
-  );
-}
-
 export default function LessonPage({ params: paramsPromise }: { params: Promise<{ id: string; lessonId: string }> }) {
   const params = use(paramsPromise);
   const router = useRouter();
@@ -131,9 +116,31 @@ export default function LessonPage({ params: paramsPromise }: { params: Promise<
                             </a>
                         </Button>
                     )}
-                    <div className="space-y-2">
-                        {lesson.accessEmail && <InfoField label="Email / Usuário" value={lesson.accessEmail} onCopy={() => handleCopy(lesson.accessEmail!, 'Email / Usuário')} />}
-                        {lesson.accessPassword && <InfoField label="Senha" value={lesson.accessPassword} isPassword onCopy={() => handleCopy(lesson.accessPassword!, 'Senha')} />}
+                    <div className="space-y-4">
+                        {lesson.accessEmail && (
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between rounded-lg border-2 border-primary/20 bg-muted/30 p-4 transition-colors gap-4 shadow-lg shadow-primary/5">
+                                <div>
+                                    <p className="font-headline text-lg text-primary">Email / Usuário</p>
+                                    <p className="font-mono text-sm text-foreground break-all">{lesson.accessEmail}</p>
+                                </div>
+                                <Button size="lg" className="w-full sm:w-auto flex-shrink-0" onClick={() => handleCopy(lesson.accessEmail!, 'Email / Usuário')}>
+                                    <ClipboardCopy />
+                                    Copiar Email
+                                </Button>
+                            </div>
+                        )}
+                        {lesson.accessPassword && (
+                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between rounded-lg border-2 border-primary/20 bg-muted/30 p-4 transition-colors gap-4 shadow-lg shadow-primary/5">
+                                <div>
+                                    <p className="font-headline text-lg text-primary">Senha</p>
+                                    <p className="font-mono text-sm text-foreground">••••••••</p>
+                                </div>
+                                <Button size="lg" className="w-full sm:w-auto flex-shrink-0" onClick={() => handleCopy(lesson.accessPassword!, 'Senha')}>
+                                    <ClipboardCopy />
+                                    Copiar Senha
+                                </Button>
+                            </div>
+                        )}
                     </div>
                 </CardContent>
             </Card>
