@@ -82,6 +82,17 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
   const apiUrl = 'https://api.pushinpay.com.br/api/pix/cashIn';
   const webhookUrl = `${siteUrl}/api/webhook`;
 
+  if (siteUrl.includes('localhost')) {
+      console.warn(`
+        --- AVISO DE DESENVOLVIMENTO ---
+        Você está usando um endereço localhost para o webhook: ${webhookUrl}
+        O provedor de pagamento (PushInPay) não conseguirá acessar este endereço.
+        A liberação automática de acesso NÃO funcionará no ambiente local.
+        Isto é esperado. Em produção, com uma URL pública, o webhook funcionará normalmente.
+        --- FIM DO AVISO ---
+      `);
+  }
+
   const expirationDate = new Date();
   expirationDate.setHours(expirationDate.getHours() + 1);
 
