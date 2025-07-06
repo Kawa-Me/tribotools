@@ -1,8 +1,6 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -111,8 +109,8 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
         phone: data.phone,
       });
 
-      if (result.error || !result.qrcode_text) {
-        throw new Error(result.error || 'Não foi possível gerar o Pix. Tente novamente.');
+      if (result.error || !result.qrcode_text || !result.qrcode_image_url) {
+        throw new Error(result.error || 'Não foi possível gerar o Pix. A API retornou uma resposta inesperada.');
       }
       
       setPixData(result as PixData);
@@ -168,13 +166,14 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
     if (pixData) {
         return (
              <div className="flex flex-col items-center gap-4">
-               <Image src={pixData.qrcode_image_url} alt="QR Code Pix" width={250} height={250} className="rounded-md border-2 border-primary" />
-               <div className="w-full p-3 bg-muted/50 rounded-md flex items-center gap-2 border border-input">
-                  <p className="truncate text-sm flex-grow">{pixData.qrcode_text}</p>
-                  <Button variant="ghost" size="icon" onClick={() => handleCopyToClipboard(pixData.qrcode_text)}>
-                      <ClipboardCopy className="h-4 w-4" />
-                  </Button>
-               </div>
+                {/* Use a standard img tag for better data URI compatibility and add a white background for scannability */}
+               <img src={pixData.qrcode_image_url} alt="QR Code Pix" width={250} height={250} className="rounded-md border-2 border-primary bg-white p-1" />
+               
+               <Button className="w-full" size="lg" onClick={() => handleCopyToClipboard(pixData.qrcode_text)}>
+                    <ClipboardCopy className="mr-2 h-4 w-4" />
+                    Copiar Código PIX
+               </Button>
+
                <p className="text-xs text-center text-muted-foreground">Após o pagamento, o acesso será liberado automaticamente em alguns instantes.</p>
             </div>
         )
