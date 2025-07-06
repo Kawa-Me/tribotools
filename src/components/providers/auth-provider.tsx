@@ -11,6 +11,7 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isGuest, setGuest] = useState(false);
 
   useEffect(() => {
     // If firebase is not configured, we set loading to false and user to null.
@@ -22,26 +23,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
-        // User is signed in, listen to their profile in Firestore
+        // User is signed in, no longer a guest.
+        setGuest(false);
+        // Listen to their profile in Firestore
         const userDocRef = doc(db, 'users', firebaseUser.uid);
         const unsubFirestore = onSnapshot(userDocRef, (doc) => {
           if (doc.exists()) {
             const data = doc.data();
             const expiresAt = data.subscription?.expiresAt as Timestamp | null;
-            const currentDbStatus = data.subscription?.status;
-            let effectiveStatus = currentDbStatus;
+            let currentDbStatus = data.subscription?.status;
 
-            // Check if a currently active subscription has expired
             if (currentDbStatus === 'active' && expiresAt && expiresAt.toDate() < new Date()) {
-                effectiveStatus = 'expired';
-                // Update Firestore document to reflect the expiration.
-                // This is a "write-on-read" pattern to keep data clean.
-                updateDoc(doc.ref, { 'subscription.status': 'expired' })
-                    .catch(err => console.error("Failed to auto-update expired status:", err));
+                currentDbStatus = 'expired';
             }
             
             const subscription: UserSubscription = {
-              status: effectiveStatus,
+              status: currentDbStatus,
               plan: data.subscription?.plan || null,
               expiresAt,
               startedAt: data.subscription?.startedAt || null,
@@ -74,11 +71,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // User is signed out
         setUser(null);
         setLoading(false);
+        // Do not reset guest state here, as they might be navigating as a guest.
       }
     });
 
     return () => unsubscribe();
   }, []);
 
-  return <AuthContext.Provider value={{ user, loading }}>{children}</AuthContext.Provider>;
+  const value = { user, loading, isGuest, setGuest };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

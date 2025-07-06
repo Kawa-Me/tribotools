@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, use } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks';
@@ -17,19 +17,27 @@ import { CheckoutModal } from '@/components/checkout-modal';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, isGuest, setGuest } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user) {
+    // If we're done loading, have no user, and are not in guest mode, redirect to login.
+    if (!loading && !user && !isGuest) {
       router.replace('/login');
     }
-    if (!loading && user?.role === 'admin') {
-      router.replace('/admin');
+    
+    // If a user is found (logged in), ensure we're not in guest mode.
+    if (user) {
+      setGuest(false);
+      // If the user is an admin, they should be on the admin panel.
+      if (user.role === 'admin') {
+        router.replace('/admin');
+      }
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, isGuest, setGuest]);
 
-  if (loading || !user || user.role === 'admin') {
+  // Show a loader during auth check, if we need to redirect, or if an admin lands here.
+  if (loading || (!user && !isGuest) || (user?.role === 'admin')) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader className="h-10 w-10 text-primary" />
@@ -41,9 +49,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <>
       <div className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
         <Sidebar />
-        <div className="flex flex-col overflow-y-auto">
+        <div className="flex flex-col">
           <Header />
-          <main className="flex-1 bg-background p-4 md:p-6 lg:p-8">
+          <main className="flex-1 overflow-y-auto bg-background p-4 md:p-6 lg:p-8">
               {children}
           </main>
         </div>
@@ -55,12 +63,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
 function Sidebar() {
     const pathname = usePathname();
-    const { user } = useAuth();
+    const { user, isGuest } = useAuth();
     const { modules, dbConfigured } = useModules();
   
-    if (!user) return null;
-  
-    const isUnlocked = user.role === 'admin' || user.subscription?.status === 'active';
+    const isUnlocked = !isGuest && (user?.role === 'admin' || user?.subscription?.status === 'active');
   
     return (
       <div className="hidden border-r bg-muted/40 md:block">
@@ -99,16 +105,18 @@ function Sidebar() {
         <div className="fixed bottom-5 z-50 p-4 md:w-[220px] lg:w-[280px]">
           <Card className="bg-card/80 backdrop-blur-sm border-white/10">
               <CardHeader className="p-4">
-                  <CardTitle className="text-base">Sua Assinatura</CardTitle>
+                  <CardTitle className="text-base">{isGuest ? 'Visitante' : 'Sua Assinatura'}</CardTitle>
                   <CardDescription className="text-xs">
-                      {user.role === 'admin' ? 'Plano: Administrador' : (isUnlocked ? `Plano: ${user.subscription.plan}` : 'Nenhuma assinatura ativa.')}
+                      {isGuest ? 'Crie uma conta para acessar.' : (user?.role === 'admin' ? 'Plano: Administrador' : (isUnlocked ? `Plano: ${user?.subscription?.plan}` : 'Nenhuma assinatura ativa.'))}
                   </CardDescription>
               </CardHeader>
               <CardContent className="p-4 pt-0">
                   <div className="text-xs text-muted-foreground">
-                      {user.role === 'admin' ? (
+                      {isGuest ? (
+                          <Button asChild size="sm" className="w-full"><Link href="/signup">Criar Conta</Link></Button>
+                      ) : user?.role === 'admin' ? (
                           'Acesso vitalício'
-                      ) : isUnlocked && user.subscription.expiresAt ? (
+                      ) : isUnlocked && user?.subscription?.expiresAt ? (
                           `Expira em: ${new Date(user.subscription.expiresAt.seconds * 1000).toLocaleDateString()}`
                       ) : (
                            <CheckoutModal>
@@ -125,11 +133,10 @@ function Sidebar() {
   
   function Header() {
     const pathname = usePathname();
-    const { user } = useAuth();
+    const { user, isGuest } = useAuth();
     const { modules, dbConfigured } = useModules();
 
-    if (!user) return null;
-    const isUnlocked = user.role === 'admin' || user.subscription?.status === 'active';
+    const isUnlocked = !isGuest && (user?.role === 'admin' || user?.subscription?.status === 'active');
   
     return (
       <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-neutral-800 bg-background/95 px-4 shadow-md backdrop-blur-sm lg:h-[60px] lg:px-6">
@@ -174,16 +181,18 @@ function Sidebar() {
             <div className="mt-auto">
               <Card className="bg-card/80 backdrop-blur-sm border-white/10">
                 <CardHeader>
-                    <CardTitle>Sua Assinatura</CardTitle>
+                    <CardTitle>{isGuest ? 'Visitante' : 'Sua Assinatura'}</CardTitle>
                     <CardDescription>
-                         {user.role === 'admin' ? 'Plano: Administrador' : (isUnlocked ? `Plano: ${user.subscription.plan}` : 'Nenhuma assinatura ativa.')}
+                         {isGuest ? 'Crie uma conta para acessar.' : (user?.role === 'admin' ? 'Plano: Administrador' : (isUnlocked ? `Plano: ${user?.subscription?.plan}` : 'Nenhuma assinatura ativa.'))}
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
                 <div className="text-sm text-muted-foreground">
-                        {user.role === 'admin' ? (
+                        {isGuest ? (
+                            <Button asChild size="sm" className="w-full"><Link href="/signup">Criar Conta</Link></Button>
+                        ) : user?.role === 'admin' ? (
                             'Acesso vitalício'
-                        ) : isUnlocked && user.subscription.expiresAt ? (
+                        ) : isUnlocked && user?.subscription?.expiresAt ? (
                             `Expira em: ${new Date(user.subscription.expiresAt.seconds * 1000).toLocaleDateString()}`
                         ) : (
                             <CheckoutModal>
@@ -200,7 +209,7 @@ function Sidebar() {
         <div className="w-full flex-1">
           {/* Can add search bar here if needed */}
         </div>
-        <UserNav />
+        {user ? <UserNav /> : <Button asChild><Link href="/login">Fazer Login</Link></Button>}
       </header>
     );
   }

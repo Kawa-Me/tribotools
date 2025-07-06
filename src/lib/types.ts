@@ -36,4 +36,6 @@ export interface UserData {
 export interface AuthContextType {
   user: UserData | null;
   loading: boolean;
+  isGuest: boolean;
+  setGuest: (isGuest: boolean) => void;
 }
