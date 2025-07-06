@@ -4,38 +4,37 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Helper function para verificar se o usuário é um administrador.
+    // Isso verifica se o documento do usuário existe e se o campo 'role' é 'admin'.
+    function isAdmin() {
+      return request.auth != null && exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Helper function para verificar se o usuário está autenticado.
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      // Verifica se o usuário está autenticado e se o seu documento na coleção 'users' tem a role 'admin'.
-      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-
+    // Coleção de Módulos:
+    // - Qualquer usuário autenticado pode LER a lista de módulos.
+    // - Apenas administradores podem ESCREVER (criar, editar, deletar) módulos.
     match /modules/{moduleId} {
-      // Qualquer usuário autenticado pode ler os módulos.
       allow read: if isAuthenticated();
-      // Apenas administradores podem escrever nos módulos.
       allow write: if isAdmin();
     }
 
+    // Coleção de Usuários:
+    // - Usuários podem LER e ATUALIZAR seus próprios dados.
+    // - Administradores podem LER e ATUALIZAR os dados de qualquer usuário.
+    // - Administradores podem LISTAR todos os usuários.
+    // - Um usuário pode CRIAR seu próprio documento ao se registrar.
     match /users/{userId} {
-      // O usuário pode criar seu próprio documento (cadastro).
-      allow create: if isAuthenticated() && request.auth.uid == userId;
-
-      // O usuário pode ler seu próprio documento.
-      // O administrador pode ler qualquer documento de usuário.
-      allow get: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
-      
-      // Apenas administradores podem listar todos os usuários (para o painel de admin).
+      allow get, update: if request.auth.uid == userId || isAdmin();
       allow list: if isAdmin();
-
-      // O administrador pode atualizar qualquer usuário.
-      // O webhook (não autenticado) também pode atualizar um usuário para ativar a assinatura.
-      // ATENÇÃO: A permissão 'request.auth == null' é necessária para a arquitetura atual do webhook,
-      // mas deve ser tratada com cuidado em produção, idealmente usando um segredo ou Cloud Function.
-      allow update: if isAdmin() || request.auth == null;
+      allow create: if isAuthenticated();
+      // Nenhuma permissão de exclusão é concedida para segurança.
+      allow delete: if false;
     }
   }
 }
