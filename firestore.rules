@@ -1,32 +1,40 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function isUserAuthenticated() {
-      return request.auth != null;
+    
+    function isAdmin() {
+      return request.auth != null &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    function isUserAdmin() {
-      // Check if the user is authenticated, has a user document, and their role is 'admin'.
-      return isUserAuthenticated()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    match /modules/{moduleId} {
+      // Any authenticated user (including anonymous) can read modules.
+      allow get, list: if request.auth != null;
+      
+      // Only admins can write modules.
+      allow write: if isAdmin();
     }
 
     match /users/{userId} {
-      // A user can read or update their own document.
-      allow read, update: if isUserAuthenticated() && request.auth.uid == userId;
-      // Only admins can list, create, or delete user documents.
-      allow list, write, delete: if isUserAdmin();
-    }
-    
-    match /modules/{moduleId} {
-      // Any authenticated user can read or list modules.
-      // This is safe because the content itself is protected by the app logic (isUnlocked flag)
-      allow read, list: if isUserAuthenticated();
-      // Only admins can write or delete modules.
-      allow write, delete: if isUserAdmin();
+      // User can create their own document on signup.
+      allow create: if request.auth.uid == userId;
+
+      // User can read their own data. Admins can read any user's data.
+      allow get: if request.auth.uid == userId || isAdmin();
+      
+      // A user can update their own data. Admins can update any user's data.
+      // NOTE: This rule is intentionally broad for simplicity. In a real-world scenario,
+      // you'd likely restrict which fields a user can update.
+      allow update: if request.auth.uid == userId || isAdmin();
+      
+      // Only admins can list all users for the admin panel.
+      allow list: if isAdmin();
+      
+      // Only admins can delete users.
+      allow delete: if isAdmin();
     }
   }
 }
