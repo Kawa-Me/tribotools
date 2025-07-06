@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks';
+import { useModules } from '@/hooks/use-modules';
 import { cn } from '@/lib/utils';
 import { Loader } from '@/components/loader';
 import { Logo } from '@/components/logo';
@@ -11,26 +12,9 @@ import { UserNav } from '@/components/dashboard/user-nav';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Menu } from 'lucide-react';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import type { Module } from '@/lib/types';
-import * as lucideIcons from 'lucide-react';
 import { Rotbar } from '@/components/rotbar';
 import { CheckoutModal } from '@/components/checkout-modal';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-
-const iconComponents: { [key: string]: React.ComponentType<any> } = {
-  LayoutDashboard: lucideIcons.LayoutDashboard,
-  BookOpen: lucideIcons.BookOpen,
-  Users: lucideIcons.Users,
-  Settings: lucideIcons.Settings,
-  ShieldCheck: lucideIcons.ShieldCheck,
-  KeyRound: lucideIcons.KeyRound,
-  SearchCode: lucideIcons.SearchCode,
-  BrainCircuit: lucideIcons.BrainCircuit,
-  Paintbrush: lucideIcons.Paintbrush,
-  TrendingUp: lucideIcons.TrendingUp,
-};
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -72,25 +56,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 function Sidebar() {
     const pathname = usePathname();
     const { user } = useAuth();
-    const [modules, setModules] = useState<Module[]>([]);
-    const [dbConfigured, setDbConfigured] = useState(true);
-
-    useEffect(() => {
-        if (!db) {
-            setDbConfigured(false);
-            return;
-        }
-        const unsubscribe = onSnapshot(collection(db, "modules"), (snapshot) => {
-            const modulesData = snapshot.docs.map(doc => {
-                const data = doc.data();
-                const iconName = data.icon as keyof typeof iconComponents;
-                const icon = iconComponents[iconName] || lucideIcons.HelpCircle;
-                return { id: doc.id, ...data, icon } as Module;
-            });
-            setModules(modulesData);
-        });
-        return () => unsubscribe && unsubscribe();
-    }, []);
+    const { modules, dbConfigured } = useModules();
   
     if (!user) return null;
   
@@ -100,8 +66,8 @@ function Sidebar() {
       <div className="hidden border-r bg-muted/40 md:block">
         <div className="flex h-full max-h-screen flex-col gap-2">
           <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
-            <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
-              <Logo />
+            <Link href="/dashboard" className="flex items-center gap-2 font-semibold w-full">
+              <Logo className="w-full" />
             </Link>
           </div>
           <div className="flex-1 overflow-y-auto">
@@ -157,25 +123,7 @@ function Sidebar() {
   function Header() {
     const pathname = usePathname();
     const { user } = useAuth();
-    const [modules, setModules] = useState<Module[]>([]);
-    const [dbConfigured, setDbConfigured] = useState(true);
-
-    useEffect(() => {
-        if (!db) {
-            setDbConfigured(false);
-            return;
-        }
-        const unsubscribe = onSnapshot(collection(db, "modules"), (snapshot) => {
-            const modulesData = snapshot.docs.map(doc => {
-                 const data = doc.data();
-                const iconName = data.icon as keyof typeof iconComponents;
-                const icon = iconComponents[iconName] || lucideIcons.HelpCircle;
-                return { id: doc.id, ...data, icon } as Module;
-            });
-            setModules(modulesData);
-        });
-        return () => unsubscribe && unsubscribe();
-    }, []);
+    const { modules, dbConfigured } = useModules();
 
     if (!user) return null;
     const isUnlocked = user.role === 'admin' || user.subscription?.status === 'active';

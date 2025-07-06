@@ -1,53 +1,14 @@
 'use client';
 
 import { useAuth } from '@/lib/hooks';
-import { useEffect, useState } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import type { Module } from '@/lib/types';
+import { useModules } from '@/hooks/use-modules';
 import { Skeleton } from '@/components/ui/skeleton';
-import * as lucideIcons from 'lucide-react';
 import { Card, CardDescription, CardTitle } from '@/components/ui/card';
 import { ToolCard } from '@/components/dashboard/tool-card';
 
-const iconComponents: { [key: string]: React.ComponentType<any> } = {
-  LayoutDashboard: lucideIcons.LayoutDashboard,
-  BookOpen: lucideIcons.BookOpen,
-  Users: lucideIcons.Users,
-  Settings: lucideIcons.Settings,
-  ShieldCheck: lucideIcons.ShieldCheck,
-  KeyRound: lucideIcons.KeyRound,
-  SearchCode: lucideIcons.SearchCode,
-  BrainCircuit: lucideIcons.BrainCircuit,
-  Paintbrush: lucideIcons.Paintbrush,
-  TrendingUp: lucideIcons.TrendingUp,
-};
-
 export default function DashboardPage() {
   const { user } = useAuth();
-  const [modules, setModules] = useState<Module[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [dbConfigured, setDbConfigured] = useState(true);
-
-  useEffect(() => {
-    if (!db) {
-      setLoading(false);
-      setDbConfigured(false);
-      return;
-    }
-    const unsubscribe = onSnapshot(collection(db, "modules"), (snapshot) => {
-      const modulesData = snapshot.docs.map(doc => {
-        const data = doc.data();
-        const iconName = data.icon as keyof typeof iconComponents;
-        const icon = iconComponents[iconName] || lucideIcons.HelpCircle;
-        return { id: doc.id, ...data, icon } as Module;
-      });
-      setModules(modulesData);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
+  const { modules, loading, dbConfigured } = useModules();
 
   if (!user) return null;
 
@@ -77,17 +38,19 @@ export default function DashboardPage() {
         </Card>
       ) : (
         modules.map((module) => (
-          <div key={module.id} className="space-y-4">
-            <h2 className="text-lg font-bold font-headline flex items-center gap-3 text-primary/90">
-                <module.icon className="h-5 w-5" />
-                {module.title}
-            </h2>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-              {module.lessons.map((lesson) => (
-                <ToolCard key={lesson.id} lesson={lesson} moduleId={module.id} isLocked={!isUnlocked} />
-              ))}
+          (module.lessons && module.lessons.length > 0) && (
+            <div key={module.id} className="space-y-4">
+              <h2 className="text-lg font-bold font-headline flex items-center gap-3 text-primary/90">
+                  <module.icon className="h-5 w-5" />
+                  {module.title}
+              </h2>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                {module.lessons.map((lesson) => (
+                  <ToolCard key={lesson.id} lesson={lesson} moduleId={module.id} isLocked={!isUnlocked} />
+                ))}
+              </div>
             </div>
-          </div>
+          )
         ))
       )}
     </div>

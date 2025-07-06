@@ -3,13 +3,14 @@ import Image from 'next/image';
 
 export function Logo({ className }: { className?: string }) {
   return (
-    <div className={cn('flex items-center', className)}>
+    <div className={cn('flex items-center justify-center', className)}>
       <Image
         src="https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//tribo-logo.png"
         alt="Tribo Tools Logo"
-        width={140}
-        height={25}
+        width={120}
+        height={22}
         priority
+        className="object-contain"
       />
     </div>
   );
