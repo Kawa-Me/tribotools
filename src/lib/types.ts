@@ -5,9 +5,13 @@ export interface Lesson {
   id: string;
   title: string;
   type: 'video' | 'text';
-  content: string; // URL for video, markdown string for text
+  content: string; // URL for video, Markdown for additional notes on text lessons
   imageUrl?: string;
   order: number;
+  accessUrl?: string;
+  buttonText?: string;
+  accessEmail?: string;
+  accessPassword?: string;
 }
 
 export interface Module {

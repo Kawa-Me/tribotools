@@ -13,15 +13,18 @@ import {
 } from '@/components/ui/accordion';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Trash2, ArrowUp, ArrowDown, Save } from 'lucide-react';
+import { PlusCircle, Trash2, ArrowUp, ArrowDown, Save, Eye, EyeOff } from 'lucide-react';
 import { Skeleton } from '../ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { cn } from '@/lib/utils';
 
 export function ModuleEditor() {
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
 
   useEffect(() => {
@@ -105,8 +108,6 @@ export function ModuleEditor() {
       const batch = writeBatch(db);
       modules.forEach(mod => {
           const moduleRef = doc(db, 'modules', mod.id);
-          // The 'icon' property on the module object here is the string name,
-          // due to the 'as any' cast during data fetching. So it's safe to save.
           const { icon, ...dataToSave } = mod;
           batch.set(moduleRef, { ...dataToSave, icon: icon });
       });
@@ -123,7 +124,7 @@ export function ModuleEditor() {
       id: doc(collection(db, 'modules')).id,
       title: 'Novo Módulo',
       description: 'Descrição do novo módulo.',
-      icon: 'LayoutDashboard' as any, // Placeholder
+      icon: 'LayoutDashboard' as any,
       lessons: [],
       order: modules.length,
     };
@@ -138,7 +139,6 @@ export function ModuleEditor() {
     if (!window.confirm("Tem certeza que deseja deletar este módulo? Esta ação não pode ser desfeita.")) return;
     try {
         await deleteDoc(doc(db, "modules", moduleId));
-        // The local state will be updated by the onSnapshot listener
         toast({ title: 'Sucesso!', description: 'Módulo deletado.' });
     } catch (error) {
         console.error(error);
@@ -158,9 +158,13 @@ export function ModuleEditor() {
                   id: `lesson-${Date.now()}`,
                   title: 'Nova Lição',
                   type: 'text',
-                  content: 'Conteúdo da nova lição.',
+                  content: '',
                   imageUrl: '',
                   order: mod.lessons.length,
+                  accessUrl: '',
+                  buttonText: '',
+                  accessEmail: '',
+                  accessPassword: '',
                 },
               ],
             }
@@ -341,26 +345,81 @@ export function ModuleEditor() {
                 <h4 className="font-semibold mt-4">Lições</h4>
                 <div className="space-y-3">
                     {mod.lessons.map((lesson, lessonIndex) => (
-                        <div key={lesson.id} className="p-3 border rounded bg-background space-y-2">
+                        <div key={lesson.id} className="p-3 border rounded bg-background space-y-3">
                              <div className="flex justify-between items-center">
                                 <div className="flex items-center gap-2">
                                     <div className="flex flex-col">
-                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={lessonIndex === 0} onClick={() => handleMoveLesson(mod.id, lessonIndex, 'up')}>
+                                        <div
+                                            role="button"
+                                            aria-label="Mover lição para cima"
+                                            className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-6 w-6', lessonIndex === 0 && 'pointer-events-none opacity-50')}
+                                            onClick={() => handleMoveLesson(mod.id, lessonIndex, 'up')}>
                                             <ArrowUp className="h-4 w-4" />
-                                        </Button>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={lessonIndex === mod.lessons.length - 1} onClick={() => handleMoveLesson(mod.id, lessonIndex, 'down')}>
+                                        </div>
+                                        <div
+                                            role="button"
+                                            aria-label="Mover lição para baixo"
+                                            className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-6 w-6', lessonIndex === mod.lessons.length - 1 && 'pointer-events-none opacity-50')}
+                                            onClick={() => handleMoveLesson(mod.id, lessonIndex, 'down')}>
                                             <ArrowDown className="h-4 w-4" />
-                                        </Button>
+                                        </div>
                                     </div>
                                     <span className="text-sm font-medium">Lição {lessonIndex + 1}</span>
                                 </div>
-                                <Button variant="ghost" size="icon" onClick={() => handleDeleteLesson(mod.id, lesson.id)} className="text-destructive hover:text-destructive/80">
+                                <div
+                                    role="button"
+                                    aria-label={`Deletar lição ${lesson.title}`}
+                                    onClick={() => handleDeleteLesson(mod.id, lesson.id)}
+                                    className={cn('p-2 rounded-md hover:bg-destructive/20 text-destructive hover:text-destructive/80')}
+                                >
                                     <Trash2 className="h-4 w-4" />
-                                </Button>
+                                </div>
                              </div>
                             <Input value={lesson.title} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'title', e.target.value)} placeholder="Título da lição" />
                             <Input value={lesson.imageUrl || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'imageUrl', e.target.value)} placeholder="URL da Imagem da Capa" />
-                            <Textarea value={lesson.content} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'content', e.target.value)} placeholder="Conteúdo (URL do vídeo ou texto em markdown)" />
+                            
+                            <div className="space-y-1">
+                                <Label>Tipo da Lição</Label>
+                                <Select value={lesson.type} onValueChange={(value) => handleLessonChange(mod.id, lesson.id, 'type', value as 'video' | 'text')}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecione o tipo" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="text">Acesso a Ferramenta</SelectItem>
+                                        <SelectItem value="video">Vídeo</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            {lesson.type === 'video' ? (
+                                <Textarea value={lesson.content} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'content', e.target.value)} placeholder="URL de embed do vídeo (ex: https://www.youtube.com/embed/...)" />
+                            ) : (
+                                <div className="space-y-2 pt-2 border-t mt-3">
+                                    <Label className="text-xs text-muted-foreground">Dados de Acesso</Label>
+                                    <Input value={lesson.accessUrl || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'accessUrl', e.target.value)} placeholder="URL de Acesso" />
+                                    <Input value={lesson.buttonText || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'buttonText', e.target.value)} placeholder="Texto do Botão (ex: Acessar Ferramenta)" />
+                                    <Input value={lesson.accessEmail || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'accessEmail', e.target.value)} placeholder="Email / Usuário de Acesso" />
+                                    <div className="relative">
+                                        <Input
+                                            type={showPasswords[lesson.id] ? 'text' : 'password'}
+                                            value={lesson.accessPassword || ''}
+                                            onChange={(e) => handleLessonChange(mod.id, lesson.id, 'accessPassword', e.target.value)}
+                                            placeholder="Senha de Acesso"
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2"
+                                            onClick={() => setShowPasswords(prev => ({...prev, [lesson.id]: !prev[lesson.id]}))}
+                                        >
+                                            {showPasswords[lesson.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                        </Button>
+                                    </div>
+                                    <Label className="text-xs text-muted-foreground pt-2">Notas Adicionais</Label>
+                                    <Textarea value={lesson.content} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'content', e.target.value)} placeholder="Instruções extras, observações, etc. (Markdown)" />
+                                </div>
+                            )}
                         </div>
                     ))}
                 </div>
