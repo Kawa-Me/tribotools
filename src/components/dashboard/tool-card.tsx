@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { Check, Lock, PowerOff } from 'lucide-react';
+import { Check, Lock, Wrench } from 'lucide-react';
 import type { Lesson } from '@/lib/types';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -53,8 +53,8 @@ export function ToolCard({ lesson, moduleId, isLocked }: ToolCardProps) {
             </Badge>
           ) : (
             <Badge variant="destructive" className="mt-2">
-              <PowerOff className="mr-1 h-3 w-3" />
-              OFF
+              <Wrench className="mr-1 h-3 w-3" />
+              MANUTENÇÃO
             </Badge>
           )
         )}
