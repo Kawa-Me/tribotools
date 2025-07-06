@@ -94,7 +94,11 @@ export function PlanEditor() {
   };
   
   const handleAddNewProduct = () => {
-    const newId = `product_${Date.now()}`;
+    if (!db) {
+      toast({ variant: 'destructive', title: 'Erro', description: 'Serviço de banco de dados indisponível.' });
+      return;
+    }
+    const newId = doc(collection(db, 'products')).id;
     const newProduct: Product = {
       id: newId,
       name: 'Novo Produto',
@@ -107,13 +111,14 @@ export function PlanEditor() {
   const handleDeleteProduct = async (productId: string) => {
     if (!window.confirm("Tem certeza que deseja deletar este produto e todos os seus planos? Esta ação não pode ser desfeita.")) return;
     
+    const originalProducts = [...products];
+
     // Optimistically update UI
     setProducts((prev) => prev.filter(p => p.id !== productId));
     
     if (!db) {
         toast({ variant: 'destructive', title: 'Erro de Conexão', description: 'Serviço de banco de dados indisponível.' });
-        // Restore state if DB is not available
-        setProducts(products);
+        setProducts(originalProducts);
         return;
     }
     
@@ -122,9 +127,8 @@ export function PlanEditor() {
         toast({ title: 'Sucesso!', description: 'Produto deletado.' });
     } catch (error) {
         console.error("Error deleting product:", error);
-        toast({ variant: 'destructive', title: 'Erro ao Deletar', description: 'Não foi possível remover o produto do servidor.' });
-        // Optionally restore state on failure
-        // For now, the optimistic update is kept, but a refetch would be more robust.
+        toast({ variant: 'destructive', title: 'Erro ao Deletar', description: 'Não foi possível remover o produto. Verifique suas permissões e tente novamente.' });
+        setProducts(originalProducts);
     }
   };
   
@@ -201,7 +205,7 @@ export function PlanEditor() {
           <AccordionItem value={prod.id} key={prod.id}>
             <AccordionTrigger className="hover:no-underline">
               <div className="flex justify-between items-center w-full pr-4">
-                <span className="font-bold">{prod.name} (ID: {prod.id})</span>
+                <span className="font-bold">{prod.name}</span>
                  <div
                       role="button"
                       aria-label={`Deletar produto ${prod.name}`}
@@ -232,7 +236,7 @@ export function PlanEditor() {
                   {prod.plans.map((plan, planIndex) => (
                     <div key={plan.id} className="p-3 border rounded bg-background space-y-3">
                       <div className="flex justify-between items-center">
-                          <span className="text-sm font-medium">Plano {planIndex + 1}</span>
+                          <span className="text-sm font-medium">{plan.name}</span>
                           <Button variant="destructive" size="icon" className="h-7 w-7" onClick={() => handleDeletePlan(prod.id, plan.id)}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -249,7 +253,7 @@ export function PlanEditor() {
                          </div>
                          <div className="space-y-1">
                             <Label className="text-xs">Preço Original (R$)</Label>
-                            <Input type="number" value={plan.originalPrice} onChange={(e) => handlePlanChange(prod.id, plan.id, 'originalPrice', parseFloat(e.target.value) || 0)} placeholder="Preço Original" />
+                            <Input type="number" value={plan.originalPrice || 0} onChange={(e) => handlePlanChange(prod.id, plan.id, 'originalPrice', parseFloat(e.target.value) || 0)} placeholder="Preço Original" />
                          </div>
                          <div className="space-y-1">
                             <Label className="text-xs">Dias de Validade</Label>
