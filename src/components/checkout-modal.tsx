@@ -35,8 +35,14 @@ const FormSchema = z.object({
   plans: z.array(z.string()).min(1, {
     message: 'Você precisa selecionar pelo menos um plano.',
   }),
+  name: z.string().min(3, {
+    message: 'Por favor, insira seu nome completo.',
+  }),
+  document: z.string().min(11, {
+    message: 'O CPF/CNPJ deve ter pelo menos 11 dígitos (apenas números).',
+  }),
   phone: z.string().min(10, {
-    message: 'O telefone deve ter pelo menos 10 dígitos.',
+    message: 'O telefone deve ter pelo menos 10 dígitos (com DDD).',
   }),
 });
 
@@ -57,6 +63,8 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
     resolver: zodResolver(FormSchema),
     defaultValues: {
       plans: [],
+      name: '',
+      document: '',
       phone: '',
     },
   });
@@ -66,6 +74,8 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
   const totalPrice = selectedPlans.reduce((sum, plan) => sum + plan.price, 0);
 
   useEffect(() => {
+    form.register('name');
+    form.register('document');
     form.register('phone');
   }, [form]);
 
@@ -96,6 +106,8 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
       const result = await createPixPayment({
         plans: data.plans,
         email: user.email,
+        name: data.name,
+        document: data.document,
         phone: data.phone,
       });
 
@@ -174,7 +186,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
 
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-2">
                 <FormField
                 control={form.control}
                 name="plans"
@@ -211,18 +223,18 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
                                     </FormControl>
                                     <FormLabel className="font-normal flex-grow cursor-pointer w-full !mt-0">
                                         <div className="flex justify-between items-start">
-                                            <span className="font-semibold text-foreground">{plan.name}</span>
+                                            <span className="font-semibold text-foreground text-sm">{plan.name}</span>
                                             {plan.promo && (
                                                 <Badge variant="destructive" className="ml-2 animate-pulse text-xs shrink-0">OFERTA</Badge>
                                             )}
                                         </div>
                                         <p className="text-xs text-muted-foreground mt-1">{plan.description}</p>
-                                        <div className="flex items-baseline gap-2 mt-2">
-                                            <span className="text-lg font-bold text-primary">
+                                        <div className="flex items-baseline gap-2 mt-1">
+                                            <span className="text-base font-bold text-primary">
                                                 R${plan.price.toFixed(2).replace('.', ',')}
                                             </span>
                                             {plan.originalPrice && plan.originalPrice > plan.price && (
-                                                <span className="text-sm text-muted-foreground line-through">
+                                                <span className="text-xs text-muted-foreground line-through">
                                                     R${plan.originalPrice.toFixed(2).replace('.', ',')}
                                                 </span>
                                             )}
@@ -240,30 +252,58 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
                 )}
                 />
 
-                <FormField
-                control={form.control}
-                name="phone"
-                render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>Telefone (com DDD)</FormLabel>
-                    <FormControl>
-                        <Input placeholder="(99) 99999-9999" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                    </FormItem>
-                )}
-                />
-
-                <div className="mt-2 space-y-1 border-t pt-2">
-                <div className="text-base font-bold flex justify-between">
-                    <span>Total:</span>
-                    <span>R$ {totalPrice.toFixed(2).replace('.', ',')}</span>
+                 <div className="space-y-2 pt-2">
+                    <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel className="text-xs">Nome Completo</FormLabel>
+                        <FormControl>
+                            <Input placeholder="Seu nome" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                    />
+                     <FormField
+                    control={form.control}
+                    name="document"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel className="text-xs">CPF ou CNPJ</FormLabel>
+                        <FormControl>
+                            <Input placeholder="Apenas números" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                    />
+                    <FormField
+                    control={form.control}
+                    name="phone"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel className="text-xs">Telefone (com DDD)</FormLabel>
+                        <FormControl>
+                            <Input placeholder="(99) 99999-9999" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                    />
                 </div>
-                {totalPrice > 150 && (
-                    <p className="text-sm text-destructive font-semibold text-center">
-                    O valor total não pode exceder R$ 150,00. Por favor, adquira um item e depois o outro em compras separadas.
-                    </p>
-                )}
+
+                <div className="!mt-4 space-y-1 border-t pt-2">
+                    <div className="text-base font-bold flex justify-between">
+                        <span>Total:</span>
+                        <span>R$ {totalPrice.toFixed(2).replace('.', ',')}</span>
+                    </div>
+                    {totalPrice > 150 && (
+                        <p className="text-sm text-destructive font-semibold text-center">
+                        O valor total não pode exceder R$ 150,00. Adquira os itens em compras separadas.
+                        </p>
+                    )}
                 </div>
 
                 <Button type="submit" className="w-full" disabled={loading || totalPrice > 150 || selectedPlanIds.length === 0}>
@@ -282,11 +322,11 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
         }
     }}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-xs bg-background/95 backdrop-blur-sm border-primary/20 font-body">
-        <DialogHeader>
-          <DialogTitle className="font-headline text-2xl text-primary">Plano de Assinatura</DialogTitle>
-          <DialogDescription>
-            {pixData ? 'Escaneie o QR Code ou copie o código para pagar.' : 'Escolha um ou mais planos e insira seu telefone.'}
+      <DialogContent className="sm:max-w-[380px] bg-background/95 backdrop-blur-sm border-primary/20 font-body">
+        <DialogHeader className="p-0">
+          <DialogTitle className="font-headline text-xl text-primary">Plano de Assinatura</DialogTitle>
+          <DialogDescription className="text-xs">
+            {pixData ? 'Escaneie o QR Code ou copie o código para pagar.' : 'Preencha seus dados para gerar o PIX.'}
           </DialogDescription>
         </DialogHeader>
         
@@ -295,5 +335,3 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
-
-    

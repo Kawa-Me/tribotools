@@ -18,7 +18,9 @@ async function getPlansFromFirestore() {
 
 const CreatePixPaymentSchema = z.object({
   plans: z.array(z.string()).min(1, { message: 'Selecione pelo menos um plano.' }),
+  name: z.string().min(3),
   email: z.string().email(),
+  document: z.string().min(11),
   phone: z.string().min(10),
 });
 
@@ -31,7 +33,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     return { error: 'Dados inválidos.', details: validation.error.format() };
   }
 
-  const { plans: selectedPlanIds, email, phone } = validation.data;
+  const { plans: selectedPlanIds, name, email, document, phone } = validation.data;
 
   const allPlans = await getPlansFromFirestore();
   if (allPlans.length === 0) {
@@ -59,11 +61,14 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     return { error: 'Erro de configuração do servidor.' };
   }
 
-  const paymentName = `Tribo Tools - Plans:[${selectedPlanIds.join(',')}]`;
+  // The payment provider uses the 'name' field for the customer's name, but we also use it to track plans.
+  // We'll combine them, and the webhook will parse the plan IDs from this string.
+  const paymentName = `${name} | Tribo Tools - Plans:[${selectedPlanIds.join(',')}]`;
 
   const payload = {
     name: paymentName,
     email,
+    document,
     phone,
     value: totalPrice,
     webhook: webhookUrl,
