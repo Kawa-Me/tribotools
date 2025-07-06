@@ -35,13 +35,18 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
 
   const { plans: selectedPlanIds, name, email, document, phone } = validation.data;
 
-  // --- DIAGNOSTIC STEP ---
-  // Check if the API token is loaded from .env.local
   const apiToken = process.env.PUSHINPAY_API_TOKEN;
   if (!apiToken) {
     console.error('CRITICAL ERROR: PUSHINPAY_API_TOKEN environment variable not found!');
     return { error: 'Erro de configuração do servidor: Chave de API não encontrada.' };
   }
+  
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  if (!siteUrl) {
+    console.error('CRITICAL ERROR: NEXT_PUBLIC_SITE_URL environment variable not found!');
+    return { error: 'Erro de configuração do servidor: URL do site não encontrada.' };
+  }
+
 
   let allPlans;
   try {
@@ -75,7 +80,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
   const totalPriceInCents = Math.round(totalPrice * 100);
 
   const apiUrl = 'https://api.pushinpay.com.br/api/pix/cashIn';
-  const webhookUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/api/webhook`;
+  const webhookUrl = `${siteUrl}/api/webhook`;
 
   const expirationDate = new Date();
   expirationDate.setHours(expirationDate.getHours() + 1);
@@ -92,6 +97,8 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     expires_at: expirationDate.toISOString(),
   };
 
+  console.log("Enviando payload para PushInPay:", JSON.stringify(payload, null, 2));
+
   try {
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -106,13 +113,13 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     const data = await response.json();
     
     if (!response.ok) {
-        console.error('Pushin Pay API Error:', data);
-        const errorMessage = data.message || `HTTP error! status: ${response.status}`;
-        return { error: `Falha ao se comunicar com o provedor de pagamento: ${errorMessage}` };
+        console.error('Pushin Pay API Error Response:', data);
+        const apiErrorMessage = data.message || (data.errors ? JSON.stringify(data.errors) : `HTTP error! status: ${response.status}`);
+        return { error: `Falha no provedor de pagamento: ${apiErrorMessage}` };
     }
 
     if (!data.qrcode_text || !data.qrcode_image_url) {
-        console.error('Invalid response from Pushin Pay:', data);
+        console.error('Invalid success response from Pushin Pay:', data);
         return { error: 'Resposta inválida do provedor de pagamento.' };
     }
 
@@ -124,6 +131,6 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
   } catch (error) {
     console.error('Error creating Pix payment:', error);
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-    return { error: `Erro inesperado: ${errorMessage}` };
+    return { error: `Erro inesperado na comunicação: ${errorMessage}` };
   }
 }
