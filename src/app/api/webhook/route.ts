@@ -32,28 +32,25 @@ export async function POST(request: Request) {
   }
 
   try {
-    const formData = await request.formData();
-    const event = formData.get('event') as string;
-    
-    // The 'pix' field contains a URL-encoded string, not a JSON string.
-    const pixFormString = formData.get('pix') as string; 
+    // Read the body as raw text to bypass any framework-level automatic JSON parsing
+    const bodyText = await request.text();
+    console.log('Webhook Raw Body:', bodyText);
 
-    // Log the received form data parts for debugging
+    // Manually parse the text as URL-encoded form data
+    const formData = new URLSearchParams(bodyText);
+
+    const event = formData.get('event');
+    const pixFormString = formData.get('pix');
+    
     console.log('Webhook Event:', event);
     console.log('Webhook Pix Form String:', pixFormString);
 
-    if (!pixFormString) {
-      console.error('Webhook payload is missing the "pix" field.');
-      try {
-        const fullBody = Object.fromEntries(formData.entries());
-        console.error('Full form data received:', JSON.stringify(fullBody, null, 2));
-      } catch (e) {
-          console.error('Could not serialize full form data.');
-      }
-      return NextResponse.json({ error: 'Invalid webhook payload: missing pix data' }, { status: 400 });
+    if (!event || !pixFormString) {
+      console.error('Webhook payload is missing "event" or "pix" field in form data.');
+      return NextResponse.json({ error: 'Invalid webhook payload: missing essential fields' }, { status: 400 });
     }
     
-    // Parse the inner URL-encoded string
+    // Parse the inner URL-encoded string from the 'pix' field
     const pixParams = new URLSearchParams(pixFormString);
     
     const pixData = {
@@ -69,8 +66,8 @@ export async function POST(request: Request) {
     
     console.log('Webhook Parsed Pix Data:', JSON.stringify(pixData, null, 2));
 
-    if (event !== 'pix_approved' || !pixData || !pixData.customer || !pixData.customer.email) {
-      console.log('Webhook ignored: Not a "pix_approved" event or missing essential data.');
+    if (event !== 'pix_approved' || !pixData.customer?.email) {
+      console.log('Webhook ignored: Not a "pix_approved" event or missing customer email.');
       return NextResponse.json({ message: 'Webhook received but not processed' }, { status: 200 });
     }
 
@@ -79,9 +76,6 @@ export async function POST(request: Request) {
     const { email, name, document, phone } = pixData.customer;
     const paymentDescription = pixData.description;
     console.log(`Customer Email: ${email}`);
-    console.log(`Customer Name: ${name || 'N/A'}`);
-    console.log(`Customer Document: ${document || 'N/A'}`);
-    console.log(`Customer Phone: ${phone || 'N/A'}`);
     console.log(`Payment Description: ${paymentDescription}`);
 
     const allPlans = await getPlansFromFirestore();
