@@ -2,11 +2,7 @@
 'use server';
 
 import { z } from 'zod';
-
-const plans = {
-  mensal: { name: 'Acesso Mensal', price: 57.90 },
-  trimestral: { name: 'Acesso Trimestral', price: 150.00 },
-};
+import { plans } from '@/lib/plans';
 
 const CreatePixPaymentSchema = z.object({
   plan: z.enum(['mensal', 'trimestral']),
@@ -24,7 +20,11 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
   }
 
   const { plan, email, phone } = validation.data;
-  const selectedPlan = plans[plan];
+  const selectedPlan = plans.find(p => p.id === plan);
+
+  if (!selectedPlan) {
+    return { error: 'Plano selecionado inválido.' };
+  }
 
   const apiUrl = 'https://api.pushinpay.com.br/api/pix/cashIn';
   const apiToken = process.env.PUSHINPAY_API_TOKEN;

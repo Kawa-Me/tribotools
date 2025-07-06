@@ -15,6 +15,7 @@ import { Menu } from 'lucide-react';
 import { Rotbar } from '@/components/rotbar';
 import { CheckoutModal } from '@/components/checkout-modal';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { plans } from '@/lib/plans';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -101,25 +102,37 @@ function Sidebar() {
         <div className="fixed bottom-5 z-50 p-4 md:w-[220px] lg:w-[280px]">
           <Card className="bg-card/80 backdrop-blur-sm border-white/10">
               <CardHeader className="p-4">
-                  <CardTitle className="text-base">{user?.isAnonymous ? 'Visitante' : 'Sua Assinatura'}</CardTitle>
+                  <CardTitle className="text-base">{user?.isAnonymous ? 'Nossos Planos' : 'Sua Assinatura'}</CardTitle>
                   <CardDescription className="text-xs">
-                      {user?.isAnonymous ? 'Crie uma conta para acessar.' : (user?.role === 'admin' ? 'Plano: Administrador' : (isUnlocked ? `Plano: ${user?.subscription?.plan}` : 'Nenhuma assinatura ativa.'))}
+                      {user?.isAnonymous ? 'Faça um upgrade para ter acesso ilimitado.' : (user?.role === 'admin' ? 'Plano: Administrador' : (isUnlocked ? `Plano: ${user?.subscription?.plan}` : 'Nenhuma assinatura ativa.'))}
                   </CardDescription>
               </CardHeader>
               <CardContent className="p-4 pt-0">
-                  <div className="text-xs text-muted-foreground">
-                      {user?.isAnonymous ? (
-                          <Button asChild size="sm" className="w-full"><Link href="/signup">Criar Conta</Link></Button>
-                      ) : user?.role === 'admin' ? (
-                          'Acesso vitalício'
-                      ) : isUnlocked && user?.subscription?.expiresAt ? (
-                          `Expira em: ${new Date(user.subscription.expiresAt.seconds * 1000).toLocaleDateString()}`
-                      ) : (
+                  {user?.isAnonymous ? (
+                    <div className="space-y-3">
+                        {plans.map(plan => (
+                            <div key={plan.id} className="text-xs flex justify-between items-center">
+                                <span>{plan.name}</span>
+                                <span className="font-semibold text-primary">R${plan.price.toFixed(2).replace('.',',')}</span>
+                            </div>
+                        ))}
+                        <CheckoutModal>
+                            <Button size="sm" className="w-full mt-2">Fazer Upgrade</Button>
+                        </CheckoutModal>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground">
+                        {user?.role === 'admin' ? (
+                            'Acesso vitalício'
+                        ) : isUnlocked && user?.subscription?.expiresAt ? (
+                            `Expira em: ${new Date(user.subscription.expiresAt.seconds * 1000).toLocaleDateString()}`
+                        ) : (
                            <CheckoutModal>
                              <Button size="sm" className="w-full">Fazer Upgrade</Button>
                            </CheckoutModal>
-                      )}
-                  </div>
+                        )}
+                    </div>
+                  )}
               </CardContent>
           </Card>
         </div>
@@ -177,25 +190,37 @@ function Sidebar() {
             <div className="mt-auto">
               <Card className="bg-card/80 backdrop-blur-sm border-white/10">
                 <CardHeader>
-                    <CardTitle>{user?.isAnonymous ? 'Visitante' : 'Sua Assinatura'}</CardTitle>
+                    <CardTitle>{user?.isAnonymous ? 'Nossos Planos' : 'Sua Assinatura'}</CardTitle>
                     <CardDescription>
-                         {user?.isAnonymous ? 'Crie uma conta para acessar.' : (user?.role === 'admin' ? 'Plano: Administrador' : (isUnlocked ? `Plano: ${user?.subscription?.plan}` : 'Nenhuma assinatura ativa.'))}
+                         {user?.isAnonymous ? 'Faça um upgrade para ter acesso ilimitado.' : (user?.role === 'admin' ? 'Plano: Administrador' : (isUnlocked ? `Plano: ${user?.subscription?.plan}` : 'Nenhuma assinatura ativa.'))}
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                <div className="text-sm text-muted-foreground">
-                        {user?.isAnonymous ? (
-                            <Button asChild size="sm" className="w-full"><Link href="/signup">Criar Conta</Link></Button>
-                        ) : user?.role === 'admin' ? (
-                            'Acesso vitalício'
-                        ) : isUnlocked && user?.subscription?.expiresAt ? (
-                            `Expira em: ${new Date(user.subscription.expiresAt.seconds * 1000).toLocaleDateString()}`
-                        ) : (
+                    {user?.isAnonymous ? (
+                        <div className="space-y-3">
+                             {plans.map(plan => (
+                                <div key={plan.id} className="text-sm flex justify-between items-center">
+                                    <span>{plan.name}</span>
+                                    <span className="font-semibold text-primary">R${plan.price.toFixed(2).replace('.',',')}</span>
+                                </div>
+                            ))}
                             <CheckoutModal>
-                                <Button size="sm" className="w-full">Fazer Upgrade</Button>
+                                <Button size="sm" className="w-full mt-2">Fazer Upgrade</Button>
                             </CheckoutModal>
-                        )}
-                    </div>
+                        </div>
+                    ) : (
+                        <div className="text-sm text-muted-foreground">
+                            {user?.role === 'admin' ? (
+                                'Acesso vitalício'
+                            ) : isUnlocked && user?.subscription?.expiresAt ? (
+                                `Expira em: ${new Date(user.subscription.expiresAt.seconds * 1000).toLocaleDateString()}`
+                            ) : (
+                                <CheckoutModal>
+                                    <Button size="sm" className="w-full">Fazer Upgrade</Button>
+                                </CheckoutModal>
+                            )}
+                        </div>
+                    )}
                 </CardContent>
               </Card>
             </div>
