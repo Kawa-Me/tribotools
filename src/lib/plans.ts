@@ -12,6 +12,7 @@ export const products = {
         name: 'ZapVoice',
         plans: [
             { id: 'zapvoice_mensal', name: 'Acesso Mensal', price: 5.99, description: '30 dias de acesso', days: 30 },
+            { id: 'zapvoice_trimestral', name: 'Acesso Trimestral', price: 15.00, description: '90 dias de acesso', days: 90 },
         ]
     }
 } as const;
