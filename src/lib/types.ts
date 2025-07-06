@@ -1,6 +1,11 @@
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { Timestamp } from 'firebase/firestore';
 
+export interface LessonCookie {
+  name: string;
+  value: string;
+}
+
 export interface Lesson {
   id: string;
   title: string;
@@ -12,6 +17,7 @@ export interface Lesson {
   buttonText?: string;
   accessEmail?: string;
   accessPassword?: string;
+  cookies?: LessonCookie[];
 }
 
 export interface Module {

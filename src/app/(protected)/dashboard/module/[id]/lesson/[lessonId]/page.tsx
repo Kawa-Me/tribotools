@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, Video, FileText, ClipboardCopy, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ReactMarkdown from 'react-markdown';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 function InfoField({ label, value, isPassword = false }: { label: string, value: string, isPassword?: boolean }) {
   const { toast } = useToast();
@@ -27,7 +27,7 @@ function InfoField({ label, value, isPassword = false }: { label: string, value:
     <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-3 transition-colors">
       <div>
         <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="font-mono text-sm text-foreground">{isPassword ? '••••••••' : value}</p>
+        <p className={`font-mono text-sm text-foreground ${!isPassword && 'break-all'}`}>{isPassword ? '••••••••' : value}</p>
       </div>
       <Button variant="ghost" size="icon" onClick={handleCopy} aria-label={`Copiar ${label}`}>
         <ClipboardCopy className="h-4 w-4" />
@@ -139,6 +139,20 @@ export default function LessonPage({ params: paramsPromise }: { params: Promise<
                     </div>
                 </CardContent>
             </Card>
+
+            {lesson.cookies && lesson.cookies.length > 0 && (
+              <Card className="bg-card/60 backdrop-blur-sm border-white/10">
+                <CardHeader className="p-6 pb-2">
+                    <CardTitle className="font-headline text-lg text-primary">Cookies de Acesso</CardTitle>
+                    <CardDescription>Copie o cookie e cole em sua extensão.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 pt-0 space-y-2">
+                    {lesson.cookies.map((cookie, index) => (
+                        <InfoField key={index} label={cookie.name} value={cookie.value} />
+                    ))}
+                </CardContent>
+              </Card>
+            )}
 
             {lesson.content && (
                 <Card className="bg-card/60 backdrop-blur-sm border-white/10">

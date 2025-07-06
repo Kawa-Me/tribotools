@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { Module, Lesson } from '@/lib/types';
+import type { Module, Lesson, LessonCookie } from '@/lib/types';
 import { seedModules } from '@/data/seed-modules';
 import {
   Accordion,
@@ -44,6 +44,7 @@ export function ModuleEditor() {
                 ...lesson,
                 id: `lesson-${Date.now()}-${Math.random()}`,
                 order: lessonIndex,
+                cookies: (lesson as any).cookies || [],
             }));
             batch.set(moduleRef, { ...moduleData, lessons: newLessons, order: moduleIndex });
           });
@@ -97,6 +98,68 @@ export function ModuleEditor() {
           : mod
       )
     );
+  };
+
+  const handleCookieChange = (moduleId: string, lessonId: string, cookieIndex: number, field: keyof LessonCookie, value: string) => {
+    setModules(prevModules => prevModules.map(mod => {
+        if (mod.id === moduleId) {
+            return {
+                ...mod,
+                lessons: mod.lessons.map(lesson => {
+                    if (lesson.id === lessonId) {
+                        const newCookies = [...(lesson.cookies || [])];
+                        newCookies[cookieIndex] = { ...newCookies[cookieIndex], [field]: value };
+                        return { ...lesson, cookies: newCookies };
+                    }
+                    return lesson;
+                })
+            };
+        }
+        return mod;
+    }));
+  };
+
+  const handleAddCookie = (moduleId: string, lessonId: string) => {
+    setModules(prevModules => prevModules.map(mod => {
+        if (mod.id === moduleId) {
+            return {
+                ...mod,
+                lessons: mod.lessons.map(lesson => {
+                    if (lesson.id === lessonId) {
+                        const newCookies = [...(lesson.cookies || [])];
+                        if (newCookies.length < 7) {
+                            newCookies.push({ name: `Cookie ${newCookies.length + 1}`, value: '' });
+                        }
+                        return { ...lesson, cookies: newCookies };
+                    }
+                    return lesson;
+                })
+            };
+        }
+        return mod;
+    }));
+  };
+
+  const handleDeleteCookie = (moduleId: string, lessonId: string, cookieIndex: number) => {
+      setModules(prevModules => prevModules.map(mod => {
+          if (mod.id === moduleId) {
+              return {
+                  ...mod,
+                  lessons: mod.lessons.map(lesson => {
+                      if (lesson.id === lessonId) {
+                          const newCookies = (lesson.cookies || []).filter((_, index) => index !== cookieIndex);
+                          const updatedCookies = newCookies.map((cookie, index) => ({
+                              ...cookie,
+                              name: `Cookie ${index + 1}`
+                          }));
+                          return { ...lesson, cookies: updatedCookies };
+                      }
+                      return lesson;
+                  })
+              };
+          }
+          return mod;
+      }));
   };
   
   const handleSaveAllChanges = async () => {
@@ -165,6 +228,7 @@ export function ModuleEditor() {
                   buttonText: '',
                   accessEmail: '',
                   accessPassword: '',
+                  cookies: [],
                 },
               ],
             }
@@ -394,30 +458,58 @@ export function ModuleEditor() {
                             {lesson.type === 'video' ? (
                                 <Textarea value={lesson.content} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'content', e.target.value)} placeholder="URL de embed do vídeo (ex: https://www.youtube.com/embed/...)" />
                             ) : (
-                                <div className="space-y-2 pt-2 border-t mt-3">
-                                    <Label className="text-xs text-muted-foreground">Dados de Acesso</Label>
-                                    <Input value={lesson.accessUrl || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'accessUrl', e.target.value)} placeholder="URL de Acesso" />
-                                    <Input value={lesson.buttonText || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'buttonText', e.target.value)} placeholder="Texto do Botão (ex: Acessar Ferramenta)" />
-                                    <Input value={lesson.accessEmail || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'accessEmail', e.target.value)} placeholder="Email / Usuário de Acesso" />
-                                    <div className="relative">
-                                        <Input
-                                            type={showPasswords[lesson.id] ? 'text' : 'password'}
-                                            value={lesson.accessPassword || ''}
-                                            onChange={(e) => handleLessonChange(mod.id, lesson.id, 'accessPassword', e.target.value)}
-                                            placeholder="Senha de Acesso"
-                                        />
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2"
-                                            onClick={() => setShowPasswords(prev => ({...prev, [lesson.id]: !prev[lesson.id]}))}
-                                        >
-                                            {showPasswords[lesson.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                        </Button>
+                                <div className="space-y-4 pt-2">
+                                    <div className="space-y-2 pt-2 border-t">
+                                        <Label className="text-xs text-muted-foreground">Dados de Acesso</Label>
+                                        <Input value={lesson.accessUrl || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'accessUrl', e.target.value)} placeholder="URL de Acesso" />
+                                        <Input value={lesson.buttonText || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'buttonText', e.target.value)} placeholder="Texto do Botão (ex: Acessar Ferramenta)" />
+                                        <Input value={lesson.accessEmail || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'accessEmail', e.target.value)} placeholder="Email / Usuário de Acesso" />
+                                        <div className="relative">
+                                            <Input
+                                                type={showPasswords[lesson.id] ? 'text' : 'password'}
+                                                value={lesson.accessPassword || ''}
+                                                onChange={(e) => handleLessonChange(mod.id, lesson.id, 'accessPassword', e.target.value)}
+                                                placeholder="Senha de Acesso"
+                                            />
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2"
+                                                onClick={() => setShowPasswords(prev => ({...prev, [lesson.id]: !prev[lesson.id]}))}
+                                            >
+                                                {showPasswords[lesson.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                            </Button>
+                                        </div>
                                     </div>
-                                    <Label className="text-xs text-muted-foreground pt-2">Notas Adicionais</Label>
-                                    <Textarea value={lesson.content} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'content', e.target.value)} placeholder="Instruções extras, observações, etc. (Markdown)" />
+
+                                    <div className="space-y-2 pt-2 border-t">
+                                        <Label className="text-xs text-muted-foreground">Cookies de Acesso (até 7)</Label>
+                                        {(lesson.cookies || []).map((cookie, cookieIndex) => (
+                                            <div key={cookieIndex} className="flex items-start gap-2">
+                                                <Textarea
+                                                    placeholder={`Valor do Cookie ${cookieIndex + 1}`}
+                                                    value={cookie.value}
+                                                    onChange={(e) => handleCookieChange(mod.id, lesson.id, cookieIndex, 'value', e.target.value)}
+                                                    rows={3}
+                                                />
+                                                <Button variant="destructive" size="icon" className="shrink-0" onClick={() => handleDeleteCookie(mod.id, lesson.id, cookieIndex)}>
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                        {(!lesson.cookies || lesson.cookies.length < 7) && (
+                                            <Button variant="outline" size="sm" className="mt-2" onClick={() => handleAddCookie(mod.id, lesson.id)}>
+                                                <PlusCircle className="mr-2 h-4 w-4" />
+                                                Adicionar Cookie
+                                            </Button>
+                                        )}
+                                    </div>
+                                    
+                                    <div className="space-y-2 pt-2 border-t">
+                                        <Label className="text-xs text-muted-foreground">Notas Adicionais</Label>
+                                        <Textarea value={lesson.content} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'content', e.target.value)} placeholder="Instruções extras, observações, etc. (Markdown)" />
+                                    </div>
                                 </div>
                             )}
                         </div>
