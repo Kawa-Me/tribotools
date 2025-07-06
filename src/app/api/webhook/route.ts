@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, updateDoc, doc, Timestamp } from 'firebase/firestore';
-import type { UserSubscription, Product } from '@/lib/types';
+import type { UserSubscription, Product, Plan } from '@/lib/types';
 
 // Helper to get plans directly from Firestore on the server
 async function getPlansFromFirestore() {
@@ -18,6 +18,17 @@ export async function POST(request: Request) {
   // Log every incoming request to see if the webhook is even reaching us.
   console.log('--- WEBHOOK RECEIVED ---');
   console.log(`Timestamp: ${new Date().toISOString()}`);
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  if (!siteUrl || siteUrl.includes('localhost')) {
+     console.warn(`
+      --- AVISO DE DESENVOLVIMENTO ---
+      A URL do webhook parece ser de um ambiente local.
+      A liberação automática de acesso NÃO funcionará.
+      Em produção, com uma URL pública, o webhook funcionará normalmente.
+      --- FIM DO AVISO ---
+    `);
+  }
 
   try {
     const body = await request.json();
@@ -136,6 +147,45 @@ export async function POST(request: Request) {
         await updateDoc(userRef, updates);
         const grantedProducts = Object.keys(updates).filter(k => k.startsWith('subscriptions.')).map(k => k.split('.')[1]).join(', ');
         console.log(`SUCCESS: Successfully updated subscriptions for ${email}. Granted access to products: ${grantedProducts}`);
+        
+        // --- NEW: Forward data to n8n webhook ---
+        const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
+        if (n8nWebhookUrl) {
+          try {
+            console.log(`Forwarding data to n8n webhook: ${n8nWebhookUrl}`);
+            const purchasedPlans = allPlans.filter(p => planIds.includes(p.id));
+            const n8nPayload = {
+              customer: pixData.customer,
+              payment: {
+                description: pixData.description,
+                value: pixData.value ? (pixData.value / 100).toFixed(2) : '0.00',
+              },
+              purchased_plans: purchasedPlans.map(p => ({ 
+                  id: p.id, 
+                  name: p.name, 
+                  productName: p.productName 
+              })),
+              site_url: siteUrl
+            };
+    
+            const n8nResponse = await fetch(n8nWebhookUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(n8nPayload),
+            });
+    
+            if (!n8nResponse.ok) {
+              console.error(`Error sending data to n8n webhook. Status: ${n8nResponse.status}`, await n8nResponse.text());
+            } else {
+              console.log('Successfully forwarded data to n8n webhook.');
+            }
+          } catch (e) {
+            console.error('Failed to call n8n webhook:', e);
+          }
+        } else {
+            console.log('N8N_WEBHOOK_URL not set. Skipping notification.');
+        }
+
     } else {
          console.log(`No valid plans found to update for ${email}. No database changes made.`);
     }
