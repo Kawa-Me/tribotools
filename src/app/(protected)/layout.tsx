@@ -104,8 +104,8 @@ function Sidebar() {
               <Logo />
             </Link>
           </div>
-          <div className="flex-1">
-            <nav className="grid items-start px-2 text-sm font-medium lg:px-4">
+          <div className="flex-1 overflow-y-auto">
+            <nav className="grid items-start px-2 py-4 text-sm font-medium lg:px-4">
               {!dbConfigured && (
                 <p className="p-4 text-xs text-destructive">
                     Erro: DB não configurado.
