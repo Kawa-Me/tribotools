@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 import { auth, db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -48,15 +48,19 @@ export function SignupForm() {
       const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
       const user = userCredential.user;
 
+      // Always send verification email for new accounts.
       await sendEmailVerification(user);
 
+      // Check if the signing up user is the designated admin.
       const isAdmin = values.email === 'kawameller@gmail.com';
 
-      // Create a user document in Firestore
+      // Create a user document in Firestore with the appropriate role.
       await setDoc(doc(db, 'users', user.uid), {
+        uid: user.uid,
         email: user.email,
-        subscriptions: {},
-        role: isAdmin ? 'admin' : 'user',
+        subscriptions: {}, // Initialize with empty subscriptions
+        role: isAdmin ? 'admin' : 'user', // Set role based on email
+        createdAt: serverTimestamp(), // Use server timestamp for accuracy
       });
 
       toast({ 
@@ -64,6 +68,7 @@ export function SignupForm() {
         description: 'Enviamos um link de verificação para o seu email. Por favor, clique no link para ativar sua conta antes de fazer o login.',
         duration: 9000
       });
+      // Redirect to the login page so they can log in after verifying.
       router.push('/login');
     } catch (error: any) {
       if (error.code === 'auth/email-already-in-use') {

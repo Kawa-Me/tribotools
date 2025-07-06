@@ -13,94 +13,99 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Check if Firebase is configured. If not, stop loading and do nothing.
     if (!auth || !db) {
       setUser(null);
       setLoading(false);
       return;
     }
 
+    // This listener handles all authentication state changes.
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
-      if (firebaseUser) {
-        // A user is signed in (either anonymous or real).
-        // Subscribe to their Firestore document for real-time data.
-        const userDocRef = doc(db, 'users', firebaseUser.uid);
-        
-        const unsubscribeFirestore = onSnapshot(userDocRef, (docSnap) => {
-          if (firebaseUser.isAnonymous) {
-            setUser({
-              uid: firebaseUser.uid,
-              email: null,
-              displayName: 'Visitante',
-              photoURL: null,
-              subscriptions: {},
-              role: 'user',
-              emailVerified: false,
-              isAnonymous: true,
-            });
-            setLoading(false);
-            return;
-          }
-
-          // It's a real user.
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            let subscriptions = data.subscriptions || {};
-            
-            // On-the-fly expiration check.
-            Object.keys(subscriptions).forEach(key => {
-              const sub = subscriptions[key];
-              if (sub.status === 'active' && sub.expiresAt && (sub.expiresAt as Timestamp).toDate() < new Date()) {
-                  subscriptions[key].status = 'expired';
-              }
-            });
-
-            setUser({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              displayName: firebaseUser.displayName,
-              photoURL: firebaseUser.photoURL,
-              subscriptions,
-              role: data.role || 'user',
-              emailVerified: firebaseUser.emailVerified,
-              isAnonymous: false,
-              name: data.name,
-              document: data.document,
-              phone: data.phone,
-            });
-          } else {
-             // Real user authenticated but no Firestore doc exists yet (e.g., right after signup).
-             // Provide a default user object.
-             setUser({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              displayName: firebaseUser.displayName,
-              photoURL: firebaseUser.photoURL,
-              subscriptions: {},
-              role: 'user',
-              emailVerified: firebaseUser.emailVerified,
-              isAnonymous: false,
-             });
-          }
-          setLoading(false);
-        }, (error) => {
-          console.error("Firestore snapshot error in AuthProvider:", error);
-          setUser(null);
-          setLoading(false);
-        });
-        
-        // This is the cleanup function for the Firestore listener.
-        return () => unsubscribeFirestore();
-
-      } else {
-        // No user is signed in at all.
+      // If a user is signed out, reset state and stop loading.
+      if (!firebaseUser) {
         setUser(null);
         setLoading(false);
+        return;
       }
+      
+      // If the user is anonymous, create a simple visitor object.
+      if (firebaseUser.isAnonymous) {
+        setUser({
+          uid: firebaseUser.uid,
+          email: null,
+          displayName: 'Visitante',
+          photoURL: null,
+          subscriptions: {},
+          role: 'user', // Anonymous users are treated as 'user' role
+          emailVerified: false,
+          isAnonymous: true,
+        });
+        setLoading(false);
+        return;
+      }
+
+      // If it's a real, registered user, we must fetch their data from Firestore.
+      const userDocRef = doc(db, 'users', firebaseUser.uid);
+      
+      const unsubscribeFirestore = onSnapshot(userDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          // Perform an on-the-fly check for expired subscriptions.
+          let subscriptions = data.subscriptions || {};
+          Object.keys(subscriptions).forEach(key => {
+            const sub = subscriptions[key];
+            if (sub.status === 'active' && sub.expiresAt && (sub.expiresAt as Timestamp).toDate() < new Date()) {
+                subscriptions[key].status = 'expired';
+            }
+          });
+
+          // Build the complete user object with data from both Auth and Firestore.
+          setUser({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            displayName: firebaseUser.displayName,
+            photoURL: firebaseUser.photoURL,
+            subscriptions,
+            role: data.role || 'user',
+            emailVerified: firebaseUser.emailVerified,
+            isAnonymous: false,
+            // Include personal details if they exist
+            name: data.name,
+            document: data.document,
+            phone: data.phone,
+          });
+        } else {
+           // This case handles a newly registered user whose Firestore document might not exist yet.
+           // We provide a default object. The document will be created upon signup/login.
+           setUser({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            displayName: firebaseUser.displayName,
+            photoURL: firebaseUser.photoURL,
+            subscriptions: {},
+            role: 'user',
+            emailVerified: firebaseUser.emailVerified,
+            isAnonymous: false,
+           });
+        }
+        // Only stop loading after we have the full user profile.
+        setLoading(false);
+      }, (error) => {
+        // Handle errors fetching from Firestore (e.g., permissions).
+        console.error("AuthProvider: Firestore snapshot error:", error);
+        setUser(null); // Reset user state on error
+        setLoading(false);
+      });
+      
+      // Return the cleanup function for the Firestore listener.
+      return () => unsubscribeFirestore();
+
     });
 
-    // This is the cleanup function for the Auth listener.
+    // Return the cleanup function for the Auth listener.
     return () => unsubscribeAuth();
-  }, []);
+  }, []); // The empty dependency array ensures this effect runs only once on mount.
 
   const value = { user, loading };
 

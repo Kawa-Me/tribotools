@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, updateDoc, Timestamp, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { UserData, UserSubscription, Product, Plan } from '@/lib/types';
 import { useProducts } from '@/hooks/use-products';
@@ -100,7 +100,7 @@ export function UserTable({ users }: UserTableProps) {
                     const effectiveStatus = sub?.status === 'active' && isExpired ? 'expired' : sub?.status;
                     return (
                       <TableCell key={p.id}>
-                        {sub && sub.status !== 'none' ? (
+                        {sub && sub.status && sub.status !== 'none' ? (
                            <Badge variant={effectiveStatus === 'active' ? 'default' : 'destructive'}>
                               {effectiveStatus || 'none'}
                             </Badge>
@@ -167,7 +167,7 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave, products }: EditUs
           if (value === 'none') {
             updatedSub = { status: 'none', plan: null, expiresAt: null, startedAt: null };
           } else if (value === 'active' && !currentProductSub.startedAt) {
-              updatedSub.startedAt = Timestamp.now();
+              updatedSub.startedAt = serverTimestamp() as Timestamp;
           }
       }
 

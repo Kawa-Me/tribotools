@@ -49,9 +49,9 @@ export function LoginForm() {
       const userCredential = await signInWithEmailAndPassword(auth, values.email, values.password);
       const user = userCredential.user;
 
+      // Failsafe: Ensure the primary admin email always has the 'admin' role.
       const isAdmin = user.email === 'kawameller@gmail.com';
 
-      // If the user is the admin, ensure their role is correctly set in Firestore.
       if (isAdmin) {
         try {
             const userDocRef = doc(db, 'users', user.uid);
@@ -61,9 +61,10 @@ export function LoginForm() {
                 email: user.email, 
                 role: 'admin'
             }, { merge: true });
-            console.log("Admin role successfully set in Firestore.");
+            console.log("Admin role successfully verified/set in Firestore.");
         } catch (firestoreError: any) {
             console.error("CRITICAL: Failed to set admin role in Firestore.", firestoreError);
+            // This is a non-blocking error for the user, but critical for the admin.
             toast({
                 variant: 'destructive',
                 title: 'Falha Crítica de Permissão',
@@ -73,11 +74,10 @@ export function LoginForm() {
         }
       }
       
-      if (isAdmin) {
-        router.push('/admin');
-      } else {
-        router.push('/dashboard');
-      }
+      // The redirect logic is now handled by the DashboardLayout,
+      // which will direct the admin to the correct page automatically after login.
+      // We just need to push to the generic dashboard entry point.
+      router.push('/dashboard');
 
       toast({ title: 'Sucesso!', description: 'Login realizado com sucesso.' });
     } catch (error: any) {
@@ -85,8 +85,8 @@ export function LoginForm() {
       let description = 'Ocorreu um erro. Tente novamente mais tarde.';
 
       if (error.code) {
-        if (error.code === 'auth/invalid-credential') {
-          description = 'Credenciais inválidas. Verifique seu email e senha. Se ainda não tiver uma conta, por favor, cadastre-se.';
+        if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+          description = 'Credenciais inválidas. Verifique seu email e senha.';
         } else if (error.code.startsWith('firestore/')) {
           description = 'Ocorreu um erro ao acessar os dados da sua conta. Contate o suporte.';
         } else {

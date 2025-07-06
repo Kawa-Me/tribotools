@@ -25,15 +25,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading) {
-      if (!user) {
-        router.replace('/login');
-      } else if (user.role !== 'admin') {
-        router.replace('/dashboard');
-      }
+    // Wait for the auth state to be fully resolved.
+    if (loading) {
+      return;
+    }
+
+    // If there is no user or the user is not an admin, they should not be here.
+    if (!user || user.role !== 'admin') {
+      // Redirect non-admins to the main dashboard.
+      router.replace('/dashboard');
     }
   }, [user, loading, router]);
 
+  // Show a loader while authentication is in progress.
+  // Also, show loader and prevent content flash if a non-admin briefly hits this page before redirecting.
   if (loading || !user || user.role !== 'admin') {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
@@ -42,6 +47,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
+  // If we've passed all checks, render the admin layout.
   return (
     <>
       <div className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
