@@ -17,6 +17,7 @@ import type { Module } from '@/lib/types';
 import * as lucideIcons from 'lucide-react';
 import { Rotbar } from '@/components/rotbar';
 import { CheckoutModal } from '@/components/checkout-modal';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const iconComponents: { [key: string]: React.ComponentType<any> } = {
   LayoutDashboard: lucideIcons.LayoutDashboard,
@@ -72,9 +73,13 @@ function Sidebar() {
     const pathname = usePathname();
     const { user } = useAuth();
     const [modules, setModules] = useState<Module[]>([]);
+    const [dbConfigured, setDbConfigured] = useState(true);
 
     useEffect(() => {
-        if (!db) return;
+        if (!db) {
+            setDbConfigured(false);
+            return;
+        }
         const unsubscribe = onSnapshot(collection(db, "modules"), (snapshot) => {
             const modulesData = snapshot.docs.map(doc => {
                 const data = doc.data();
@@ -101,6 +106,11 @@ function Sidebar() {
           </div>
           <div className="flex-1">
             <nav className="grid items-start px-2 text-sm font-medium lg:px-4">
+              {!dbConfigured && (
+                <p className="p-4 text-xs text-destructive">
+                    Erro: DB não configurado.
+                </p>
+              )}
               {modules.map((mod) => (
                 <Link
                   key={mod.id}
@@ -144,15 +154,17 @@ function Sidebar() {
     );
   }
   
-  import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-  
   function Header() {
     const pathname = usePathname();
     const { user } = useAuth();
     const [modules, setModules] = useState<Module[]>([]);
+    const [dbConfigured, setDbConfigured] = useState(true);
 
     useEffect(() => {
-        if (!db) return;
+        if (!db) {
+            setDbConfigured(false);
+            return;
+        }
         const unsubscribe = onSnapshot(collection(db, "modules"), (snapshot) => {
             const modulesData = snapshot.docs.map(doc => {
                  const data = doc.data();
@@ -185,6 +197,11 @@ function Sidebar() {
               >
                 <Logo />
               </Link>
+               {!dbConfigured && (
+                  <p className="p-4 text-sm text-destructive">
+                      Erro: DB não configurado.
+                  </p>
+                )}
               {modules.map((mod) => (
                 <Link
                   key={mod.id}

@@ -28,10 +28,12 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dbConfigured, setDbConfigured] = useState(true);
 
   useEffect(() => {
     if (!db) {
       setLoading(false);
+      setDbConfigured(false);
       return;
     }
     const unsubscribe = onSnapshot(collection(db, "modules"), (snapshot) => {
@@ -65,6 +67,13 @@ export default function DashboardPage() {
             <Skeleton className="h-40 w-full" />
             <Skeleton className="h-40 w-full" />
         </div>
+      ) : !dbConfigured ? (
+        <Card className="bg-destructive/10 border-destructive/50 text-center p-8">
+            <CardTitle className="text-destructive">Erro de Conexão</CardTitle>
+            <CardDescription className="text-destructive-foreground/80 mt-2">
+                Não foi possível conectar ao banco de dados. Por favor, verifique se o Firestore está ativado e configurado corretamente no seu projeto do Firebase.
+            </CardDescription>
+        </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {modules.map((module) => (
