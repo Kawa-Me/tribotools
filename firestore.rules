@@ -1,44 +1,33 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helper function to check if a user is authenticated
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    // Helper function to check if the user is an admin.
-    // It safely checks for the existence of the user's document before reading the role.
+    
     function isAdmin() {
-      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
-      return isSignedIn() && userDoc.exists && userDoc.data.role == 'admin';
+      // Check if the user is authenticated and their document in 'users' collection has role 'admin'
+      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // Rules for the 'users' collection
     match /users/{userId} {
-      // GET: A user can get their own document. An admin can get any user's document.
-      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      // Admins can read/write any user document.
+      allow read, write: if isAdmin();
       
-      // LIST: Only an admin can list all users. This is for the admin user table.
-      allow list: if isAdmin();
-      
-      // CREATE: An authenticated user can create their own document (on signup).
-      allow create: if isSignedIn() && request.auth.uid == userId;
+      // Authenticated users can interact with their own document.
+      allow read, create: if request.auth.uid == userId;
 
-      // UPDATE: Only an admin can update a user's subscription or role.
-      allow update: if isAdmin();
-
-      // DELETE: Deleting users from the client is disabled for safety.
-      allow delete: if false;
+      // Users can't update their own role or subscription.
+      allow update: if request.auth.uid == userId &&
+                       request.resource.data.role == resource.data.role &&
+                       request.resource.data.subscription == resource.data.subscription;
     }
-
-    // Rules for the 'modules' collection
+    
     match /modules/{moduleId} {
-      // GET, LIST: Any authenticated user can read and list all modules.
-      allow get, list: if isSignedIn();
-      
-      // WRITE (create, update, delete): Only admins can manage modules.
+      // Allow public read access to modules. This is necessary for guest users 
+      // to see the list of available modules on the dashboard.
+      allow read: if true;
+
+      // Only admins can write to modules.
       allow write: if isAdmin();
     }
   }
