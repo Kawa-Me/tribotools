@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, use } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks';
@@ -65,12 +65,13 @@ function Sidebar() {
     return (
       <div className="hidden border-r bg-muted/40 md:block">
         <div className="flex h-full max-h-screen flex-col gap-2">
-          <div className="flex h-[140px] items-center justify-center border-b px-4 lg:px-6">
+          <div className="flex h-24 items-center justify-center border-b px-4 lg:h-32">
             <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
               <Logo />
             </Link>
           </div>
-          <div className="flex-1 overflow-y-auto">
+           {/* Add padding bottom to make sure the last nav item is visible above the fixed card */}
+          <div className="flex-1 overflow-y-auto pb-36">
             <nav className="grid items-start px-2 py-4 text-sm font-medium lg:px-4">
               {!dbConfigured && (
                 <p className="p-4 text-xs text-destructive">
@@ -92,29 +93,31 @@ function Sidebar() {
               ))}
             </nav>
           </div>
-          <div className="mt-auto p-4">
-            <Card className="bg-card/80 backdrop-blur-sm border-white/10">
-                <CardHeader className="p-4">
-                    <CardTitle className="text-base">Sua Assinatura</CardTitle>
-                    <CardDescription className="text-xs">
-                        {user.role === 'admin' ? 'Plano: Administrador' : (isUnlocked ? `Plano: ${user.subscription.plan}` : 'Nenhuma assinatura ativa.')}
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="p-4 pt-0">
-                    <div className="text-xs text-muted-foreground">
-                        {user.role === 'admin' ? (
-                            'Acesso vitalício'
-                        ) : isUnlocked && user.subscription.expiresAt ? (
-                            `Expira em: ${new Date(user.subscription.expiresAt.seconds * 1000).toLocaleDateString()}`
-                        ) : (
-                             <CheckoutModal>
-                               <Button size="sm" className="w-full">Fazer Upgrade</Button>
-                             </CheckoutModal>
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
-          </div>
+        </div>
+
+        {/* Fixed subscription card at the bottom of the viewport */}
+        <div className="fixed bottom-5 z-50 p-4 md:w-[220px] lg:w-[280px]">
+          <Card className="bg-card/80 backdrop-blur-sm border-white/10">
+              <CardHeader className="p-4">
+                  <CardTitle className="text-base">Sua Assinatura</CardTitle>
+                  <CardDescription className="text-xs">
+                      {user.role === 'admin' ? 'Plano: Administrador' : (isUnlocked ? `Plano: ${user.subscription.plan}` : 'Nenhuma assinatura ativa.')}
+                  </CardDescription>
+              </CardHeader>
+              <CardContent className="p-4 pt-0">
+                  <div className="text-xs text-muted-foreground">
+                      {user.role === 'admin' ? (
+                          'Acesso vitalício'
+                      ) : isUnlocked && user.subscription.expiresAt ? (
+                          `Expira em: ${new Date(user.subscription.expiresAt.seconds * 1000).toLocaleDateString()}`
+                      ) : (
+                           <CheckoutModal>
+                             <Button size="sm" className="w-full">Fazer Upgrade</Button>
+                           </CheckoutModal>
+                      )}
+                  </div>
+              </CardContent>
+          </Card>
         </div>
       </div>
     );
@@ -141,7 +144,7 @@ function Sidebar() {
           <nav className="grid gap-2 text-lg font-medium">
               <Link
                 href="/dashboard"
-                className="flex items-center justify-center gap-2 text-lg font-semibold mb-4 h-[140px] border-b"
+                className="flex h-24 items-center justify-center gap-2 border-b text-lg font-semibold mb-4 lg:h-32"
               >
                 <Logo />
               </Link>
