@@ -29,6 +29,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { ClipboardCopy } from 'lucide-react';
 import { Skeleton } from './ui/skeleton';
+import { Separator } from './ui/separator';
 
 const FormSchema = z.object({
   plans: z.array(z.string()).min(1, {
@@ -266,7 +267,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
                 )}
                 />
 
-                 <div className="space-y-4 pt-4 mt-4 border-t border-input">
+                <div className="space-y-4 pt-4 mt-4 border-t border-input">
                     <FormField
                     control={form.control}
                     name="name"
@@ -276,7 +277,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
                         <FormControl>
                             <Input placeholder="Seu nome" {...field} />
                         </FormControl>
-                        <FormMessage />
+                        <FormMessage className="text-xs" />
                         </FormItem>
                     )}
                     />
@@ -289,7 +290,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
                         <FormControl>
                             <Input placeholder="Apenas números" {...field} />
                         </FormControl>
-                        <FormMessage />
+                        <FormMessage className="text-xs" />
                         </FormItem>
                     )}
                     />
@@ -302,7 +303,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
                         <FormControl>
                             <Input placeholder="(99) 99999-9999" {...field} />
                         </FormControl>
-                        <FormMessage />
+                        <FormMessage className="text-xs" />
                         </FormItem>
                     )}
                     />
@@ -336,15 +337,17 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
         }
     }}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-[380px] bg-background/95 backdrop-blur-sm border-primary/20 font-body">
-        <DialogHeader className="p-0">
+      <DialogContent className="sm:max-w-[380px] bg-background/95 backdrop-blur-sm border-primary/20 font-body flex flex-col max-h-[90dvh]">
+        <DialogHeader className="p-0 flex-shrink-0">
           <DialogTitle className="font-headline text-xl text-primary">Plano de Assinatura</DialogTitle>
           <DialogDescription className="text-xs">
             {pixData ? 'Escaneie o QR Code ou copie o código para pagar.' : 'Preencha seus dados para gerar o PIX.'}
           </DialogDescription>
         </DialogHeader>
         
-        {renderContent()}
+        <div className="flex-grow overflow-y-auto pr-2 -mr-4">
+          {renderContent()}
+        </div>
       </DialogContent>
     </Dialog>
   );
