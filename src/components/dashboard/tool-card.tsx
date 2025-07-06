@@ -18,11 +18,11 @@ export function ToolCard({ lesson, moduleId, isLocked }: ToolCardProps) {
 
   return (
     <Link href={isUnlocked ? `/dashboard/module/${moduleId}/lesson/${lesson.id}` : '#'} className={cn(!isUnlocked && 'pointer-events-none group')}>
-      <Card className="h-full bg-slate-900/50 backdrop-blur-sm border border-white/10 transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 overflow-hidden relative group">
+      <Card className="h-full bg-card backdrop-blur-sm border transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 overflow-hidden relative group">
         <CardContent className="p-0">
           <div className="aspect-[3/4] relative">
             <Image
-              src="https://placehold.co/400x533.png"
+              src={lesson.imageUrl || "https://placehold.co/400x533.png"}
               data-ai-hint="shark hacker"
               alt={lesson.title}
               fill

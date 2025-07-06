@@ -156,6 +156,7 @@ export function ModuleEditor() {
                   title: 'Nova Lição',
                   type: 'text',
                   content: 'Conteúdo da nova lição.',
+                  imageUrl: '',
                 },
               ],
             }
@@ -259,6 +260,7 @@ export function ModuleEditor() {
                                 </Button>
                              </div>
                             <Input value={lesson.title} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'title', e.target.value)} placeholder="Título da lição" />
+                            <Input value={lesson.imageUrl || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'imageUrl', e.target.value)} placeholder="URL da Imagem da Capa" />
                             <Textarea value={lesson.content} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'content', e.target.value)} placeholder="Conteúdo (URL do vídeo ou texto em markdown)" />
                         </div>
                     ))}

@@ -6,6 +6,7 @@ export interface Lesson {
   title: string;
   type: 'video' | 'text';
   content: string; // URL for video, markdown string for text
+  imageUrl?: string;
 }
 
 export interface Module {

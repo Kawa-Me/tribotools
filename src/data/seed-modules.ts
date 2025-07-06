@@ -32,7 +32,7 @@ export const seedModules: (Omit<Module, 'id' | 'icon' | 'lessons'> & { icon: str
       { title: 'Grok', type: 'text', content: 'Acesso ao Grok A.I.' },
       { title: 'HeyGen', type: 'text', content: 'Acesso ao Heygen.' },
       { title: 'Gamma App', type: 'text', content: 'Acesso ao Gamma App.' },
-      { title: 'VOICE CLONE A.I', type: 'text', content: 'Acesso à ferramenta de clonagem de voz.' },
+      { title: 'VOICE CLONE A.I', type: 'text', content: 'Acesso à ferramenta de clonagem de voz.', imageUrl: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//voiceCLone.png' },
       { title: 'Perplexity', type: 'text', content: 'Acesso ao Perplexity.' },
       { title: 'Clicopy', type: 'text', content: 'Acesso ao Clicopy.' },
     ],
@@ -43,7 +43,7 @@ export const seedModules: (Omit<Module, 'id' | 'icon' | 'lessons'> & { icon: str
     icon: 'Paintbrush',
     lessons: [
       { title: 'Canva PRO', type: 'text', content: 'Acesso ao Canva PRO.' },
-      { title: 'CapCut Pro', type: 'text', content: 'Acesso ao CapCut Pro.' },
+      { title: 'CapCut Pro', type: 'text', content: 'Acesso ao CapCut Pro.', imageUrl: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//cap%20cut.png' },
       { title: 'Leonardo A.I', type: 'text', content: 'Acesso ao Leonardo A.I.' },
       { title: 'Midjourney', type: 'text', content: 'Acesso ao Midjourney.' },
     ],

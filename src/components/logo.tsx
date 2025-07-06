@@ -7,8 +7,8 @@ export function Logo({ className }: { className?: string }) {
       <Image
         src="https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//tribo-logo.png"
         alt="Tribo Tools Logo"
-        width={160}
-        height={29}
+        width={140}
+        height={25}
         priority
       />
     </div>
