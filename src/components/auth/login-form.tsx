@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 import { auth, db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -50,9 +50,32 @@ export function LoginForm() {
       const user = userCredential.user;
 
       const userDocRef = doc(db, 'users', user.uid);
-      const userDoc = await getDoc(userDocRef);
+      const isAdmin = user.email === 'kawameller@gmail.com';
 
-      if (userDoc.exists() && userDoc.data()?.role === 'admin') {
+      // If the user is the admin, ensure their role is correctly set in Firestore.
+      // This makes the system resilient if the Firestore document was created incorrectly.
+      if (isAdmin) {
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists()) {
+          if (userDoc.data()?.role !== 'admin') {
+            await updateDoc(userDocRef, { role: 'admin' });
+          }
+        } else {
+          // This case is unlikely if they signed up, but good for robustness
+          await setDoc(userDocRef, {
+            email: user.email,
+            subscription: {
+              status: 'active',
+              plan: 'anual',
+              startedAt: null,
+              expiresAt: null,
+            },
+            role: 'admin',
+          });
+        }
+      }
+      
+      if (isAdmin) {
         router.push('/admin');
       } else {
         router.push('/dashboard');
