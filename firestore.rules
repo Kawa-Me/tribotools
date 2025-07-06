@@ -1,28 +1,41 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Modules collection
-    match /modules/{moduleId} {
-      // Any authenticated user can list and get modules.
-      // 'list' is for collection queries (e.g., loading the dashboard).
-      // 'get' is for single document reads (e.g., viewing a specific module page).
-      allow list, get: if request.auth != null;
-      
-      // Only admins can create, update, or delete modules.
-      allow write: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+
+    function isAuthenticated() {
+      return request.auth != null;
     }
 
-    // Users collection
+    function isAdmin() {
+      // Verifica se o usuário está autenticado e se o seu documento na coleção 'users' tem a role 'admin'.
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /modules/{moduleId} {
+      // Qualquer usuário autenticado pode ler os módulos.
+      allow read: if isAuthenticated();
+      // Apenas administradores podem escrever nos módulos.
+      allow write: if isAdmin();
+    }
+
     match /users/{userId} {
-      // A user can read and update their own document. They cannot list all users.
-      allow get, update: if request.auth != null && request.auth.uid == userId;
+      // O usuário pode criar seu próprio documento (cadastro).
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+
+      // O usuário pode ler seu próprio documento.
+      // O administrador pode ler qualquer documento de usuário.
+      allow get: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
       
-      // Admins can perform any action on user documents.
-      // 'list' allows the admin panel to show all users.
-      // 'write' allows admins to edit user subscriptions.
-      allow list, write: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      // Apenas administradores podem listar todos os usuários (para o painel de admin).
+      allow list: if isAdmin();
+
+      // O administrador pode atualizar qualquer usuário.
+      // O webhook (não autenticado) também pode atualizar um usuário para ativar a assinatura.
+      // ATENÇÃO: A permissão 'request.auth == null' é necessária para a arquitetura atual do webhook,
+      // mas deve ser tratada com cuidado em produção, idealmente usando um segredo ou Cloud Function.
+      allow update: if isAdmin() || request.auth == null;
     }
   }
 }
