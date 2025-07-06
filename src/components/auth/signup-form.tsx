@@ -66,32 +66,35 @@ export function SignupForm() {
       router.push(isAdmin ? '/admin' : '/dashboard');
     } catch (error: any) {
       console.error("Signup error:", error);
-      let description = 'Ocorreu um erro. Tente novamente mais tarde.';
 
-      if (error.code) {
-        switch (error.code) {
-          case 'auth/email-already-in-use':
-            description = 'Este email já está cadastrado. Por favor, faça login.';
-            break;
-          case 'auth/weak-password':
-            description = 'Sua senha é muito fraca. Use pelo menos 6 caracteres.';
-            break;
-          case 'auth/invalid-email':
-            description = 'O formato do email é inválido.';
-            break;
-          case 'firestore/permission-denied':
-            description = 'Não foi possível criar seu perfil. Verifique as permissões do banco de dados.';
-            break;
-          default:
-            description = `Erro: ${error.code}. Por favor, tente novamente.`;
+      if (error.code === 'auth/email-already-in-use') {
+        form.setError('email', {
+          type: 'manual',
+          message: 'Este email já está cadastrado. Por favor, faça login.',
+        });
+      } else {
+        let description = 'Ocorreu um erro. Tente novamente mais tarde.';
+        if (error.code) {
+          switch (error.code) {
+            case 'auth/weak-password':
+              description = 'Sua senha é muito fraca. Use pelo menos 6 caracteres.';
+              break;
+            case 'auth/invalid-email':
+              description = 'O formato do email é inválido.';
+              break;
+            case 'firestore/permission-denied':
+              description = 'Não foi possível criar seu perfil. Verifique as permissões do banco de dados.';
+              break;
+            default:
+              description = `Erro: ${error.code}. Por favor, tente novamente.`;
+          }
         }
+        toast({
+          variant: 'destructive',
+          title: 'Erro no cadastro',
+          description: description,
+        });
       }
-
-      toast({
-        variant: 'destructive',
-        title: 'Erro no cadastro',
-        description: description,
-      });
     } finally {
       setLoading(false);
     }
