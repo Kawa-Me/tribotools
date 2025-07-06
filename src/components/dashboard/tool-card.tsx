@@ -20,7 +20,7 @@ export function ToolCard({ lesson, moduleId, isLocked }: ToolCardProps) {
     <Card
       className={cn(
         'group relative flex h-[240px] w-full flex-col overflow-hidden rounded-md border-2 border-transparent bg-[#111111] transition-all duration-300',
-        isUnlocked && 'hover:border-neon-green hover:shadow-neon-glow'
+        isUnlocked && 'hover:border-neon-green hover:shadow-lg'
       )}
     >
       <div className="relative h-3/5 w-full">
@@ -32,7 +32,7 @@ export function ToolCard({ lesson, moduleId, isLocked }: ToolCardProps) {
           className="object-cover"
         />
         {isLocked && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-[2px]">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/70">
             <Lock className="h-8 w-8 text-white" />
           </div>
         )}

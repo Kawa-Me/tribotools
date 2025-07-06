@@ -56,9 +56,6 @@ export default {
           '5': 'hsl(var(--chart-5))',
         },
       },
-      boxShadow: {
-        'neon-glow': '0 0 15px rgba(57, 255, 20, 0.4)',
-      },
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
