@@ -19,26 +19,26 @@ export function ToolCard({ lesson, moduleId, isLocked }: ToolCardProps) {
   const cardContent = (
     <Card
       className={cn(
-        'group relative flex h-[240px] w-full flex-col overflow-hidden rounded-md border-2 border-transparent bg-[#111111] transition-all duration-300',
+        'group relative flex w-full flex-col overflow-hidden rounded-md border-2 border-transparent bg-[#111111] transition-all duration-300',
         isUnlocked && 'hover:border-neon-green hover:shadow-lg hover:shadow-neon-green/10'
       )}
     >
-      <div className="relative h-3/5 w-full">
+      <div className="relative w-full aspect-[3/4]">
         <Image
-          src={lesson.imageUrl || 'https://placehold.co/400x240.png'}
+          src={lesson.imageUrl || 'https://placehold.co/400x533.png'}
           alt={lesson.title}
           fill
           loading="lazy"
-          className="object-cover transition-transform duration-300 group-hover:scale-105"
+          className="object-cover transition-transform duration-300 group-hover:scale-105 rounded-t-md"
         />
         {isLocked && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/70">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/70 rounded-t-md">
             <Lock className="h-8 w-8 text-white" />
           </div>
         )}
       </div>
 
-      <div className="flex flex-grow flex-col items-center justify-center p-2 text-center">
+      <div className="flex flex-col items-center justify-center p-4 text-center">
         <h3 className="font-bold text-white">{lesson.title}</h3>
         {isUnlocked && (
           <div className="mt-1 flex items-center gap-1 text-xs font-bold text-neon-green">
