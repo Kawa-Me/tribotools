@@ -19,11 +19,11 @@ export default function DashboardPage() {
       {loading ? (
         <div className="space-y-12">
           {[...Array(2)].map((_, i) => (
-            <div key={i} className="space-y-4">
+            <div key={i} className="space-y-6">
               <Skeleton className="h-8 w-1/3" />
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-                {[...Array(6)].map((_, j) => (
-                  <Skeleton key={j} className="aspect-[3/4] w-full rounded-lg" />
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {[...Array(3)].map((_, j) => (
+                  <Skeleton key={j} className="h-[240px] w-full rounded-lg" />
                 ))}
               </div>
             </div>
@@ -39,12 +39,12 @@ export default function DashboardPage() {
       ) : (
         modules.map((module) => (
           (module.lessons && module.lessons.length > 0) && (
-            <div key={module.id} className="space-y-4">
-              <h2 className="text-lg font-bold font-headline flex items-center gap-3 text-primary/90">
-                  <module.icon className="h-5 w-5" />
+            <div key={module.id} className="space-y-6">
+              <h2 className="text-2xl font-bold font-headline flex items-center gap-3 text-primary">
+                  <module.icon className="h-6 w-6" />
                   {module.title}
               </h2>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {module.lessons.map((lesson) => (
                   <ToolCard key={lesson.id} lesson={lesson} moduleId={module.id} isLocked={!isUnlocked} />
                 ))}
