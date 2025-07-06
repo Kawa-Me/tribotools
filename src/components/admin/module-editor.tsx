@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { Module, Lesson, LessonCookie } from '@/lib/types';
+import type { Module, Lesson, LessonCookie, Product } from '@/lib/types';
 import { seedModules } from '@/data/seed-modules';
 import {
   Accordion,
@@ -16,20 +16,21 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { useProducts } from '@/hooks/use-products';
 import { PlusCircle, Trash2, ArrowUp, ArrowDown, Save, Eye, EyeOff } from 'lucide-react';
 import { Skeleton } from '../ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
-import { products } from '@/lib/plans';
-
-const availablePermissions = ['public', ...Object.keys(products)];
 
 export function ModuleEditor() {
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
+  const { products: availableProducts, loading: productsLoading } = useProducts();
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
+
+  const availablePermissions = ['public', ...availableProducts.map(p => p.id)];
 
   useEffect(() => {
     if (!db) {
@@ -281,7 +282,7 @@ export function ModuleEditor() {
     }));
   };
 
-  if (loading) {
+  if (loading || productsLoading) {
     return (
         <div className="space-y-4">
             <Skeleton className="h-14 w-full" />
@@ -415,7 +416,7 @@ export function ModuleEditor() {
                             <SelectContent>
                               {availablePermissions.map((perm) => (
                                 <SelectItem key={perm} value={perm}>
-                                  {perm.charAt(0).toUpperCase() + perm.slice(1)}
+                                  {availableProducts.find(p => p.id === perm)?.name || perm.charAt(0).toUpperCase() + perm.slice(1)}
                                 </SelectItem>
                               ))}
                             </SelectContent>

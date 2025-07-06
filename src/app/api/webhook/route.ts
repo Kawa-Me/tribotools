@@ -2,8 +2,17 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, updateDoc, doc, Timestamp } from 'firebase/firestore';
-import type { UserSubscription } from '@/lib/types';
-import { allPlans } from '@/lib/plans';
+import type { UserSubscription, Product } from '@/lib/types';
+
+// Helper to get plans directly from Firestore on the server
+async function getPlansFromFirestore() {
+  if (!db) return [];
+  const productsSnapshot = await getDocs(collection(db, 'products'));
+  const products = productsSnapshot.docs.map(doc => doc.data() as Product);
+  return products.flatMap(p => 
+    p.plans.map(plan => ({...plan, productId: p.id, productName: p.name}))
+  );
+}
 
 export async function POST(request: Request) {
   try {
@@ -12,21 +21,25 @@ export async function POST(request: Request) {
     // Log for debugging purposes
     console.log('Webhook received:', body);
 
-    // Basic validation
     if (body.status !== 'approved' || !body.email || !body.name) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
     const { email, name: receivedProductName } = body;
 
+    const allPlans = await getPlansFromFirestore();
+    if (allPlans.length === 0) {
+        console.error('No plans configured in Firestore.');
+        return NextResponse.json({ error: 'Server configuration error: No plans found' }, { status: 500 });
+    }
+
     let planIds: string[] = [];
-    // New format: "Tribo Tools - Plans:[plan_id_1,plan_id_2]"
     const plansMatch = receivedProductName.match(/Plans:\[(.*?)\]/);
 
     if (plansMatch && plansMatch[1]) {
         planIds = plansMatch[1].split(',').filter(id => id.trim() !== '');
     } else {
-        // Fallback for old payment format for backward compatibility
+        // Fallback for old format
         const matchedPlan = allPlans.find(p => receivedProductName.includes(p.productName) && receivedProductName.includes(p.name));
         if (matchedPlan) {
             planIds.push(matchedPlan.id);
@@ -43,7 +56,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Internal server error: DB not configured' }, { status: 500 });
     }
 
-    // Find user in Firestore by email
     const usersRef = collection(db, 'users');
     const q = query(usersRef, where('email', '==', email));
     const querySnapshot = await getDocs(q);
@@ -55,8 +67,9 @@ export async function POST(request: Request) {
 
     const userDoc = querySnapshot.docs[0];
     const userRef = doc(db, 'users', userDoc.id);
+    const userData = userDoc.data();
+    const existingSubscriptions = userData.subscriptions || {};
 
-    // Prepare updates for all purchased plans
     const updates: { [key: string]: any } = {};
 
     for (const planId of planIds) {
@@ -69,9 +82,19 @@ export async function POST(request: Request) {
 
         const { productId, id: matchedPlanId, days } = matchedPlan;
         
-        // Calculate new expiration date
         const now = new Date();
-        const expiresAt = new Date(new Date().setDate(now.getDate() + days));
+        const currentSub = existingSubscriptions[productId];
+        let startDate = now;
+
+        // If user has an active sub, extend it. Otherwise, start from now.
+        if (currentSub && currentSub.status === 'active' && currentSub.expiresAt) {
+            const currentExpiry = currentSub.expiresAt.toDate();
+            if (currentExpiry > now) {
+                startDate = currentExpiry;
+            }
+        }
+        
+        const expiresAt = new Date(new Date(startDate).setDate(startDate.getDate() + days));
 
         const newSubscriptionData: UserSubscription = {
             status: 'active',
@@ -83,7 +106,6 @@ export async function POST(request: Request) {
         updates[`subscriptions.${productId}`] = newSubscriptionData;
     }
 
-    // Atomically update all subscriptions in one go
     if (Object.keys(updates).length > 0) {
         await updateDoc(userRef, updates);
         console.log(`Successfully updated subscriptions for ${email} with plans: ${planIds.join(', ')}.`);

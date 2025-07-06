@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
@@ -10,6 +10,7 @@ import * as z from 'zod';
 
 import { useAuth } from '@/lib/hooks';
 import { useToast } from '@/hooks/use-toast';
+import { useProducts } from '@/hooks/use-products';
 import { createPixPayment } from '@/lib/checkout';
 import { cn } from '@/lib/utils';
 import { Loader } from '@/components/loader';
@@ -28,12 +29,10 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { ClipboardCopy } from 'lucide-react';
-import { products, allPlans, type PlanId } from '@/lib/plans';
-
-const planIds = allPlans.map(p => p.id) as [PlanId, ...PlanId[]];
+import { Skeleton } from './ui/skeleton';
 
 const FormSchema = z.object({
-  plans: z.array(z.enum(planIds)).min(1, {
+  plans: z.array(z.string()).min(1, {
     message: 'Você precisa selecionar pelo menos um plano.',
   }),
   phone: z.string().min(10, {
@@ -49,6 +48,7 @@ interface PixData {
 export function CheckoutModal({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { products, allPlans, loading: productsLoading } = useProducts();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [pixData, setPixData] = useState<PixData | null>(null);
@@ -57,12 +57,17 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
     resolver: zodResolver(FormSchema),
     defaultValues: {
       plans: [],
+      phone: '',
     },
   });
 
   const selectedPlanIds = form.watch('plans') || [];
   const selectedPlans = allPlans.filter(p => selectedPlanIds.includes(p.id));
   const totalPrice = selectedPlans.reduce((sum, plan) => sum + plan.price, 0);
+
+  useEffect(() => {
+    form.register('phone');
+  }, [form]);
 
   const handleCopyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -139,6 +144,136 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
     );
   }
 
+  const renderContent = () => {
+     if (loading || productsLoading) {
+      return (
+        <div className="flex justify-center items-center h-48">
+          <Loader className="h-10 w-10 text-primary" />
+        </div>
+      );
+    }
+
+    if (pixData) {
+        return (
+             <div className="flex flex-col items-center gap-4">
+               <Image src={pixData.qrcode_image_url} alt="QR Code Pix" width={250} height={250} className="rounded-md border-2 border-primary" />
+               <div className="w-full p-3 bg-muted/50 rounded-md flex items-center gap-2 border border-input">
+                  <p className="truncate text-sm flex-grow">{pixData.qrcode_text}</p>
+                  <Button variant="ghost" size="icon" onClick={() => handleCopyToClipboard(pixData.qrcode_text)}>
+                      <ClipboardCopy className="h-4 w-4" />
+                  </Button>
+               </div>
+               <p className="text-xs text-center text-muted-foreground">Após o pagamento, o acesso será liberado automaticamente em alguns instantes.</p>
+            </div>
+        )
+    }
+
+    if (!products.length && !productsLoading) {
+        return <p className="text-center text-muted-foreground">Nenhum plano de assinatura disponível no momento.</p>
+    }
+
+    return (
+        <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <FormField
+                control={form.control}
+                name="plans"
+                render={() => (
+                    <FormItem className="space-y-4">
+                    {products.map((product) => (
+                        <div key={product.id}>
+                        <FormLabel className="text-foreground font-semibold">{product.name}</FormLabel>
+                        <div className="space-y-2 mt-2">
+                            {product.plans.map((plan) => (
+                            <FormField
+                                key={plan.id}
+                                control={form.control}
+                                name="plans"
+                                render={({ field }) => (
+                                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-4 rounded-md border border-input has-[:checked]:border-primary has-[:checked]:bg-muted/50 transition-all">
+                                    <FormControl>
+                                    <Checkbox
+                                        checked={field.value?.includes(plan.id)}
+                                        onCheckedChange={(checked) => {
+                                        const currentValues = field.value || [];
+                                        const planIdsForThisProduct = product.plans.map(p => p.id);
+                                        const otherProductSelections = currentValues.filter(
+                                            selectedPlanId => !planIdsForThisProduct.includes(selectedPlanId)
+                                        );
+                                        
+                                        if (checked) {
+                                            field.onChange([...otherProductSelections, plan.id]);
+                                        } else {
+                                            field.onChange(otherProductSelections);
+                                        }
+                                        }}
+                                    />
+                                    </FormControl>
+                                    <FormLabel className="font-normal flex-grow cursor-pointer w-full !mt-0">
+                                        <div className="flex justify-between items-start">
+                                            <span className="font-semibold text-foreground">{plan.name}</span>
+                                            {plan.promo && (
+                                                <Badge variant="destructive" className="ml-2 animate-pulse text-xs shrink-0">OFERTA</Badge>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-muted-foreground mt-1">{plan.description}</p>
+                                        <div className="flex items-baseline gap-2 mt-2">
+                                            <span className="text-xl font-bold text-primary">
+                                                R${plan.price.toFixed(2).replace('.', ',')}
+                                            </span>
+                                            {plan.originalPrice && plan.originalPrice > plan.price && (
+                                                <span className="text-sm text-muted-foreground line-through">
+                                                    R${plan.originalPrice.toFixed(2).replace('.', ',')}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </FormLabel>
+                                </FormItem>
+                                )}
+                            />
+                            ))}
+                        </div>
+                        </div>
+                    ))}
+                    <FormMessage />
+                    </FormItem>
+                )}
+                />
+
+                <FormField
+                control={form.control}
+                name="phone"
+                render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Telefone (com DDD)</FormLabel>
+                    <FormControl>
+                        <Input placeholder="(99) 99999-9999" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                    </FormItem>
+                )}
+                />
+
+                <div className="mt-4 space-y-2 border-t pt-4">
+                <div className="text-lg font-bold flex justify-between">
+                    <span>Total:</span>
+                    <span>R$ {totalPrice.toFixed(2).replace('.', ',')}</span>
+                </div>
+                {totalPrice > 150 && (
+                    <p className="text-sm text-destructive font-semibold text-center">
+                    O valor total não pode exceder R$ 150,00. Por favor, adquira um item e depois o outro em compras separadas.
+                    </p>
+                )}
+                </div>
+
+                <Button type="submit" className="w-full" disabled={loading || totalPrice > 150 || selectedPlanIds.length === 0}>
+                Gerar Pagamento Pix
+                </Button>
+            </form>
+            </Form>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={(isOpen) => {
         setOpen(isOpen);
@@ -156,121 +291,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
         </DialogHeader>
         
         <div className="py-4">
-          {loading ? (
-            <div className="flex justify-center items-center h-48">
-              <Loader className="h-10 w-10 text-primary" />
-            </div>
-          ) : pixData ? (
-            <div className="flex flex-col items-center gap-4">
-               <Image src={pixData.qrcode_image_url} alt="QR Code Pix" width={250} height={250} className="rounded-md border-2 border-primary" />
-               <div className="w-full p-3 bg-muted/50 rounded-md flex items-center gap-2 border border-input">
-                  <p className="truncate text-sm flex-grow">{pixData.qrcode_text}</p>
-                  <Button variant="ghost" size="icon" onClick={() => handleCopyToClipboard(pixData.qrcode_text)}>
-                      <ClipboardCopy className="h-4 w-4" />
-                  </Button>
-               </div>
-               <p className="text-xs text-center text-muted-foreground">Após o pagamento, o acesso será liberado automaticamente em alguns instantes.</p>
-            </div>
-          ) : (
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                 <FormField
-                  control={form.control}
-                  name="plans"
-                  render={() => (
-                    <FormItem className="space-y-4">
-                      {Object.values(products).map((product) => (
-                        <div key={product.id}>
-                          <FormLabel className="text-foreground font-semibold">{product.name}</FormLabel>
-                          <div className="space-y-2 mt-2">
-                            {product.plans.map((plan) => (
-                              <FormField
-                                key={plan.id}
-                                control={form.control}
-                                name="plans"
-                                render={({ field }) => (
-                                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-4 rounded-md border border-input has-[:checked]:border-primary has-[:checked]:bg-muted/50 transition-all">
-                                    <FormControl>
-                                      <Checkbox
-                                        checked={field.value?.includes(plan.id)}
-                                        onCheckedChange={(checked) => {
-                                          const currentValues = field.value || [];
-                                          const planIdsForThisProduct = product.plans.map(p => p.id);
-                                          const otherProductSelections = currentValues.filter(
-                                            selectedPlanId => !planIdsForThisProduct.includes(selectedPlanId)
-                                          );
-                                          
-                                          if (checked) {
-                                            field.onChange([...otherProductSelections, plan.id]);
-                                          } else {
-                                            field.onChange(otherProductSelections);
-                                          }
-                                        }}
-                                      />
-                                    </FormControl>
-                                    <FormLabel className="font-normal flex-grow cursor-pointer w-full !mt-0">
-                                        <div className="flex justify-between items-start">
-                                            <span className="font-semibold text-foreground">{plan.name}</span>
-                                            {plan.promo && (
-                                                <Badge variant="destructive" className="ml-2 animate-pulse text-xs shrink-0">OFERTA</Badge>
-                                            )}
-                                        </div>
-                                        <p className="text-xs text-muted-foreground mt-1">{plan.description}</p>
-                                        <div className="flex items-baseline gap-2 mt-2">
-                                            <span className="text-xl font-bold text-primary">
-                                                R${plan.price.toFixed(2).replace('.', ',')}
-                                            </span>
-                                            {plan.originalPrice && (
-                                                <span className="text-sm text-muted-foreground line-through">
-                                                    R${plan.originalPrice.toFixed(2).replace('.', ',')}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </FormLabel>
-                                  </FormItem>
-                                )}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                 <FormField
-                  control={form.control}
-                  name="phone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Telefone (com DDD)</FormLabel>
-                      <FormControl>
-                        <Input placeholder="(99) 99999-9999" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="mt-4 space-y-2 border-t pt-4">
-                  <div className="text-lg font-bold flex justify-between">
-                    <span>Total:</span>
-                    <span>R$ {totalPrice.toFixed(2).replace('.', ',')}</span>
-                  </div>
-                  {totalPrice > 150 && (
-                    <p className="text-sm text-destructive font-semibold text-center">
-                      O valor total não pode exceder R$ 150,00. Por favor, adquira um item e depois o outro em compras separadas.
-                    </p>
-                  )}
-                </div>
-
-                <Button type="submit" className="w-full" disabled={loading || totalPrice > 150 || selectedPlanIds.length === 0}>
-                  Gerar Pagamento Pix
-                </Button>
-              </form>
-            </Form>
-          )}
+            {renderContent()}
         </div>
       </DialogContent>
     </Dialog>

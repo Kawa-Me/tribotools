@@ -31,6 +31,23 @@ export interface Module {
   permission: string;
 }
 
+export interface Plan {
+    id: string;
+    name: string;
+    price: number;
+    originalPrice?: number;
+    description: string;
+    days: number;
+    promo: boolean;
+}
+
+export interface Product {
+    id: string;
+    name: string;
+    order: number;
+    plans: Plan[];
+}
+
 export interface UserSubscription {
   status: 'active' | 'expired' | 'none';
   plan: string | null;

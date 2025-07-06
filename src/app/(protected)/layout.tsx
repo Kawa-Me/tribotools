@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks';
 import { useModules } from '@/hooks/use-modules';
+import { useProducts } from '@/hooks/use-products';
 import { cn } from '@/lib/utils';
 import { Loader } from '@/components/loader';
 import { Logo } from '@/components/logo';
@@ -16,25 +17,21 @@ import { Menu, AlertTriangle, Package } from 'lucide-react';
 import { Rotbar } from '@/components/rotbar';
 import { CheckoutModal } from '@/components/checkout-modal';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { products } from '@/lib/plans';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    // If we're done loading and have no user (neither real nor anonymous), redirect to login.
     if (!loading && !user) {
       router.replace('/login');
     }
     
-    // If a logged-in user is an admin, they should be on the admin panel.
     if (user && !user.isAnonymous && user.role === 'admin') {
       router.replace('/admin');
     }
   }, [user, loading, router]);
 
-  // Show a loader during auth check, if we need to redirect, or if an admin lands here.
   if (loading || !user || (user.role === 'admin' && !user.isAnonymous)) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
@@ -63,6 +60,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
 function SubscriptionCard() {
     const { user } = useAuth();
+    const { products, loading } = useProducts();
 
     if (user?.isAnonymous) {
         return (
@@ -105,7 +103,7 @@ function SubscriptionCard() {
                             daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                         }
 
-                        const productName = products[productId as keyof typeof products]?.name || productId;
+                        const productName = products.find(p => p.id === productId)?.name || productId;
 
                         return (
                             <div key={productId} className="text-xs space-y-1">

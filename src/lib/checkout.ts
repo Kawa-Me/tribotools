@@ -2,12 +2,22 @@
 'use server';
 
 import { z } from 'zod';
-import { allPlans, type PlanId } from '@/lib/plans';
+import { db } from '@/lib/firebase';
+import { collection, getDocs } from 'firebase/firestore';
+import type { Product } from '@/lib/types';
 
-const planIds = allPlans.map(p => p.id) as [PlanId, ...PlanId[]];
+// Helper to get plans directly from Firestore on the server
+async function getPlansFromFirestore() {
+  if (!db) return [];
+  const productsSnapshot = await getDocs(collection(db, 'products'));
+  const products = productsSnapshot.docs.map(doc => doc.data() as Product);
+  return products.flatMap(p => 
+    p.plans.map(plan => ({...plan, productId: p.id, productName: p.name}))
+  );
+}
 
 const CreatePixPaymentSchema = z.object({
-  plans: z.array(z.enum(planIds)).min(1, { message: 'Selecione pelo menos um plano.' }),
+  plans: z.array(z.string()).min(1, { message: 'Selecione pelo menos um plano.' }),
   email: z.string().email(),
   phone: z.string().min(10),
 });
@@ -21,17 +31,21 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     return { error: 'Dados inválidos.', details: validation.error.format() };
   }
 
-  const { plans, email, phone } = validation.data;
-  
-  const selectedPlans = allPlans.filter(p => plans.includes(p.id));
+  const { plans: selectedPlanIds, email, phone } = validation.data;
 
-  if (selectedPlans.length !== plans.length) {
+  const allPlans = await getPlansFromFirestore();
+  if (allPlans.length === 0) {
+      return { error: 'Server configuration error: No plans found' };
+  }
+  
+  const selectedPlans = allPlans.filter(p => selectedPlanIds.includes(p.id));
+
+  if (selectedPlans.length !== selectedPlanIds.length) {
     return { error: 'Um ou mais planos selecionados são inválidos.' };
   }
 
   const totalPrice = selectedPlans.reduce((sum, plan) => sum + plan.price, 0);
 
-  // Server-side validation for the total amount
   if (totalPrice > 150) {
     return { error: 'O valor total não pode exceder R$ 150,00.' };
   }
@@ -45,8 +59,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     return { error: 'Erro de configuração do servidor.' };
   }
 
-  // Create a parsable name for the webhook to identify the purchased plans
-  const paymentName = `Tribo Tools - Plans:[${plans.join(',')}]`;
+  const paymentName = `Tribo Tools - Plans:[${selectedPlanIds.join(',')}]`;
 
   const payload = {
     name: paymentName,
