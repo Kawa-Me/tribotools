@@ -45,9 +45,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <>
       <div className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
         <Sidebar />
-        <div className="flex flex-col">
+        <div className="flex flex-col overflow-y-auto">
           <Header />
-          <main className="flex-1 overflow-y-auto bg-background p-4 md:p-6 lg:p-8">
+          <main className="flex-1 bg-background p-4 md:p-6 lg:p-8">
               {children}
           </main>
         </div>
@@ -95,7 +95,7 @@ function Sidebar() {
     const pathname = usePathname();
   
     return (
-      <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6">
+      <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-neutral-800 bg-background/95 px-4 shadow-md backdrop-blur-sm lg:h-[60px] lg:px-6">
         <Sheet>
           <SheetTrigger asChild>
             <Button variant="outline" size="icon" className="shrink-0 md:hidden">
