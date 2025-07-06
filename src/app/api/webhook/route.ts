@@ -17,7 +17,6 @@ async function getPlansFromFirestore() {
 }
 
 export async function POST(request: Request) {
-  // Log every incoming request to see if the webhook is even reaching us.
   console.log('--- WEBHOOK RECEIVED ---');
   console.log(`Timestamp: ${new Date().toISOString()}`);
 
@@ -35,13 +34,15 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const event = formData.get('event') as string;
-    const pixJson = formData.get('pix') as string;
+    
+    // The 'pix' field contains a URL-encoded string, not a JSON string.
+    const pixFormString = formData.get('pix') as string; 
 
     // Log the received form data parts for debugging
     console.log('Webhook Event:', event);
-    console.log('Webhook Pix JSON String:', pixJson);
+    console.log('Webhook Pix Form String:', pixFormString);
 
-    if (!pixJson) {
+    if (!pixFormString) {
       console.error('Webhook payload is missing the "pix" field.');
       try {
         const fullBody = Object.fromEntries(formData.entries());
@@ -52,10 +53,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid webhook payload: missing pix data' }, { status: 400 });
     }
     
-    const pixData = JSON.parse(pixJson);
+    // Parse the inner URL-encoded string
+    const pixParams = new URLSearchParams(pixFormString);
     
-    // Log the entire reconstructed payload for debugging
-    console.log('Webhook Reconstructed Body:', JSON.stringify({ event, pix: pixData }, null, 2));
+    const pixData = {
+        customer: {
+            email: pixParams.get('customer[email]'),
+            name: pixParams.get('customer[name]'),
+            document: pixParams.get('customer[document]'),
+            phone: pixParams.get('customer[phone]'),
+        },
+        description: pixParams.get('description'),
+        value: pixParams.get('value') ? parseInt(pixParams.get('value')!, 10) : null,
+    };
+    
+    console.log('Webhook Parsed Pix Data:', JSON.stringify(pixData, null, 2));
 
     if (event !== 'pix_approved' || !pixData || !pixData.customer || !pixData.customer.email) {
       console.log('Webhook ignored: Not a "pix_approved" event or missing essential data.');
@@ -80,10 +92,11 @@ export async function POST(request: Request) {
     console.log('Successfully fetched all plans from Firestore.');
 
     let planIds: string[] = [];
-    const plansMatch = paymentDescription.match(/Plans:\[(.*?)\]/);
-
-    if (plansMatch && plansMatch[1]) {
-        planIds = plansMatch[1].split(',').filter(id => id.trim() !== '');
+    if (paymentDescription) {
+        const plansMatch = paymentDescription.match(/Plans:\[(.*?)\]/);
+        if (plansMatch && plansMatch[1]) {
+            planIds = plansMatch[1].split(',').filter(id => id.trim() !== '');
+        }
     }
     
     if (planIds.length === 0) {
@@ -114,7 +127,6 @@ export async function POST(request: Request) {
     console.log('Existing user subscriptions:', JSON.stringify(existingSubscriptions, null, 2));
 
     const updates: { [key: string]: any } = {
-        // Save/update customer personal data on purchase
         ...(name && { name }),
         ...(document && { document }),
         ...(phone && { phone }),
@@ -166,7 +178,6 @@ export async function POST(request: Request) {
         const grantedProducts = Object.keys(updates).filter(k => k.startsWith('subscriptions.')).map(k => k.split('.')[1]).join(', ');
         console.log(`SUCCESS: Successfully updated subscriptions for ${email}. Granted access to products: ${grantedProducts}`);
         
-        // --- NEW: Forward data to n8n webhook ---
         const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
         if (n8nWebhookUrl) {
           try {
@@ -220,5 +231,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Internal Server Error', details: errorMessage }, { status: 500 });
   }
 }
-
-    
