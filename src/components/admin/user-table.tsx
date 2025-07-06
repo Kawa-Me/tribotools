@@ -45,7 +45,7 @@ export function UserTable({ users }: UserTableProps) {
     setIsDialogOpen(true);
   };
 
-  const handleSaveChanges = async (productId: string, newSubscription: UserSubscription) => {
+  const handleSaveChanges = async (newSubscriptions: { [key: string]: UserSubscription }) => {
     if (!selectedUser || !db) {
         toast({
             variant: 'destructive',
@@ -58,7 +58,7 @@ export function UserTable({ users }: UserTableProps) {
     try {
       const userDocRef = doc(db, 'users', selectedUser.uid);
       await updateDoc(userDocRef, {
-        [`subscriptions.${productId}`]: newSubscription,
+        subscriptions: newSubscriptions,
       });
       toast({
         title: 'Sucesso!',
@@ -96,7 +96,7 @@ export function UserTable({ users }: UserTableProps) {
                     const effectiveStatus = sub?.status === 'active' && isExpired ? 'expired' : sub?.status;
                     return (
                       <TableCell key={id}>
-                        {sub ? (
+                        {sub && sub.status !== 'none' ? (
                            <Badge variant={effectiveStatus === 'active' ? 'default' : 'destructive'}>
                               {effectiveStatus || 'none'}
                             </Badge>
@@ -141,131 +141,117 @@ interface EditUserDialogProps {
   user: UserData;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (productId: string, subscription: UserSubscription) => void;
+  onSave: (subscriptions: { [key: string]: UserSubscription }) => void;
 }
 
 function EditUserDialog({ user, isOpen, onOpenChange, onSave }: EditUserDialogProps) {
-  const [selectedProductId, setSelectedProductId] = useState(productIds[0]);
-  const [subscription, setSubscription] = useState<UserSubscription>(
-    user.subscriptions?.[selectedProductId] || { status: 'none', plan: null, expiresAt: null, startedAt: null }
-  );
+  const [subscriptions, setSubscriptions] = useState(user.subscriptions || {});
 
-  const handleProductChange = (productId: string) => {
-    setSelectedProductId(productId);
-    setSubscription(user.subscriptions?.[productId] || { status: 'none', plan: null, expiresAt: null, startedAt: null });
+  const handleSubscriptionChange = (
+    productId: string,
+    field: keyof UserSubscription,
+    value: any
+  ) => {
+    setSubscriptions(prev => {
+      const currentProductSub = prev[productId] || { status: 'none', plan: null, expiresAt: null, startedAt: null };
+      
+      let updatedSub = { ...currentProductSub, [field]: value };
+      
+      if (field === 'status') {
+          if (value === 'none') {
+            updatedSub = { status: 'none', plan: null, expiresAt: null, startedAt: null };
+          } else if (value === 'active' && !currentProductSub.startedAt) {
+              updatedSub.startedAt = Timestamp.now();
+          }
+      }
+
+      return {
+        ...prev,
+        [productId]: updatedSub
+      };
+    });
   };
-  
-  const handleSubmit = () => {
-    onSave(selectedProductId, subscription);
-  };
-  
-  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+
+  const handleDateChange = (productId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const dateString = e.target.value;
-    if (dateString) {
-      const date = new Date(dateString);
-      const timestamp = Timestamp.fromDate(date);
-      setSubscription({ ...subscription, expiresAt: timestamp });
-    } else {
-        setSubscription({ ...subscription, expiresAt: null });
-    }
-  }
-
-  const handleStatusChange = (value: UserSubscription['status']) => {
-    const newSubState: UserSubscription = { ...subscription, status: value };
-    if (value === 'none') {
-      newSubState.plan = null;
-      newSubState.expiresAt = null;
-    }
-    setSubscription(newSubState);
+    const timestamp = dateString ? Timestamp.fromDate(new Date(dateString)) : null;
+    handleSubscriptionChange(productId, 'expiresAt', timestamp);
   };
 
-  const handlePlanChange = (value: UserSubscription['plan']) => {
-    setSubscription({ ...subscription, plan: value });
+  const handleSubmit = () => {
+    onSave(subscriptions);
   };
-
-  const availablePlans = products[selectedProductId as keyof typeof products].plans;
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Editar Usuário</DialogTitle>
+          <DialogTitle>Editar Assinaturas de Usuário</DialogTitle>
           <DialogDescription>
-            Atualize as assinaturas de {user.email}.
+            Gerencie todas as assinaturas para {user.email}.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="product" className="text-right">
-                Produto
-                </Label>
-                <Select
-                    value={selectedProductId}
-                    onValueChange={handleProductChange}
-                >
-                <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Selecione o produto" />
-                </SelectTrigger>
-                <SelectContent>
-                    {productIds.map(id => (
-                        <SelectItem key={id} value={id}>{products[id as keyof typeof products].name}</SelectItem>
-                    ))}
-                </SelectContent>
-                </Select>
-            </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="status" className="text-right">
-              Status
-            </Label>
-            <Select
-                value={subscription.status}
-                onValueChange={handleStatusChange}
-            >
-              <SelectTrigger className="col-span-3">
-                <SelectValue placeholder="Selecione o status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">Ativo</SelectItem>
-                <SelectItem value="expired">Expirado</SelectItem>
-                <SelectItem value="none">Nenhum</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="plan" className="text-right">
-              Plano
-            </Label>
-            <Select
-                disabled={subscription.status === 'none'}
-                value={subscription.plan || ''}
-                onValueChange={handlePlanChange}
-            >
-              <SelectTrigger className="col-span-3">
-                <SelectValue placeholder="Selecione um plano" />
-              </SelectTrigger>
-              <SelectContent>
-                {availablePlans.map(p => (
-                   <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="expiresAt" className="text-right">
-              Expira em
-            </Label>
-            <Input
-              id="expiresAt"
-              type="datetime-local"
-              className="col-span-3"
-              disabled={subscription.status === 'none'}
-              value={subscription.expiresAt ? format(subscription.expiresAt.toDate(), "yyyy-MM-dd'T'HH:mm") : ''}
-              onChange={handleDateChange}
-            />
-          </div>
+        <div className="max-h-[60vh] overflow-y-auto space-y-6 py-4 pr-3">
+          {Object.values(products).map(product => {
+            const sub = subscriptions[product.id] || { status: 'none', plan: null, expiresAt: null, startedAt: null };
+            const availablePlans = product.plans;
+
+            return (
+              <div key={product.id} className="space-y-4 rounded-md border bg-muted/30 p-4">
+                <h4 className="font-semibold text-primary">{product.name}</h4>
+                
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor={`status-${product.id}`} className="text-right text-xs">Status</Label>
+                  <Select
+                    value={sub.status || 'none'}
+                    onValueChange={(value: UserSubscription['status']) => handleSubscriptionChange(product.id, 'status', value)}
+                  >
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="Selecione o status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Ativo</SelectItem>
+                      <SelectItem value="expired">Expirado</SelectItem>
+                      <SelectItem value="none">Nenhum</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor={`plan-${product.id}`} className="text-right text-xs">Plano</Label>
+                  <Select
+                    disabled={sub.status === 'none'}
+                    value={sub.plan || ''}
+                    onValueChange={(value) => handleSubscriptionChange(product.id, 'plan', value)}
+                  >
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="Selecione um plano" />
+                    </SelectTrigger>
+                    <SelectContent>
+                       {availablePlans.map(p => (
+                         <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor={`expiresAt-${product.id}`} className="text-right text-xs">Expira em</Label>
+                  <Input
+                    id={`expiresAt-${product.id}`}
+                    type="datetime-local"
+                    className="col-span-3"
+                    disabled={sub.status === 'none'}
+                    value={sub.expiresAt ? format(sub.expiresAt.toDate(), "yyyy-MM-dd'T'HH:mm") : ''}
+                    onChange={(e) => handleDateChange(product.id, e)}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
         <DialogFooter>
-          <Button onClick={handleSubmit}>Salvar alterações</Button>
+          <Button onClick={handleSubmit}>Salvar Alterações</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
