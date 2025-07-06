@@ -87,29 +87,35 @@ export function UserTable({ users }: UserTableProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {users.map((user) => (
-              <TableRow key={user.uid}>
-                <TableCell className="font-medium">{user.email}</TableCell>
-                <TableCell>{user.subscription.plan || 'N/A'}</TableCell>
-                <TableCell>
-                  <Badge variant={user.subscription.status === 'active' ? 'default' : 'destructive'}>
-                    {user.subscription.status}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  {user.subscription.expiresAt
-                    ? format(user.subscription.expiresAt.toDate(), 'dd/MM/yyyy HH:mm')
-                    : 'N/A'}
-                </TableCell>
-                <TableCell className="text-right">
-                    {user.role !== 'admin' && (
-                        <Button variant="outline" size="sm" onClick={() => handleEditClick(user)}>
-                            Editar
-                        </Button>
-                    )}
-                </TableCell>
-              </TableRow>
-            ))}
+            {users.map((user) => {
+              const { subscription } = user;
+              const isExpired = subscription.expiresAt && subscription.expiresAt.toDate() < new Date();
+              const effectiveStatus = subscription.status === 'active' && isExpired ? 'expired' : subscription.status;
+
+              return (
+                <TableRow key={user.uid}>
+                  <TableCell className="font-medium">{user.email}</TableCell>
+                  <TableCell>{subscription.plan || 'N/A'}</TableCell>
+                  <TableCell>
+                    <Badge variant={effectiveStatus === 'active' ? 'default' : 'destructive'}>
+                      {effectiveStatus}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {subscription.expiresAt
+                      ? format(subscription.expiresAt.toDate(), 'dd/MM/yyyy HH:mm')
+                      : 'N/A'}
+                  </TableCell>
+                  <TableCell className="text-right">
+                      {user.role !== 'admin' && (
+                          <Button variant="outline" size="sm" onClick={() => handleEditClick(user)}>
+                              Editar
+                          </Button>
+                      )}
+                  </TableCell>
+                </TableRow>
+              )
+            })}
              {users.length === 0 && (
                 <TableRow>
                     <TableCell colSpan={5} className="text-center text-muted-foreground">

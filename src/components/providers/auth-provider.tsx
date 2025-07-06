@@ -2,7 +2,7 @@
 
 import { createContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { doc, onSnapshot, Timestamp } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, Timestamp } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import type { UserData, UserSubscription, AuthContextType } from '@/lib/types';
 
@@ -28,9 +28,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (doc.exists()) {
             const data = doc.data();
             const expiresAt = data.subscription?.expiresAt as Timestamp | null;
+            const currentDbStatus = data.subscription?.status;
+            let effectiveStatus = currentDbStatus;
+
+            // Check if a currently active subscription has expired
+            if (currentDbStatus === 'active' && expiresAt && expiresAt.toDate() < new Date()) {
+                effectiveStatus = 'expired';
+                // Update Firestore document to reflect the expiration.
+                // This is a "write-on-read" pattern to keep data clean.
+                updateDoc(doc.ref, { 'subscription.status': 'expired' })
+                    .catch(err => console.error("Failed to auto-update expired status:", err));
+            }
             
             const subscription: UserSubscription = {
-              status: data.subscription?.status === 'active' && expiresAt && expiresAt.toDate() > new Date() ? 'active' : 'expired',
+              status: effectiveStatus,
               plan: data.subscription?.plan || null,
               expiresAt,
               startedAt: data.subscription?.startedAt || null,
