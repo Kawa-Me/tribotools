@@ -1,7 +1,8 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, onSnapshot, doc, writeBatch, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, writeBatch, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Product, Plan } from '@/lib/types';
 import { initialProducts } from '@/lib/plans';
@@ -11,12 +12,12 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Trash2, Save, ArrowUp, ArrowDown } from 'lucide-react';
+import { PlusCircle, Trash2, Save } from 'lucide-react';
 import { Skeleton } from '../ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
@@ -143,32 +144,37 @@ export function PlanEditor() {
       toast({ variant: 'destructive', title: 'Erro', description: 'Serviço de banco de dados indisponível.' });
       return;
     }
-    
-    // First, find all current product IDs in the database to detect deletions
-    const existingProducts = await collection(db, 'products').get();
-    const existingIds = new Set(existingProducts.docs.map(d => d.id));
-    const currentIds = new Set(products.map(p => p.id));
 
     try {
       const batch = writeBatch(db);
+      const productsCollection = collection(db, 'products');
 
-      // Handle creations and updates
+      // Step 1: Get all current product IDs from the database
+      const querySnapshot = await getDocs(productsCollection);
+      const existingIdsOnDb = new Set(querySnapshot.docs.map(doc => doc.id));
+      
+      // Step 2: Get all product IDs from the current state
+      const currentIdsInState = new Set(products.map(p => p.id));
+      
+      // Step 3: Determine which products to delete
+      existingIdsOnDb.forEach(id => {
+          if (!currentIdsInState.has(id)) {
+              batch.delete(doc(db, 'products', id));
+          }
+      });
+      
+      // Step 4: Add create/update operations for products in the current state
       products.forEach((prod, index) => {
+        // Important: If an ID was changed in the UI, this creates a NEW document.
+        // It's the admin's responsibility to ensure IDs are managed correctly.
         const productRef = doc(db, 'products', prod.id);
         batch.set(productRef, { ...prod, order: index });
-      });
-
-      // Handle deletions
-      existingIds.forEach(id => {
-        if (!currentIds.has(id)) {
-          batch.delete(doc(db, 'products', id));
-        }
       });
       
       await batch.commit();
       toast({ title: 'Sucesso!', description: 'Todas as alterações nos planos foram salvas.' });
     } catch (error) {
-      console.error(error);
+      console.error("Error saving changes: ", error);
       toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível salvar as alterações.' });
     }
   };
@@ -215,8 +221,8 @@ export function PlanEditor() {
                     <Input id={`name-${prod.id}`} value={prod.name} onChange={(e) => handleProductChange(prod.id, 'name', e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor={`id-${prod.id}`}>ID do Produto (não editável)</Label>
-                    <Input id={`id-${prod.id}`} value={prod.id} disabled />
+                    <Label htmlFor={`id-${prod.id}`}>ID do Produto</Label>
+                    <Input id={`id-${prod.id}`} value={prod.id} onChange={(e) => handleProductChange(prod.id, 'id', e.target.value)} />
                   </div>
                 </div>
                 
@@ -232,7 +238,7 @@ export function PlanEditor() {
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Input value={plan.name} onChange={(e) => handlePlanChange(prod.id, plan.id, 'name', e.target.value)} placeholder="Nome do plano (Ex: Mensal)" />
-                        <Input value={plan.id} disabled placeholder="ID do Plano" />
+                        <Input value={plan.id} onChange={(e) => handlePlanChange(prod.id, plan.id, 'id', e.target.value)} placeholder="ID do Plano" />
                       </div>
                       <Textarea value={plan.description} onChange={(e) => handlePlanChange(prod.id, plan.id, 'description', e.target.value)} placeholder="Descrição do plano" />
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
