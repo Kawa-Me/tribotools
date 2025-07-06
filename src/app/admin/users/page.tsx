@@ -6,28 +6,42 @@ import { db } from '@/lib/firebase';
 import type { UserData } from '@/lib/types';
 import { UserTable } from '@/components/admin/user-table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/lib/hooks';
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
+  const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
+    if (authLoading || !user || user.role !== 'admin') {
+      if (!authLoading) setLoading(false);
+      return;
+    }
+
     if (!db) {
       setLoading(false);
       return;
     }
     const q = query(collection(db, 'users'));
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const usersData: UserData[] = [];
-      querySnapshot.forEach((doc) => {
-        usersData.push({ uid: doc.id, ...doc.data() } as UserData);
-      });
-      setUsers(usersData);
-      setLoading(false);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (querySnapshot) => {
+        const usersData: UserData[] = [];
+        querySnapshot.forEach((doc) => {
+          usersData.push({ uid: doc.id, ...doc.data() } as UserData);
+        });
+        setUsers(usersData);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Firestore snapshot error in AdminUsersPage:", error);
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
-  }, []);
+  }, [user, authLoading]);
 
   return (
     <div className="space-y-8">

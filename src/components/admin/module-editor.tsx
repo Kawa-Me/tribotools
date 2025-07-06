@@ -22,6 +22,7 @@ import { Skeleton } from '../ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/hooks';
 
 export function ModuleEditor() {
   const [modules, setModules] = useState<Module[]>([]);
@@ -29,10 +30,16 @@ export function ModuleEditor() {
   const { products: availableProducts, loading: productsLoading } = useProducts();
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
+  const { user, loading: authLoading } = useAuth();
 
   const availablePermissions = ['public', ...availableProducts.map(p => p.id)];
 
   useEffect(() => {
+    if (authLoading || !user || user.role !== 'admin') {
+      if (!authLoading) setLoading(false);
+      return;
+    }
+
     if (!db) {
       setLoading(false);
       return;
@@ -72,9 +79,13 @@ export function ModuleEditor() {
         setModules(modulesData);
         setLoading(false);
       }
+    }, (error) => {
+      console.error("Firestore snapshot error in ModuleEditor:", error);
+      toast({ variant: 'destructive', title: 'Erro ao carregar módulos.' });
+      setLoading(false);
     });
     return () => unsubscribe();
-  }, [toast]);
+  }, [toast, user, authLoading]);
   
 
   const handleModuleChange = (moduleId: string, field: keyof Omit<Module, 'id' | 'lessons'>, value: any) => {

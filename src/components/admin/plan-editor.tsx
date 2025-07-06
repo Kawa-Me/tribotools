@@ -20,13 +20,20 @@ import { PlusCircle, Trash2, Save, ArrowUp, ArrowDown } from 'lucide-react';
 import { Skeleton } from '../ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/hooks';
 
 export function PlanEditor() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
+    if (authLoading || !user || user.role !== 'admin') {
+      if (!authLoading) setLoading(false);
+      return;
+    }
+
     if (!db) {
       setLoading(false);
       return;
@@ -56,9 +63,13 @@ export function PlanEditor() {
         setProducts(productsData);
         setLoading(false);
       }
+    }, (error) => {
+      console.error("Error fetching plans:", error);
+      toast({ variant: 'destructive', title: 'Erro ao carregar planos.' });
+      setLoading(false);
     });
     return () => unsubscribe();
-  }, [toast]);
+  }, [toast, user, authLoading]);
 
   const handleProductChange = (productId: string, field: keyof Product, value: any) => {
     setProducts((prev) =>
