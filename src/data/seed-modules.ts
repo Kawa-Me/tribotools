@@ -8,6 +8,7 @@ export const seedModules: (Omit<Module, 'id' | 'icon' | 'lessons'> & { icon: str
     title: 'Design e Edição',
     description: 'Ferramentas de design para criar materiais incríveis.',
     icon: 'Paintbrush',
+    permission: 'ferramentas',
     lessons: [
       { title: 'Canva PRO', type: 'text', content: 'Acesso via extensão.', imageUrl: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//canva.png', accessUrl: 'https://www.canva.com', buttonText: 'Acessar Canva', accessEmail: 'user@example.com', accessPassword: 'password123', isActive: true },
       { title: 'CapCut Pro', type: 'text', content: 'Acesso via extensão.', imageUrl: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//cap%20cut.png', accessUrl: 'https://www.capcut.com', buttonText: 'Acessar CapCut', accessEmail: 'user@example.com', accessPassword: 'password123', isActive: true },
@@ -19,6 +20,7 @@ export const seedModules: (Omit<Module, 'id' | 'icon' | 'lessons'> & { icon: str
     title: 'Inteligências Artificiais',
     description: 'Acesso a IAs poderosas para otimizar seu trabalho.',
     icon: 'BrainCircuit',
+    permission: 'ferramentas',
     lessons: [
       { title: 'ChatGPT 4.0', type: 'text', content: 'Acesso via extensão.', imageUrl: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//gpt.png', accessUrl: 'https://chat.openai.com', buttonText: 'Acessar ChatGPT', accessEmail: 'user@example.com', accessPassword: 'password123', isActive: true },
       { title: 'Grok A.I.', type: 'text', content: 'Acesso via extensão.', imageUrl: 'https://placehold.co/400x240.png', accessUrl: 'https://grok.x.ai', buttonText: 'Acessar Grok', accessEmail: 'user@example.com', accessPassword: 'password123', isActive: true },
@@ -33,6 +35,7 @@ export const seedModules: (Omit<Module, 'id' | 'icon' | 'lessons'> & { icon: str
     title: 'Instruções de Acesso',
     description: 'Como acessar e baixar a extensão exclusiva.',
     icon: 'KeyRound',
+    permission: 'ferramentas',
     lessons: [
       { title: 'Vídeo de Instruções', type: 'video', content: 'https://www.youtube.com/embed/dQw4w9WgXcQ', isActive: true },
       { title: 'Download da Extensão', type: 'text', content: '## Link para Download\n\nClique no link abaixo para baixar a extensão. Lembre-se de seguir as instruções do vídeo para a instalação correta.', accessUrl: 'https://example.com/download', buttonText: 'Baixar Extensão', isActive: true },
@@ -42,6 +45,7 @@ export const seedModules: (Omit<Module, 'id' | 'icon' | 'lessons'> & { icon: str
     title: 'Ferramentas de SEO',
     description: 'Otimize seu posicionamento nos buscadores.',
     icon: 'TrendingUp',
+    permission: 'ferramentas',
     lessons: [
       { title: 'SemRush', type: 'text', content: 'Acesso via extensão.', imageUrl: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//semrush.png', accessUrl: 'https://semrush.com', buttonText: 'Acessar SemRush', accessEmail: 'user@example.com', accessPassword: 'password123', isActive: true },
       { title: 'Similar Web', type: 'text', content: 'Acesso via extensão.', imageUrl: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//sinilarweb.png', accessUrl: 'https://similarweb.com', buttonText: 'Acessar Similar Web', accessEmail: 'user@example.com', accessPassword: 'password123', isActive: true },
@@ -52,10 +56,20 @@ export const seedModules: (Omit<Module, 'id' | 'icon' | 'lessons'> & { icon: str
     title: 'Plataformas de Espionagem',
     description: 'Ferramentas para análise de concorrência e mineração de dados.',
     icon: 'SearchCode',
+    permission: 'ferramentas',
     lessons: [
       { title: 'DropKiller', type: 'text', content: 'Acesso via extensão.', imageUrl: 'https://placehold.co/400x240.png', accessUrl: '#', buttonText: 'Acessar DropKiller', accessEmail: 'user@example.com', accessPassword: 'password123', isActive: true },
       { title: 'Adsparo', type: 'text', content: 'Acesso via extensão.', imageUrl: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//adsparo.png', accessUrl: 'https://adsparo.com', buttonText: 'Acessar Adsparo', accessEmail: 'user@example.com', accessPassword: 'password123', isActive: true },
       { title: 'SpyGuru', type: 'text', content: 'Acesso via extensão.', imageUrl: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//spyguru.png', accessUrl: '#', buttonText: 'Acessar SpyGuru', accessEmail: 'user@example.com', accessPassword: 'password123', isActive: true },
     ],
+  },
+  {
+    title: 'ZapVoice',
+    description: 'Envie áudios com vozes de famosos no WhatsApp.',
+    icon: 'MessageSquare',
+    permission: 'zapvoice',
+    lessons: [
+      { title: 'Acessar ZapVoice', type: 'text', content: 'Acesso à ferramenta ZapVoice.', imageUrl: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//zapvoice.png', accessUrl: '#', buttonText: 'Acessar ZapVoice', isActive: true },
+    ]
   },
 ];

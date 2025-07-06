@@ -53,22 +53,32 @@ export function LoginForm() {
       const isAdmin = user.email === 'kawameller@gmail.com';
 
       // If the user is the admin, ensure their role is correctly set in Firestore.
-      // This makes the system resilient if the Firestore document was created incorrectly.
       if (isAdmin) {
         const userDoc = await getDoc(userDocRef);
         if (userDoc.exists()) {
-          if (userDoc.data()?.role !== 'admin') {
-            await updateDoc(userDocRef, { role: 'admin' });
+          const data = userDoc.data();
+          if (data?.role !== 'admin' || !data.subscriptions || !data.subscriptions.ferramentas) {
+            await updateDoc(userDocRef, {
+              role: 'admin',
+              'subscriptions.ferramentas': {
+                status: 'active',
+                plan: 'admin',
+                startedAt: null,
+                expiresAt: null,
+              },
+            });
           }
         } else {
           // This case is unlikely if they signed up, but good for robustness
           await setDoc(userDocRef, {
             email: user.email,
-            subscription: {
-              status: 'active',
-              plan: 'anual',
-              startedAt: null,
-              expiresAt: null,
+            subscriptions: {
+              ferramentas: {
+                status: 'active',
+                plan: 'admin',
+                startedAt: null,
+                expiresAt: null,
+              },
             },
             role: 'admin',
           });

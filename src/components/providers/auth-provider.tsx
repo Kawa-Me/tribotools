@@ -23,13 +23,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (firebaseUser) {
         if (firebaseUser.isAnonymous) {
           // Handle anonymous user
-          const anonymousSubscription: UserSubscription = { status: 'none', plan: null, expiresAt: null, startedAt: null };
           setUser({
             uid: firebaseUser.uid,
             email: null,
             displayName: 'Visitante',
             photoURL: null,
-            subscription: anonymousSubscription,
+            subscriptions: {},
             role: 'user',
             isAnonymous: true,
           });
@@ -40,38 +39,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const unsubFirestore = onSnapshot(userDocRef, (doc) => {
             if (doc.exists()) {
               const data = doc.data();
-              const expiresAt = data.subscription?.expiresAt as Timestamp | null;
-              let currentDbStatus = data.subscription?.status;
+              let subscriptions = data.subscriptions || {};
 
-              if (currentDbStatus === 'active' && expiresAt && expiresAt.toDate() < new Date()) {
-                  currentDbStatus = 'expired';
+              // Legacy user migration on-the-fly from 'subscription' to 'subscriptions.ferramentas'
+              if (data.subscription && Object.keys(subscriptions).length === 0) {
+                subscriptions.ferramentas = data.subscription;
               }
               
-              const subscription: UserSubscription = {
-                status: currentDbStatus,
-                plan: data.subscription?.plan || null,
-                expiresAt,
-                startedAt: data.subscription?.startedAt || null,
-              };
+              // Check for expirations in the new structure
+              Object.keys(subscriptions).forEach(key => {
+                const sub = subscriptions[key];
+                if (sub.status === 'active' && sub.expiresAt && (sub.expiresAt as Timestamp).toDate() < new Date()) {
+                    subscriptions[key].status = 'expired';
+                }
+              });
 
               setUser({
                 uid: firebaseUser.uid,
                 email: firebaseUser.email,
                 displayName: firebaseUser.displayName,
                 photoURL: firebaseUser.photoURL,
-                subscription,
+                subscriptions,
                 role: data.role || 'user',
                 isAnonymous: false,
               });
             } else {
              // If no firestore doc, create a default user profile
-             const defaultSubscription: UserSubscription = { status: 'none', plan: null, expiresAt: null, startedAt: null };
              setUser({
               uid: firebaseUser.uid,
               email: firebaseUser.email,
               displayName: firebaseUser.displayName,
               photoURL: firebaseUser.photoURL,
-              subscription: defaultSubscription,
+              subscriptions: {},
               role: 'user',
               isAnonymous: false,
              });

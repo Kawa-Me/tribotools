@@ -27,10 +27,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ClipboardCopy } from 'lucide-react';
-import { plans } from '@/lib/plans';
+import { products, allPlans, type PlanId } from '@/lib/plans';
+
+const planIds = allPlans.map(p => p.id) as [PlanId, ...PlanId[]];
 
 const FormSchema = z.object({
-  plan: z.enum(['mensal', 'trimestral'], {
+  plan: z.enum(planIds, {
     required_error: 'Você precisa selecionar um plano.',
   }),
   phone: z.string().min(10, {
@@ -52,9 +54,6 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
   
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
-    defaultValues: {
-      plan: 'mensal',
-    },
   });
 
   const handleCopyToClipboard = (text: string) => {
@@ -163,23 +162,29 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
                   name="plan"
                   render={({ field }) => (
                     <FormItem className="space-y-3">
-                      <FormLabel className="text-foreground">Selecione o Plano</FormLabel>
                       <FormControl>
                         <RadioGroup
                           onValueChange={field.onChange}
                           defaultValue={field.value}
-                          className="flex flex-col space-y-2"
+                          className="flex flex-col space-y-4"
                         >
-                          {plans.map((plan) => (
-                             <FormItem key={plan.id} className="flex items-center space-x-3 space-y-0 p-3 rounded-md border border-input has-[:checked]:border-primary transition-all">
-                                <FormControl>
-                                  <RadioGroupItem value={plan.id} />
-                                </FormControl>
-                                <FormLabel className="font-normal flex-grow cursor-pointer">
-                                  {plan.name} - R${plan.price.toFixed(2).replace('.',',')}
-                                  <p className="text-xs text-muted-foreground">{plan.description}</p>
-                                </FormLabel>
-                             </FormItem>
+                          {Object.values(products).map((product) => (
+                             <div key={product.id}>
+                                <FormLabel className="text-foreground font-semibold">{product.name}</FormLabel>
+                                <div className="space-y-2 mt-2">
+                                  {product.plans.map(plan => (
+                                    <FormItem key={plan.id} className="flex items-center space-x-3 space-y-0 p-3 rounded-md border border-input has-[:checked]:border-primary transition-all">
+                                        <FormControl>
+                                        <RadioGroupItem value={plan.id} />
+                                        </FormControl>
+                                        <FormLabel className="font-normal flex-grow cursor-pointer">
+                                        {plan.name} - R${plan.price.toFixed(2).replace('.',',')}
+                                        <p className="text-xs text-muted-foreground">{plan.description}</p>
+                                        </FormLabel>
+                                    </FormItem>
+                                  ))}
+                                </div>
+                             </div>
                           ))}
                         </RadioGroup>
                       </FormControl>

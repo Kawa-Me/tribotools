@@ -25,6 +25,7 @@ const iconComponents: { [key: string]: React.ComponentType<any> } = {
     BrainCircuit: lucideIcons.BrainCircuit,
     Paintbrush: lucideIcons.Paintbrush,
     TrendingUp: lucideIcons.TrendingUp,
+    MessageSquare: lucideIcons.MessageSquare,
   };
 
 export default function ModulePage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
@@ -78,7 +79,7 @@ export default function ModulePage({ params: paramsPromise }: { params: Promise<
     return notFound();
   }
 
-  const isUnlocked = !user?.isAnonymous && (user?.subscription?.status === 'active' || user?.role === 'admin');
+  const isUnlocked = user?.role === 'admin' || (user?.subscriptions && user.subscriptions[module.permission]?.status === 'active');
 
   return (
     <div className="space-y-8">
@@ -88,7 +89,7 @@ export default function ModulePage({ params: paramsPromise }: { params: Promise<
       </header>
 
       {!isUnlocked ? (
-        <LockedContent />
+        <LockedContent module={module} />
       ) : (
         <div className="space-y-4">
           {module.lessons.map((lesson) => (
@@ -115,7 +116,7 @@ export default function ModulePage({ params: paramsPromise }: { params: Promise<
   );
 }
 
-function LockedContent() {
+function LockedContent({ module }: { module: Module }) {
   const { user } = useAuth();
   return (
     <Card className="bg-destructive/10 border-destructive/50 text-center">
@@ -125,14 +126,14 @@ function LockedContent() {
         </div>
         <CardTitle className="font-headline text-2xl mt-4">Acesso Bloqueado</CardTitle>
         <CardDescription className="text-destructive-foreground/80">
-          Este módulo é exclusivo para membros com uma assinatura ativa.
+          Este conteúdo é exclusivo para membros com a assinatura do produto "{module.title}" ativa.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <p className="mb-4">
           {user?.isAnonymous
-            ? 'Crie uma conta e faça o upgrade do seu plano para desbloquear este e todos os outros módulos.'
-            : 'Faça o upgrade do seu plano para desbloquear este e todos os outros módulos, e tenha acesso total a todos os recursos da plataforma.'
+            ? 'Crie uma conta e adquira o plano para desbloquear este conteúdo.'
+            : 'Adquira o plano para desbloquear este módulo e ter acesso total aos seus recursos.'
           }
         </p>
         {user?.isAnonymous ? (
@@ -141,7 +142,7 @@ function LockedContent() {
           </Button>
         ) : (
           <CheckoutModal>
-            <Button size="lg" variant="destructive">Fazer Upgrade Agora</Button>
+            <Button size="lg" variant="destructive">Adquirir Acesso</Button>
           </CheckoutModal>
         )}
       </CardContent>

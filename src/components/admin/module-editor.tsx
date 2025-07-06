@@ -173,7 +173,7 @@ export function ModuleEditor() {
       modules.forEach(mod => {
           const moduleRef = doc(db, 'modules', mod.id);
           const { icon, ...dataToSave } = mod;
-          batch.set(moduleRef, { ...dataToSave, icon: icon });
+          batch.set(moduleRef, { ...dataToSave, icon: icon, permission: mod.permission || 'ferramentas' });
       });
       await batch.commit();
       toast({ title: 'Sucesso!', description: 'Todas as alterações foram salvas.' });
@@ -191,6 +191,7 @@ export function ModuleEditor() {
       icon: 'LayoutDashboard' as any,
       lessons: [],
       order: modules.length,
+      permission: 'ferramentas'
     };
     setModules([...modules, newModule]);
   };
@@ -390,23 +391,24 @@ export function ModuleEditor() {
             </AccordionTrigger>
             <AccordionContent>
               <div className="space-y-4 p-4 border rounded-md bg-muted/20">
-                <Input
-                  value={mod.title}
-                  onChange={(e) => handleModuleChange(mod.id, 'title', e.target.value)}
-                  placeholder="Título do Módulo"
-                />
-                 <Input
-                  value={mod.icon as any}
-                  onChange={(e) => handleModuleChange(mod.id, 'icon', e.target.value)}
-                  placeholder="Nome do Ícone (Lucide React)"
-                />
-                <Textarea
-                  value={mod.description}
-                  onChange={(e) =>
-                    handleModuleChange(mod.id, 'description', e.target.value)
-                  }
-                  placeholder="Descrição do Módulo"
-                />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor={`title-${mod.id}`}>Título do Módulo</Label>
+                        <Input id={`title-${mod.id}`} value={mod.title} onChange={(e) => handleModuleChange(mod.id, 'title', e.target.value)} placeholder="Título do Módulo" />
+                    </div>
+                    <div className="space-y-2">
+                         <Label htmlFor={`icon-${mod.id}`}>Ícone (Lucide React)</Label>
+                         <Input id={`icon-${mod.id}`} value={mod.icon as any} onChange={(e) => handleModuleChange(mod.id, 'icon', e.target.value)} placeholder="Nome do Ícone" />
+                    </div>
+                    <div className="space-y-2">
+                         <Label htmlFor={`permission-${mod.id}`}>Permissão</Label>
+                         <Input id={`permission-${mod.id}`} value={mod.permission} onChange={(e) => handleModuleChange(mod.id, 'permission', e.target.value)} placeholder="Ex: ferramentas" />
+                    </div>
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor={`description-${mod.id}`}>Descrição do Módulo</Label>
+                    <Textarea id={`description-${mod.id}`} value={mod.description} onChange={(e) => handleModuleChange(mod.id, 'description', e.target.value)} placeholder="Descrição do Módulo" />
+                </div>
                 
                 <h4 className="font-semibold mt-4">Lições</h4>
                 <div className="space-y-3">

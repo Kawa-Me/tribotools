@@ -3,11 +3,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, updateDoc, doc, Timestamp } from 'firebase/firestore';
 import type { UserSubscription } from '@/lib/types';
-
-const PLANS_CONFIG: { [key: string]: { name: UserSubscription['plan'], days: number } } = {
-  'Acesso Mensal': { name: 'mensal', days: 30 },
-  'Acesso Trimestral': { name: 'trimestral', days: 60 },
-};
+import { allPlans } from '@/lib/plans';
 
 export async function POST(request: Request) {
   try {
@@ -21,17 +17,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
-    const { email, name } = body;
+    const { email, name: receivedProductName } = body;
 
     // Find the plan configuration that matches the product name from the webhook
-    const planKey = Object.keys(PLANS_CONFIG).find(key => name.includes(key));
+    const matchedPlan = allPlans.find(p => receivedProductName.includes(p.productName) && receivedProductName.includes(p.name));
     
-    if (!planKey) {
-        console.error(`No plan found for product name: ${name}`);
+    if (!matchedPlan) {
+        console.error(`No plan found for product name: ${receivedProductName}`);
         return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
     }
 
-    const planConfig = PLANS_CONFIG[planKey];
+    const { productId, id: planId, days } = matchedPlan;
     
     if (!db) {
       console.error('Firestore is not initialized.');
@@ -53,21 +49,21 @@ export async function POST(request: Request) {
 
     // Calculate new expiration date
     const now = new Date();
-    const expiresAt = new Date(now.setDate(now.getDate() + planConfig.days));
+    const expiresAt = new Date(now.setDate(now.getDate() + days));
 
     const newSubscriptionData: UserSubscription = {
       status: 'active',
-      plan: planConfig.name,
+      plan: planId,
       startedAt: Timestamp.fromDate(new Date()),
       expiresAt: Timestamp.fromDate(expiresAt),
     };
 
-    // Update user document
+    // Update user document using dot notation for nested object
     await updateDoc(userRef, {
-      subscription: newSubscriptionData
+      [`subscriptions.${productId}`]: newSubscriptionData
     });
     
-    console.log(`Successfully updated subscription for ${email} to ${planConfig.name}.`);
+    console.log(`Successfully updated subscription for ${email} to product ${productId}.`);
     
     return NextResponse.json({ success: true, message: 'User updated successfully' });
 

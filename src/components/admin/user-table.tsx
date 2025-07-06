@@ -27,6 +27,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '../ui/badge';
 import { format } from 'date-fns';
+import { products } from '@/lib/plans';
+
+const productIds = Object.keys(products);
 
 interface UserTableProps {
   users: UserData[];
@@ -42,7 +45,7 @@ export function UserTable({ users }: UserTableProps) {
     setIsDialogOpen(true);
   };
 
-  const handleSaveChanges = async (newSubscription: UserSubscription) => {
+  const handleSaveChanges = async (productId: string, newSubscription: UserSubscription) => {
     if (!selectedUser || !db) {
         toast({
             variant: 'destructive',
@@ -55,7 +58,7 @@ export function UserTable({ users }: UserTableProps) {
     try {
       const userDocRef = doc(db, 'users', selectedUser.uid);
       await updateDoc(userDocRef, {
-        subscription: newSubscription,
+        [`subscriptions.${productId}`]: newSubscription,
       });
       toast({
         title: 'Sucesso!',
@@ -79,32 +82,30 @@ export function UserTable({ users }: UserTableProps) {
           <TableHeader>
             <TableRow>
               <TableHead>Email</TableHead>
-              <TableHead>Plano</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Expira em</TableHead>
+              {productIds.map(id => <TableHead key={id}>{products[id as keyof typeof products].name}</TableHead>)}
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {users.map((user) => {
-              const { subscription } = user;
-              const isExpired = subscription.expiresAt && subscription.expiresAt.toDate() < new Date();
-              const effectiveStatus = subscription.status === 'active' && isExpired ? 'expired' : subscription.status;
-
-              return (
+            {users.map((user) => (
                 <TableRow key={user.uid}>
                   <TableCell className="font-medium">{user.email}</TableCell>
-                  <TableCell>{subscription.plan || 'N/A'}</TableCell>
-                  <TableCell>
-                    <Badge variant={effectiveStatus === 'active' ? 'default' : 'destructive'}>
-                      {effectiveStatus}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {subscription.expiresAt
-                      ? format(subscription.expiresAt.toDate(), 'dd/MM/yyyy HH:mm')
-                      : 'N/A'}
-                  </TableCell>
+                  {productIds.map(id => {
+                    const sub = user.subscriptions?.[id];
+                    const isExpired = sub?.expiresAt && sub.expiresAt.toDate() < new Date();
+                    const effectiveStatus = sub?.status === 'active' && isExpired ? 'expired' : sub?.status;
+                    return (
+                      <TableCell key={id}>
+                        {sub ? (
+                           <Badge variant={effectiveStatus === 'active' ? 'default' : 'destructive'}>
+                              {effectiveStatus || 'none'}
+                            </Badge>
+                        ) : (
+                          <Badge variant="secondary">N/A</Badge>
+                        )}
+                      </TableCell>
+                    )
+                  })}
                   <TableCell className="text-right">
                       {user.role !== 'admin' && (
                           <Button variant="outline" size="sm" onClick={() => handleEditClick(user)}>
@@ -113,11 +114,10 @@ export function UserTable({ users }: UserTableProps) {
                       )}
                   </TableCell>
                 </TableRow>
-              )
-            })}
+            ))}
              {users.length === 0 && (
                 <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground">
+                    <TableCell colSpan={productIds.length + 2} className="text-center text-muted-foreground">
                         Nenhum usuário encontrado.
                     </TableCell>
                 </TableRow>
@@ -141,14 +141,22 @@ interface EditUserDialogProps {
   user: UserData;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (subscription: UserSubscription) => void;
+  onSave: (productId: string, subscription: UserSubscription) => void;
 }
 
 function EditUserDialog({ user, isOpen, onOpenChange, onSave }: EditUserDialogProps) {
-  const [subscription, setSubscription] = useState<UserSubscription>(user.subscription);
+  const [selectedProductId, setSelectedProductId] = useState(productIds[0]);
+  const [subscription, setSubscription] = useState<UserSubscription>(
+    user.subscriptions?.[selectedProductId] || { status: 'none', plan: null, expiresAt: null, startedAt: null }
+  );
 
+  const handleProductChange = (productId: string) => {
+    setSelectedProductId(productId);
+    setSubscription(user.subscriptions?.[productId] || { status: 'none', plan: null, expiresAt: null, startedAt: null });
+  };
+  
   const handleSubmit = () => {
-    onSave(subscription);
+    onSave(selectedProductId, subscription);
   };
   
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -163,7 +171,7 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave }: EditUserDialogPr
   }
 
   const handleStatusChange = (value: UserSubscription['status']) => {
-    const newSubState = { ...subscription, status: value };
+    const newSubState: UserSubscription = { ...subscription, status: value };
     if (value === 'none') {
       newSubState.plan = null;
       newSubState.expiresAt = null;
@@ -175,6 +183,7 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave }: EditUserDialogPr
     setSubscription({ ...subscription, plan: value });
   };
 
+  const availablePlans = products[selectedProductId as keyof typeof products].plans;
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -182,10 +191,28 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave }: EditUserDialogPr
         <DialogHeader>
           <DialogTitle>Editar Usuário</DialogTitle>
           <DialogDescription>
-            Atualize os dados da assinatura de {user.email}.
+            Atualize as assinaturas de {user.email}.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="product" className="text-right">
+                Produto
+                </Label>
+                <Select
+                    value={selectedProductId}
+                    onValueChange={handleProductChange}
+                >
+                <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Selecione o produto" />
+                </SelectTrigger>
+                <SelectContent>
+                    {productIds.map(id => (
+                        <SelectItem key={id} value={id}>{products[id as keyof typeof products].name}</SelectItem>
+                    ))}
+                </SelectContent>
+                </Select>
+            </div>
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="status" className="text-right">
               Status
@@ -217,8 +244,9 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave }: EditUserDialogPr
                 <SelectValue placeholder="Selecione um plano" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="mensal">Mensal</SelectItem>
-                <SelectItem value="trimestral">Trimestral</SelectItem>
+                {availablePlans.map(p => (
+                   <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

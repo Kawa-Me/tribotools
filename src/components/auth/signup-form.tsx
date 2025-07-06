@@ -53,12 +53,16 @@ export function SignupForm() {
       // Create a user document in Firestore
       await setDoc(doc(db, 'users', user.uid), {
         email: user.email,
-        subscription: {
-          status: isAdmin ? 'active' : 'none',
-          plan: isAdmin ? 'anual' : null,
-          startedAt: null,
-          expiresAt: null,
-        },
+        subscriptions: isAdmin
+          ? {
+              ferramentas: {
+                status: 'active',
+                plan: 'admin',
+                startedAt: null,
+                expiresAt: null,
+              },
+            }
+          : {},
         role: isAdmin ? 'admin' : 'user',
       });
 

@@ -13,8 +13,6 @@ export default function DashboardPage() {
 
   if (!user) return null;
 
-  const isUnlocked = user.role === 'admin' || user.subscription?.status === 'active';
-
   return (
     <div className="space-y-12">
       {loading ? (
@@ -38,21 +36,25 @@ export default function DashboardPage() {
             </CardDescription>
         </Card>
       ) : (
-        modules.map((module) => (
-          (module.lessons && module.lessons.length > 0) && (
-            <div key={module.id} className="space-y-6">
-              <h2 className="text-2xl font-bold font-headline flex items-center gap-3 text-primary">
-                  <module.icon className="h-6 w-6" />
-                  {module.title}
-              </h2>
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-                {module.lessons.map((lesson) => (
-                  <ToolCard key={lesson.id} lesson={lesson} moduleId={module.id} isLocked={!isUnlocked} />
-                ))}
+        modules.map((module) => {
+          const hasAccess = user.role === 'admin' || (user.subscriptions && user.subscriptions[module.permission]?.status === 'active');
+          
+          return (
+            (module.lessons && module.lessons.length > 0) && (
+              <div key={module.id} className="space-y-6">
+                <h2 className="text-2xl font-bold font-headline flex items-center gap-3 text-primary">
+                    <module.icon className="h-6 w-6" />
+                    {module.title}
+                </h2>
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+                  {module.lessons.map((lesson) => (
+                    <ToolCard key={lesson.id} lesson={lesson} moduleId={module.id} isLocked={!hasAccess} />
+                  ))}
+                </div>
               </div>
-            </div>
+            )
           )
-        ))
+        })
       )}
     </div>
   );

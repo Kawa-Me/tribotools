@@ -17,6 +17,7 @@ const iconComponents: { [key: string]: React.ComponentType<any> } = {
   BrainCircuit: lucideIcons.BrainCircuit,
   Paintbrush: lucideIcons.Paintbrush,
   TrendingUp: lucideIcons.TrendingUp,
+  MessageSquare: lucideIcons.MessageSquare,
 };
 
 export function useModules() {
@@ -43,6 +44,7 @@ export function useModules() {
               lessons: (data.lessons || []).sort((a: Lesson, b: Lesson) => (a.order ?? 0) - (b.order ?? 0)),
               icon,
               order: data.order ?? 0,
+              permission: data.permission || 'ferramentas', // Default permission
             } as Module;
         })
         .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));

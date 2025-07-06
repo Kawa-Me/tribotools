@@ -28,11 +28,12 @@ export interface Module {
   icon: React.ComponentType<{ className?: string }>;
   lessons: Lesson[];
   order: number;
+  permission: string;
 }
 
 export interface UserSubscription {
   status: 'active' | 'expired' | 'none';
-  plan: 'mensal' | 'trimestral' | null;
+  plan: string | null;
   expiresAt: Timestamp | null;
   startedAt: Timestamp | null;
 }
@@ -42,7 +43,7 @@ export interface UserData {
   email: string | null;
   displayName: string | null;
   photoURL: string | null;
-  subscription: UserSubscription;
+  subscriptions: { [key: string]: UserSubscription };
   role?: 'admin' | 'user';
   isAnonymous: boolean;
 }

@@ -2,10 +2,12 @@
 'use server';
 
 import { z } from 'zod';
-import { plans } from '@/lib/plans';
+import { allPlans, type PlanId } from '@/lib/plans';
+
+const planIds = allPlans.map(p => p.id) as [PlanId, ...PlanId[]];
 
 const CreatePixPaymentSchema = z.object({
-  plan: z.enum(['mensal', 'trimestral']),
+  plan: z.enum(planIds),
   email: z.string().email(),
   phone: z.string().min(10),
 });
@@ -20,7 +22,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
   }
 
   const { plan, email, phone } = validation.data;
-  const selectedPlan = plans.find(p => p.id === plan);
+  const selectedPlan = allPlans.find(p => p.id === plan);
 
   if (!selectedPlan) {
     return { error: 'Plano selecionado inválido.' };
@@ -36,7 +38,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
   }
 
   const payload = {
-    name: `Tribo Tools - ${selectedPlan.name}`,
+    name: `Tribo Tools - ${selectedPlan.productName} ${selectedPlan.name}`,
     email,
     phone,
     value: selectedPlan.price,
