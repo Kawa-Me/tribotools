@@ -144,15 +144,19 @@ export default function LessonPage({ params: paramsPromise }: { params: Promise<
                     <CardTitle className="font-headline text-lg text-primary">Cookies de Acesso</CardTitle>
                     <CardDescription>Copie o cookie e cole em sua extensão.</CardDescription>
                 </CardHeader>
-                <CardContent className="p-6 pt-0 space-y-2">
-                    {lesson.cookies.map((cookie, index) => (
-                        <div key={index} className="flex items-center justify-between rounded-lg border bg-muted/30 p-3 transition-colors">
-                            <p className="font-mono text-sm text-foreground">{cookie.name}</p>
-                            <Button variant="ghost" size="icon" onClick={() => handleCopy(cookie.value, cookie.name)} aria-label={`Copiar ${cookie.name}`}>
-                                <ClipboardCopy className="h-4 w-4" />
-                            </Button>
-                        </div>
-                    ))}
+                <CardContent className="p-6 pt-0 space-y-4">
+                  {lesson.cookies.map((cookie, index) => (
+                      <div key={index} className="flex flex-col sm:flex-row items-start sm:items-center justify-between rounded-lg border-2 border-primary/20 bg-muted/30 p-4 transition-colors gap-4 shadow-lg shadow-primary/5">
+                          <div>
+                              <p className="font-headline text-lg text-primary">{cookie.name}</p>
+                              <p className="text-sm text-muted-foreground">Clique no botão ao lado para copiar o cookie.</p>
+                          </div>
+                          <Button size="lg" className="w-full sm:w-auto flex-shrink-0" onClick={() => handleCopy(cookie.value, cookie.name)} aria-label={`Copiar ${cookie.name}`}>
+                              <ClipboardCopy />
+                              Copiar Cookie
+                          </Button>
+                      </div>
+                  ))}
                 </CardContent>
               </Card>
             )}
