@@ -10,7 +10,7 @@ import { Loader } from '@/components/loader';
 import { Logo } from '@/components/logo';
 import { UserNav } from '@/components/dashboard/user-nav';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
 import { Menu } from 'lucide-react';
 import { Rotbar } from '@/components/rotbar';
 import { CheckoutModal } from '@/components/checkout-modal';
@@ -141,7 +141,11 @@ function Sidebar() {
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="flex flex-col bg-background">
-          <nav className="grid gap-2 text-lg font-medium">
+            <SheetHeader>
+              <SheetTitle className="sr-only">Menu</SheetTitle>
+              <SheetDescription className="sr-only">Navegue pelo painel do usuário.</SheetDescription>
+            </SheetHeader>
+            <nav className="grid gap-2 text-lg font-medium">
               <Link
                 href="/dashboard"
                 className="flex h-24 items-center justify-center gap-2 border-b text-lg font-semibold mb-4 lg:h-32"

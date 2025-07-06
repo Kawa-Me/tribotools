@@ -9,7 +9,7 @@ import { Loader } from '@/components/loader';
 import { Logo } from '@/components/logo';
 import { UserNav } from '@/components/dashboard/user-nav';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
 import { Menu, Users, BookOpen, Shield } from 'lucide-react';
 import { Rotbar } from '@/components/rotbar';
 
@@ -104,7 +104,11 @@ function Sidebar() {
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="flex flex-col bg-background">
-          <nav className="grid gap-2 text-lg font-medium">
+            <SheetHeader>
+              <SheetTitle className="sr-only">Menu Administrador</SheetTitle>
+              <SheetDescription className="sr-only">Navegue pela área de administração.</SheetDescription>
+            </SheetHeader>
+            <nav className="grid gap-2 text-lg font-medium">
               <Link
                 href="/admin"
                 className="flex items-center justify-center gap-2 text-lg font-semibold mb-4 h-[140px] border-b"
