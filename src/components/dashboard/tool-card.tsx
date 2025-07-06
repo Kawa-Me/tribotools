@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { Check, Lock } from 'lucide-react';
+import { Check, Lock, PowerOff } from 'lucide-react';
 import type { Lesson } from '@/lib/types';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 interface ToolCardProps {
   lesson: Lesson;
@@ -15,12 +16,16 @@ interface ToolCardProps {
 
 export function ToolCard({ lesson, moduleId, isLocked }: ToolCardProps) {
   const isUnlocked = !isLocked;
+  // If isActive is undefined (for older data), default to true.
+  const isToolActive = lesson.isActive ?? true;
+  const canAccess = isUnlocked && isToolActive;
 
   const cardContent = (
     <Card
       className={cn(
         'group relative flex w-full flex-col overflow-hidden rounded-md border-2 border-transparent bg-[#111111] transition-all duration-300',
-        isUnlocked && 'hover:border-neon-green hover:shadow-lg hover:shadow-neon-green/10'
+        canAccess && 'hover:border-neon-green hover:shadow-lg hover:shadow-neon-green/10',
+        isUnlocked && !isToolActive && 'opacity-60 cursor-not-allowed'
       )}
     >
       <div className="relative w-full aspect-[3/4]">
@@ -41,10 +46,17 @@ export function ToolCard({ lesson, moduleId, isLocked }: ToolCardProps) {
       <div className="flex flex-col items-center justify-center p-4 text-center">
         <h3 className="font-bold text-white">{lesson.title}</h3>
         {isUnlocked && (
-          <div className="mt-1 flex items-center gap-1 text-xs font-bold text-neon-green">
-            <span>ATIVO</span>
-            <Check className="h-4 w-4" />
-          </div>
+           isToolActive ? (
+            <Badge className="mt-2 border-neon-green bg-neon-green/10 text-neon-green hover:bg-neon-green/20">
+              <Check className="mr-1 h-3 w-3" />
+              ON
+            </Badge>
+          ) : (
+            <Badge variant="destructive" className="mt-2">
+              <PowerOff className="mr-1 h-3 w-3" />
+              OFF
+            </Badge>
+          )
         )}
       </div>
     </Card>
@@ -52,8 +64,8 @@ export function ToolCard({ lesson, moduleId, isLocked }: ToolCardProps) {
 
   return (
     <Link 
-      href={isUnlocked ? `/dashboard/module/${moduleId}/lesson/${lesson.id}` : '#'} 
-      className={cn(!isUnlocked && 'pointer-events-none cursor-not-allowed')}
+      href={canAccess ? `/dashboard/module/${moduleId}/lesson/${lesson.id}` : '#'} 
+      className={cn(!canAccess && 'pointer-events-none cursor-not-allowed')}
       aria-label={lesson.title}
     >
       {cardContent}

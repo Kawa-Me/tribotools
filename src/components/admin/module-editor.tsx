@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { PlusCircle, Trash2, ArrowUp, ArrowDown, Save, Eye, EyeOff } from 'lucide-react';
 import { Skeleton } from '../ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 
 export function ModuleEditor() {
@@ -229,6 +230,7 @@ export function ModuleEditor() {
                   accessEmail: '',
                   accessPassword: '',
                   cookies: [],
+                  isActive: true,
                 },
               ],
             }
@@ -442,6 +444,15 @@ export function ModuleEditor() {
                             <Input value={lesson.title} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'title', e.target.value)} placeholder="Título da lição" />
                             <Input value={lesson.imageUrl || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'imageUrl', e.target.value)} placeholder="URL da Imagem da Capa" />
                             
+                            <div className="flex items-center space-x-2 pt-2 border-t mt-4">
+                              <Switch
+                                id={`isActive-${lesson.id}`}
+                                checked={lesson.isActive ?? true}
+                                onCheckedChange={(checked) => handleLessonChange(mod.id, lesson.id, 'isActive', checked)}
+                              />
+                              <Label htmlFor={`isActive-${lesson.id}`}>Ferramenta Ativa</Label>
+                            </div>
+
                             <div className="space-y-1">
                                 <Label>Tipo da Lição</Label>
                                 <Select value={lesson.type} onValueChange={(value) => handleLessonChange(mod.id, lesson.id, 'type', value as 'video' | 'text')}>
