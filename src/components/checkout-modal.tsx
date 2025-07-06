@@ -26,6 +26,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 import { ClipboardCopy } from 'lucide-react';
 import { products, allPlans, type PlanId } from '@/lib/plans';
 
@@ -78,7 +79,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
       toast({
         variant: 'destructive',
         title: 'Limite de Valor Excedido',
-        description: 'O valor total não pode ultrapassar R$ 150,00. Por favor, adquira os itens em compras separadas.',
+        description: 'O valor total não pode ultrapassar R$ 150,00. Por favor, adquira um item e depois o outro em compras separadas.',
       });
       return;
     }
@@ -188,7 +189,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
                                 control={form.control}
                                 name="plans"
                                 render={({ field }) => (
-                                  <FormItem className="flex items-center space-x-3 space-y-0 p-3 rounded-md border border-input has-[:checked]:border-primary transition-all">
+                                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-4 rounded-md border border-input has-[:checked]:border-primary has-[:checked]:bg-muted/50 transition-all">
                                     <FormControl>
                                       <Checkbox
                                         checked={field.value?.includes(plan.id)}
@@ -207,9 +208,24 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
                                         }}
                                       />
                                     </FormControl>
-                                    <FormLabel className="font-normal flex-grow cursor-pointer">
-                                      {plan.name} - R${plan.price.toFixed(2).replace('.', ',')}
-                                      <p className="text-xs text-muted-foreground">{plan.description}</p>
+                                    <FormLabel className="font-normal flex-grow cursor-pointer w-full !mt-0">
+                                        <div className="flex justify-between items-start">
+                                            <span className="font-semibold text-foreground">{plan.name}</span>
+                                            {plan.promo && (
+                                                <Badge variant="destructive" className="ml-2 animate-pulse text-xs shrink-0">OFERTA</Badge>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-muted-foreground mt-1">{plan.description}</p>
+                                        <div className="flex items-baseline gap-2 mt-2">
+                                            <span className="text-xl font-bold text-primary">
+                                                R${plan.price.toFixed(2).replace('.', ',')}
+                                            </span>
+                                            {plan.originalPrice && (
+                                                <span className="text-sm text-muted-foreground line-through">
+                                                    R${plan.originalPrice.toFixed(2).replace('.', ',')}
+                                                </span>
+                                            )}
+                                        </div>
                                     </FormLabel>
                                   </FormItem>
                                 )}
