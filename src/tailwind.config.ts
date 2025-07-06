@@ -10,8 +10,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        body: ['"Share Tech Mono"', 'monospace'],
-        headline: ['"Share Tech Mono"', 'monospace'],
+        body: ['var(--font-share-tech-mono)', 'monospace'],
+        headline: ['var(--font-share-tech-mono)', 'monospace'],
       },
       colors: {
         background: 'hsl(var(--background))',

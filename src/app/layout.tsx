@@ -1,11 +1,24 @@
 import type { Metadata } from 'next';
+import { Share_Tech_Mono } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/components/providers/auth-provider';
 import { Toaster } from '@/components/ui/toaster';
 
+const shareTechMono = Share_Tech_Mono({
+  subsets: ['latin'],
+  weight: '400',
+  display: 'swap',
+  variable: '--font-share-tech-mono',
+});
+
 export const metadata: Metadata = {
   title: 'Tribo Tools',
   description: 'Sua área de membros exclusiva para ferramentas hacker.',
+  icons: {
+    icon: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//tribo-logo.png',
+    shortcut: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//tribo-logo.png',
+    apple: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//tribo-logo.png',
+  },
 };
 
 export default function RootLayout({
@@ -14,15 +27,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <html lang="en" className={`${shareTechMono.variable} dark`}>
       <body className="font-body antialiased">
         <AuthProvider>
           {children}
