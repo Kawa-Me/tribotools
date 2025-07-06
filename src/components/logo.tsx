@@ -10,7 +10,7 @@ export function Logo({ className }: { className?: string }) {
         width={120}
         height={22}
         priority
-        className="object-contain"
+        className="object-contain h-auto w-[80px] md:w-[120px]"
       />
     </div>
   );
