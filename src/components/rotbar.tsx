@@ -4,15 +4,15 @@ import { FaWhatsapp } from 'react-icons/fa';
 
 export function Rotbar() {
   return (
-    <div className="fixed bottom-4 left-4 flex flex-col gap-3 z-50">
+    <div className="fixed bottom-4 right-4 flex flex-col gap-3 z-50">
       {/* Botão Suporte */}
       <a
         href="https://wa.me/5545984325338"
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl shadow-lg hover:bg-primary/90 transition"
+        className="flex items-center gap-2 px-4 py-2 bg-black text-foreground rounded-xl shadow-lg hover:bg-neutral-800 transition border border-primary"
       >
-        <FaWhatsapp size={18} />
+        <FaWhatsapp size={18} className="text-primary" />
         Suporte
       </a>
 
@@ -21,7 +21,7 @@ export function Rotbar() {
         href="https://chat.whatsapp.com/LK6HtNWM4NODbH1gZKgypo"
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-xl shadow-lg hover:bg-secondary/80 transition"
+        className="flex items-center gap-2 px-4 py-2 bg-black text-secondary-foreground rounded-xl shadow-lg hover:bg-neutral-800 transition border border-input"
       >
         <FaWhatsapp size={18} />
         Grupo
