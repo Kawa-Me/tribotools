@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -111,35 +110,27 @@ export function PlanEditor() {
   const handleDeleteProduct = async (productId: string) => {
     if (!window.confirm("Tem certeza que deseja deletar este produto e todos os seus planos? Esta ação não pode ser desfeita.")) return;
     
-    const originalProducts = [...products];
-    const productToDelete = originalProducts.find(p => p.id === productId);
-
-    if (!productToDelete) return; // Should not happen in a normal flow
-
-    // Optimistic UI update: remove the product from the local state immediately
-    setProducts(prevProducts => prevProducts.filter(p => p.id !== productId));
-
     if (!db) {
-      toast({ variant: 'destructive', title: 'Erro', description: 'Serviço de banco de dados indisponível. A exclusão foi revertida.' });
-      setProducts(originalProducts); // Revert UI change
-      return;
+        toast({ variant: 'destructive', title: 'Erro', description: 'Serviço de banco de dados indisponível.' });
+        return;
     }
-    
+
     try {
-      // Attempt to delete the document from Firestore
-      await deleteDoc(doc(db, 'products', productId));
-      toast({ title: 'Sucesso!', description: `Produto "${productToDelete.name}" foi excluído.` });
-      // The `onSnapshot` listener will ensure the state is consistent with the database.
-    } catch (error) {
-      console.error('Failed to delete product:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Falha na Exclusão',
-        description: `Não foi possível excluir o produto. A ação foi desfeita. Verifique as permissões do banco de dados.`,
-        duration: 9000,
-      });
-      // If the deletion fails, revert the UI to its original state
-      setProducts(originalProducts);
+        await deleteDoc(doc(db, 'products', productId));
+        toast({ title: 'Sucesso!', description: 'Produto excluído. A lista será atualizada.' });
+        // The onSnapshot listener will automatically update the UI.
+    } catch (error: any) {
+        console.error('Failed to delete product:', error);
+        let description = 'Não foi possível excluir o produto do banco de dados.';
+        if (error.code === 'permission-denied') {
+            description = 'Falha na Exclusão. Você não tem permissão para realizar esta ação. Verifique as regras de segurança do Firestore.';
+        }
+        toast({
+            variant: 'destructive',
+            title: 'Erro ao Excluir',
+            description: description,
+            duration: 9000,
+        });
     }
   };
   
