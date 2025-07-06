@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, use } from 'react';
 import { notFound, useRouter } from 'next/navigation';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -11,7 +11,8 @@ import { Button } from '@/components/ui/button';
 import ReactMarkdown from 'react-markdown';
 import { Card, CardContent } from '@/components/ui/card';
 
-export default function LessonPage({ params }: { params: { id: string; lessonId: string } }) {
+export default function LessonPage({ params: paramsPromise }: { params: Promise<{ id: string; lessonId: string }> }) {
+  const params = use(paramsPromise);
   const router = useRouter();
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [moduleTitle, setModuleTitle] = useState('');

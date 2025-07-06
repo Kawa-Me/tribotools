@@ -5,7 +5,7 @@ import { notFound } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Lock, PlayCircle, FileText } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, use } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Module } from '@/lib/types';
@@ -27,7 +27,8 @@ const iconComponents: { [key: string]: React.ComponentType<any> } = {
     TrendingUp: lucideIcons.TrendingUp,
   };
 
-export default function ModulePage({ params }: { params: { id: string } }) {
+export default function ModulePage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const params = use(paramsPromise);
   const { user } = useAuth();
   const [module, setModule] = useState<Module | null>(null);
   const [loading, setLoading] = useState(true);
