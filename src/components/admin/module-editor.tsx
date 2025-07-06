@@ -10,12 +10,13 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { PlusCircle, Trash2 } from 'lucide-react';
 import { Skeleton } from '../ui/skeleton';
+import { cn } from '@/lib/utils';
 
 export function ModuleEditor() {
   const [modules, setModules] = useState<Module[]>([]);
@@ -179,9 +180,25 @@ export function ModuleEditor() {
             <AccordionTrigger className="hover:no-underline">
                 <div className="flex justify-between items-center w-full pr-4">
                     <span>{mod.title}</span>
-                    <Button variant="ghost" size="icon" onClick={(e) => {e.stopPropagation(); handleDeleteModule(mod.id)}} className="text-destructive hover:text-destructive/80">
+                    <div
+                        role="button"
+                        aria-label={`Deletar módulo ${mod.title}`}
+                        tabIndex={0}
+                        onClick={(e) => {
+                            e.stopPropagation(); 
+                            handleDeleteModule(mod.id);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleDeleteModule(mod.id);
+                          }
+                        }}
+                        className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "text-destructive hover:text-destructive/80 focus-visible:ring-1 focus-visible:ring-ring")}
+                    >
                         <Trash2 className="h-4 w-4" />
-                    </Button>
+                    </div>
                 </div>
             </AccordionTrigger>
             <AccordionContent>
