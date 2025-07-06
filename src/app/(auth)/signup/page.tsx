@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 export default function SignupPage() {
   return (
-    <Card className="bg-card/80 backdrop-blur-sm border-white/10">
+    <Card className="bg-card/80 backdrop-blur-sm">
       <CardHeader>
         <CardTitle className="font-headline text-2xl">Crie sua conta</CardTitle>
         <CardDescription>É rápido e fácil. Comece agora mesmo.</CardDescription>

@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 export default function LoginPage() {
   return (
-    <Card className="bg-card/80 backdrop-blur-sm border-white/10">
+    <Card className="bg-card/80 backdrop-blur-sm">
       <CardHeader>
         <CardTitle className="font-headline text-2xl">Acessar sua conta</CardTitle>
         <CardDescription>Bem-vindo de volta! Insira seus dados.</CardDescription>
