@@ -14,10 +14,6 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-// DEBUG LOG: This will print the API key that the browser is actually seeing.
-console.log("Firebase API Key being used by the app:", process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
-
-
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
