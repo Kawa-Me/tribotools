@@ -131,15 +131,16 @@ export async function POST(request: Request) {
         updates[`subscriptions.${productId}`] = newSubscriptionData;
     }
 
-    if (Object.keys(updates).length > 0) {
+    if (Object.keys(updates).length > 1 || (Object.keys(updates).length === 1 && !updates.name && !updates.document && !updates.phone)) {
         console.log('Applying updates to Firestore:', JSON.stringify(updates, null, 2));
         await updateDoc(userRef, updates);
-        console.log(`SUCCESS: Successfully updated subscriptions for ${email}.`);
+        const grantedProducts = Object.keys(updates).filter(k => k.startsWith('subscriptions.')).map(k => k.split('.')[1]).join(', ');
+        console.log(`SUCCESS: Successfully updated subscriptions for ${email}. Granted access to products: ${grantedProducts}`);
     } else {
          console.log(`No valid plans found to update for ${email}. No database changes made.`);
     }
     
-    return NextResponse.json({ success: true, message: 'User updated successfully' });
+    return NextResponse.json({ success: true, message: 'Webhook processed successfully.' });
 
   } catch (error) {
     console.error('---!!! FATAL WEBHOOK ERROR !!!---');
