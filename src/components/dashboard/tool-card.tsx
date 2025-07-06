@@ -26,12 +26,15 @@ export function ToolCard({ lesson, moduleId, isLocked }: ToolCardProps) {
               data-ai-hint="shark hacker"
               alt={lesson.title}
               fill
-              className="object-cover group-hover:scale-105 transition-transform duration-300"
+              className={cn(
+                "object-cover group-hover:scale-105 transition-transform duration-300",
+                isLocked && "grayscale"
+              )}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
             {isLocked && (
-                <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                    <Lock className="h-10 w-10 text-destructive" />
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center backdrop-blur-[2px]">
+                    <Lock className="h-8 w-8 text-destructive" />
                 </div>
             )}
           </div>

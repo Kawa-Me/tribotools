@@ -80,7 +80,7 @@ export default function DashboardPage() {
           <div key={module.id} className="space-y-4">
             <h2 className="text-lg font-bold font-headline flex items-center gap-3 text-primary/90">
                 <module.icon className="h-5 w-5" />
-                {module.title.toUpperCase()}
+                {module.title}
             </h2>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               {module.lessons.map((lesson) => (
