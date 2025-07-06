@@ -12,24 +12,15 @@ import { Button } from '@/components/ui/button';
 import ReactMarkdown from 'react-markdown';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-function InfoField({ label, value, isPassword = false }: { label: string, value: string, isPassword?: boolean }) {
-  const { toast } = useToast();
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(value);
-    toast({ title: "Copiado!", description: `${label} copiado para a área de transferência.` });
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
+// Refactored InfoField to be a presentational component that receives a copy handler
+function InfoField({ label, value, isPassword = false, onCopy }: { label: string, value: string, isPassword?: boolean, onCopy: () => void }) {
   return (
     <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-3 transition-colors">
       <div>
         <p className="text-xs text-muted-foreground">{label}</p>
         <p className={`font-mono text-sm text-foreground ${!isPassword && 'break-all'}`}>{isPassword ? '••••••••' : value}</p>
       </div>
-      <Button variant="ghost" size="icon" onClick={handleCopy} aria-label={`Copiar ${label}`}>
+      <Button variant="ghost" size="icon" onClick={onCopy} aria-label={`Copiar ${label}`}>
         <ClipboardCopy className="h-4 w-4" />
       </Button>
     </div>
@@ -42,6 +33,13 @@ export default function LessonPage({ params: paramsPromise }: { params: Promise<
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [moduleTitle, setModuleTitle] = useState('');
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast(); // Centralized toast hook
+
+  // Centralized copy handler for all copyable fields
+  const handleCopy = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    toast({ title: "Copiado!", description: `${label} foi copiado para a área de transferência.` });
+  };
 
   useEffect(() => {
     if (params.id && params.lessonId) {
@@ -134,8 +132,8 @@ export default function LessonPage({ params: paramsPromise }: { params: Promise<
                         </Button>
                     )}
                     <div className="space-y-2">
-                        {lesson.accessEmail && <InfoField label="Email / Usuário" value={lesson.accessEmail} />}
-                        {lesson.accessPassword && <InfoField label="Senha" value={lesson.accessPassword} isPassword />}
+                        {lesson.accessEmail && <InfoField label="Email / Usuário" value={lesson.accessEmail} onCopy={() => handleCopy(lesson.accessEmail!, 'Email / Usuário')} />}
+                        {lesson.accessPassword && <InfoField label="Senha" value={lesson.accessPassword} isPassword onCopy={() => handleCopy(lesson.accessPassword!, 'Senha')} />}
                     </div>
                 </CardContent>
             </Card>
@@ -148,7 +146,12 @@ export default function LessonPage({ params: paramsPromise }: { params: Promise<
                 </CardHeader>
                 <CardContent className="p-6 pt-0 space-y-2">
                     {lesson.cookies.map((cookie, index) => (
-                        <InfoField key={index} label={cookie.name} value={cookie.value} />
+                        <div key={index} className="flex items-center justify-between rounded-lg border bg-muted/30 p-3 transition-colors">
+                            <p className="font-mono text-sm text-foreground">{cookie.name}</p>
+                            <Button variant="ghost" size="icon" onClick={() => handleCopy(cookie.value, cookie.name)} aria-label={`Copiar ${cookie.name}`}>
+                                <ClipboardCopy className="h-4 w-4" />
+                            </Button>
+                        </div>
                     ))}
                 </CardContent>
               </Card>
