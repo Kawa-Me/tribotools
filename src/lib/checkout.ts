@@ -100,6 +100,11 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     expires_at: expirationDate.toISOString(), // Adding expiration
   };
 
+  // --- NEW DEBUG LOGGING ---
+  console.log('--- Enviando Payload para PushInPay ---');
+  console.log(JSON.stringify(payload, null, 2));
+  // --- END NEW DEBUG LOGGING ---
+
   try {
     const response = await fetch(apiUrl, {
       method: 'POST',
