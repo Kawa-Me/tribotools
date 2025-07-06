@@ -19,6 +19,7 @@ export const initialProducts: Product[] = [
         name: 'ZapVoice',
         order: 1,
         plans: [
+            { id: 'zapvoice_teste_1dia', name: 'Plano de Teste (1 Dia)', price: 1.00, originalPrice: 1.00, description: 'Plano para teste de webhook.', days: 1, promo: false },
             { id: 'zapvoice_mensal', name: 'Acesso Mensal', price: 5.99, originalPrice: 19.99, description: '30 dias de acesso.', days: 30, promo: false },
             { id: 'zapvoice_trimestral', name: 'Acesso Trimestral', price: 15.00, originalPrice: 49.99, description: '💎 MELHOR OFERTA: 90 dias de acesso.', days: 90, promo: true },
         ]
