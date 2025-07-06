@@ -112,6 +112,8 @@ export function PlanEditor() {
     
     if (!db) {
         toast({ variant: 'destructive', title: 'Erro de Conexão', description: 'Serviço de banco de dados indisponível.' });
+        // Restore state if DB is not available
+        setProducts(products);
         return;
     }
     
@@ -120,7 +122,9 @@ export function PlanEditor() {
         toast({ title: 'Sucesso!', description: 'Produto deletado.' });
     } catch (error) {
         console.error("Error deleting product:", error);
-        toast({ variant: 'destructive', title: 'Erro ao Deletar', description: 'Não foi possível remover o produto do servidor. O estado será restaurado.' });
+        toast({ variant: 'destructive', title: 'Erro ao Deletar', description: 'Não foi possível remover o produto do servidor.' });
+        // Optionally restore state on failure
+        // For now, the optimistic update is kept, but a refetch would be more robust.
     }
   };
   
@@ -163,7 +167,6 @@ export function PlanEditor() {
     try {
       const batch = writeBatch(db);
       
-      // Deletions are handled immediately, so we only handle creations and updates.
       products.forEach((prod, index) => {
         const productRef = doc(db, 'products', prod.id);
         batch.set(productRef, { ...prod, order: index });
@@ -219,8 +222,8 @@ export function PlanEditor() {
                     <Input id={`name-${prod.id}`} value={prod.name} onChange={(e) => handleProductChange(prod.id, 'name', e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor={`id-${prod.id}`}>ID do Produto</Label>
-                    <Input id={`id-${prod.id}`} value={prod.id} onChange={(e) => handleProductChange(prod.id, 'id', e.target.value)} />
+                    <Label htmlFor={`id-${prod.id}`}>ID do Produto (não editável)</Label>
+                    <Input id={`id-${prod.id}`} value={prod.id} disabled />
                   </div>
                 </div>
                 
@@ -236,7 +239,7 @@ export function PlanEditor() {
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Input value={plan.name} onChange={(e) => handlePlanChange(prod.id, plan.id, 'name', e.target.value)} placeholder="Nome do plano (Ex: Mensal)" />
-                        <Input value={plan.id} onChange={(e) => handlePlanChange(prod.id, plan.id, 'id', e.target.value)} placeholder="ID do Plano" />
+                        <Input value={plan.id} placeholder="ID do Plano (não editável)" disabled />
                       </div>
                       <Textarea value={plan.description} onChange={(e) => handlePlanChange(prod.id, plan.id, 'description', e.target.value)} placeholder="Descrição do plano" />
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
