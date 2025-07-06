@@ -3,41 +3,36 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Helper function to check if a user is an admin.
-    // It safely checks if the document exists before accessing its data.
+
+    // Helper function to check for admin role
     function isAdmin() {
       return exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // --- MODULES COLLECTION ---
-    match /modules/{moduleId} {
-      // Any authenticated user can read (get and list) all modules.
-      allow read: if request.auth != null;
-      // Only admins can create, update, or delete modules.
-      allow write: if isAdmin();
+    // Rules for the 'users' collection
+    match /users/{userId} {
+      // Any authenticated user can create their own user document upon signup.
+      allow create: if request.auth.uid == userId;
+
+      // Users can read their own data. Admins can read any user's data.
+      allow read: if request.auth.uid == userId || isAdmin();
+
+      // Users can't update their own role. Admins can update any user document.
+      allow update: if (request.auth.uid == userId && request.resource.data.role == resource.data.role) || isAdmin();
+      
+      // Deleting users is disallowed for now.
+      allow delete: if false;
     }
 
-    // --- USERS COLLECTION ---
-    match /users/{userId} {
-      // Rule to allow admins to list all documents in the 'users' collection.
-      // This is crucial for the admin panel.
-      allow list: if isAdmin();
-      
-      // Rule to allow a user to get their own document, and admins to get any document.
-      allow get: if request.auth != null && (request.auth.uid == userId || isAdmin());
+    // Rules for the 'modules' collection
+    match /modules/{moduleId} {
+        // Any authenticated user can read modules and their lessons.
+        // The app's UI will handle locking/unlocking content based on subscription status.
+        allow read: if request.auth.uid != null;
 
-      // Rule to allow a user to create their own document upon signup.
-      // The document ID (userId) must match the authenticated user's ID for security.
-      allow create: if request.auth != null && request.auth.uid == userId;
-      
-      // Rule to allow admins to update any user's document.
-      // Note: The webhook needs to use the Firebase Admin SDK to bypass security rules.
-      allow update: if isAdmin();
-
-      // Rule to allow admins to delete user documents.
-      allow delete: if isAdmin();
+        // Only admins can create, update, or delete modules.
+        allow write: if isAdmin();
     }
   }
 }
