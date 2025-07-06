@@ -78,7 +78,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
       toast({
         variant: 'destructive',
         title: 'Limite de Valor Excedido',
-        description: 'O valor total da compra não pode ultrapassar R$ 150,00. Por favor, ajuste sua seleção.',
+        description: 'O valor total não pode ultrapassar R$ 150,00. Por favor, adquira os itens em compras separadas.',
       });
       return;
     }
@@ -244,7 +244,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
                   </div>
                   {totalPrice > 150 && (
                     <p className="text-sm text-destructive font-semibold text-center">
-                      O valor total não pode exceder R$ 150,00.
+                      O valor total não pode exceder R$ 150,00. Por favor, adquira um item e depois o outro em compras separadas.
                     </p>
                   )}
                 </div>
