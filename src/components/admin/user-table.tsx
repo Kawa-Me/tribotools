@@ -181,7 +181,6 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave }: EditUserDialogPr
               <SelectContent>
                 <SelectItem value="mensal">Mensal</SelectItem>
                 <SelectItem value="trimestral">Trimestral</SelectItem>
-                <SelectItem value="anual">Anual</SelectItem>
               </SelectContent>
             </Select>
           </div>

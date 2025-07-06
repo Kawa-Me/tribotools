@@ -19,7 +19,7 @@ export interface Module {
 
 export interface UserSubscription {
   status: 'active' | 'expired' | 'none';
-  plan: 'mensal' | 'trimestral' | 'anual' | null;
+  plan: 'mensal' | 'trimestral' | null;
   expiresAt: Timestamp | null;
   startedAt: Timestamp | null;
 }

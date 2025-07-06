@@ -27,15 +27,14 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ClipboardCopy } from 'lucide-react';
 
 const plans = [
-    { id: 'mensal', name: 'Acesso Mensal', price: 29.90, description: '30 dias de acesso' },
-    { id: 'trimestral', name: 'Acesso Trimestral', price: 79.90, description: '90 dias de acesso' },
-    { id: 'anual', name: 'Acesso Anual', price: 299.90, description: '365 dias de acesso' },
+    { id: 'mensal', name: 'Acesso Mensal', price: 57.90, description: '30 dias de acesso' },
+    { id: 'trimestral', name: 'Acesso Trimestral', price: 150.00, description: '90 dias de acesso' },
 ] as const;
 
 type PlanId = typeof plans[number]['id'];
 
 const FormSchema = z.object({
-  plan: z.enum(['mensal', 'trimestral', 'anual'], {
+  plan: z.enum(['mensal', 'trimestral'], {
     required_error: 'Você precisa selecionar um plano.',
   }),
   phone: z.string().min(10, {
@@ -191,4 +190,3 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
-

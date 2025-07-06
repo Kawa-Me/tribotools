@@ -4,13 +4,12 @@
 import { z } from 'zod';
 
 const plans = {
-  mensal: { name: 'Acesso Mensal', price: 29.90 },
-  trimestral: { name: 'Acesso Trimestral', price: 79.90 },
-  anual: { name: 'Acesso Anual', price: 299.90 },
+  mensal: { name: 'Acesso Mensal', price: 57.90 },
+  trimestral: { name: 'Acesso Trimestral', price: 150.00 },
 };
 
 const CreatePixPaymentSchema = z.object({
-  plan: z.enum(['mensal', 'trimestral', 'anual']),
+  plan: z.enum(['mensal', 'trimestral']),
   email: z.string().email(),
   phone: z.string().min(10),
 });
