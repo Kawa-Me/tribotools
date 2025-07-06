@@ -1,15 +1,15 @@
 'use client';
 
 import { useAuth } from '@/lib/hooks';
-import { ModuleCard } from '@/components/dashboard/module-card';
 import { useEffect, useState } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Module } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import * as lucideIcons from 'lucide-react';
+import { Card, CardDescription, CardTitle } from '@/components/ui/card';
+import { ToolCard } from '@/components/dashboard/tool-card';
 
-// A mapping from icon names (as strings) to the actual components
 const iconComponents: { [key: string]: React.ComponentType<any> } = {
   LayoutDashboard: lucideIcons.LayoutDashboard,
   BookOpen: lucideIcons.BookOpen,
@@ -22,7 +22,6 @@ const iconComponents: { [key: string]: React.ComponentType<any> } = {
   Paintbrush: lucideIcons.Paintbrush,
   TrendingUp: lucideIcons.TrendingUp,
 };
-
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -55,17 +54,19 @@ export default function DashboardPage() {
   const isUnlocked = user.role === 'admin' || user.subscription?.status === 'active';
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold font-headline">Bem-vindo(a) de volta!</h1>
-        <p className="text-muted-foreground">Continue de onde parou e explore os módulos.</p>
-      </div>
-
+    <div className="space-y-12">
       {loading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <Skeleton className="h-40 w-full" />
-            <Skeleton className="h-40 w-full" />
-            <Skeleton className="h-40 w-full" />
+        <div className="space-y-12">
+          {[...Array(2)].map((_, i) => (
+            <div key={i} className="space-y-4">
+              <Skeleton className="h-8 w-1/3" />
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                {[...Array(6)].map((_, j) => (
+                  <Skeleton key={j} className="aspect-[3/4] w-full rounded-lg" />
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       ) : !dbConfigured ? (
         <Card className="bg-destructive/10 border-destructive/50 text-center p-8">
@@ -75,11 +76,19 @@ export default function DashboardPage() {
             </CardDescription>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {modules.map((module) => (
-            <ModuleCard key={module.id} module={module} isLocked={!isUnlocked} />
-          ))}
-        </div>
+        modules.map((module) => (
+          <div key={module.id} className="space-y-4">
+            <h2 className="text-lg font-bold font-headline flex items-center gap-3 text-primary/90">
+                <module.icon className="h-5 w-5" />
+                {module.title.toUpperCase()}
+            </h2>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+              {module.lessons.map((lesson) => (
+                <ToolCard key={lesson.id} lesson={lesson} moduleId={module.id} isLocked={!isUnlocked} />
+              ))}
+            </div>
+          </div>
+        ))
       )}
     </div>
   );
