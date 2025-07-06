@@ -26,12 +26,16 @@ export default function LoginPage() {
     try {
       await signInAnonymously(auth);
       router.push('/dashboard');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Anonymous sign-in failed', error);
+      let description = 'Não foi possível acessar como visitante. Tente novamente.';
+      if (error.code === 'auth/admin-restricted-operation') {
+        description = "O login anônimo precisa ser habilitado no seu painel do Firebase.";
+      }
       toast({
         variant: 'destructive',
-        title: 'Erro',
-        description: 'Não foi possível acessar como visitante. Tente novamente.',
+        title: 'Erro de Autenticação',
+        description: description,
       });
     }
   };
