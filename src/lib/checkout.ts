@@ -35,7 +35,19 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
 
   const { plans: selectedPlanIds, name, email, document, phone } = validation.data;
 
-  const allPlans = await getPlansFromFirestore();
+  let allPlans;
+  try {
+    allPlans = await getPlansFromFirestore();
+  } catch (e: any) {
+      if (e.code === 'permission-denied') {
+          console.error("Firestore permission denied in getPlansFromFirestore:", e);
+          return { error: "Erro de permissão ao buscar planos. Verifique as regras de segurança do Firestore." };
+      }
+      console.error("Error fetching plans from Firestore:", e);
+      const errorMessage = e.message || 'An unknown error occurred while fetching plans.';
+      return { error: `Não foi possível carregar os planos do banco de dados: ${errorMessage}` };
+  }
+
   if (allPlans.length === 0) {
       return { error: 'Server configuration error: No plans found' };
   }
