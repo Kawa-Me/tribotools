@@ -21,6 +21,9 @@ import { Skeleton } from '../ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
+import { products } from '@/lib/plans';
+
+const availablePermissions = ['public', ...Object.keys(products)];
 
 export function ModuleEditor() {
   const [modules, setModules] = useState<Module[]>([]);
@@ -402,7 +405,21 @@ export function ModuleEditor() {
                     </div>
                     <div className="space-y-2">
                          <Label htmlFor={`permission-${mod.id}`}>Permissão</Label>
-                         <Input id={`permission-${mod.id}`} value={mod.permission} onChange={(e) => handleModuleChange(mod.id, 'permission', e.target.value)} placeholder="Ex: ferramentas" />
+                         <Select
+                            value={mod.permission}
+                            onValueChange={(value) => handleModuleChange(mod.id, 'permission', value)}
+                          >
+                            <SelectTrigger id={`permission-${mod.id}`}>
+                              <SelectValue placeholder="Selecione a permissão" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availablePermissions.map((perm) => (
+                                <SelectItem key={perm} value={perm}>
+                                  {perm.charAt(0).toUpperCase() + perm.slice(1)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                     </div>
                 </div>
                 <div className="space-y-2">
