@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 import { auth, db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -49,39 +49,20 @@ export function LoginForm() {
       const userCredential = await signInWithEmailAndPassword(auth, values.email, values.password);
       const user = userCredential.user;
 
-      const userDocRef = doc(db, 'users', user.uid);
       const isAdmin = user.email === 'kawameller@gmail.com';
 
       // If the user is the admin, ensure their role is correctly set in Firestore.
       if (isAdmin) {
+        const userDocRef = doc(db, 'users', user.uid);
         const userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          if (data?.role !== 'admin' || !data.subscriptions || !data.subscriptions.ferramentas) {
-            await updateDoc(userDocRef, {
+        // Ensure the admin role is set, creating or updating the document as needed.
+        if (!userDoc.exists() || userDoc.data()?.role !== 'admin') {
+           await setDoc(userDocRef, { 
+              email: user.email, 
               role: 'admin',
-              'subscriptions.ferramentas': {
-                status: 'active',
-                plan: 'admin',
-                startedAt: null,
-                expiresAt: null,
-              },
-            });
-          }
-        } else {
-          // This case is unlikely if they signed up, but good for robustness
-          await setDoc(userDocRef, {
-            email: user.email,
-            subscriptions: {
-              ferramentas: {
-                status: 'active',
-                plan: 'admin',
-                startedAt: null,
-                expiresAt: null,
-              },
-            },
-            role: 'admin',
-          });
+              // Preserve existing subscriptions if the document already exists
+              subscriptions: userDoc.exists() ? userDoc.data().subscriptions : {}
+          }, { merge: true });
         }
       }
       
