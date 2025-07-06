@@ -30,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             photoURL: null,
             subscriptions: {},
             role: 'user',
+            emailVerified: false,
             isAnonymous: true,
           });
           setLoading(false);
@@ -61,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 photoURL: firebaseUser.photoURL,
                 subscriptions,
                 role: data.role || 'user',
+                emailVerified: firebaseUser.emailVerified,
                 isAnonymous: false,
                 name: data.name,
                 document: data.document,
@@ -75,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               photoURL: firebaseUser.photoURL,
               subscriptions: {},
               role: 'user',
+              emailVerified: firebaseUser.emailVerified,
               isAnonymous: false,
              });
             }

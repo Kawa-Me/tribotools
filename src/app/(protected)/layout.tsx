@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks';
@@ -16,7 +16,10 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTr
 import { Menu, AlertTriangle, Package } from 'lucide-react';
 import { Rotbar } from '@/components/rotbar';
 import { CheckoutModal } from '@/components/checkout-modal';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { sendEmailVerification } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
+import { useToast } from '@/hooks/use-toast';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -29,11 +32,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         router.replace('/login');
       } 
       // If user is a non-anonymous admin, they should be on the admin pages.
-      else if (user.role === 'admin' && !user.isAnonymous) {
+      else if (user.role === 'admin' && !user.isAnonymous && user.emailVerified) {
         router.replace('/admin');
       }
     }
   }, [user, loading, router]);
+
+  // If user is loaded but not verified, show verification screen
+  if (!loading && user && !user.isAnonymous && !user.emailVerified) {
+    return <VerifyEmailScreen />;
+  }
 
   // Show loader while auth is in progress, or if we are about to redirect.
   if (loading || !user || (user && !user.isAnonymous && user.role === 'admin')) {
@@ -61,6 +69,68 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </>
   );
 }
+
+function VerifyEmailScreen() {
+    const { user } = useAuth();
+    const { toast } = useToast();
+    const [sending, setSending] = useState(false);
+
+    const handleSignOut = async () => {
+        try {
+            await auth.signOut();
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Erro ao sair.' });
+        }
+    }
+
+    const handleResendVerification = async () => {
+        if (!auth.currentUser) return;
+        setSending(true);
+        try {
+            await sendEmailVerification(auth.currentUser);
+            toast({
+                title: 'Email Reenviado!',
+                description: 'Verifique sua caixa de entrada para o novo link de verificação.'
+            });
+        } catch (error) {
+            toast({
+                variant: 'destructive',
+                title: 'Erro',
+                description: 'Não foi possível reenviar o email. Tente novamente mais tarde.'
+            });
+        } finally {
+            setSending(false);
+        }
+    };
+
+    return (
+        <div className="flex min-h-screen w-full flex-col items-center justify-center bg-background p-4">
+            <Card className="w-full max-w-md text-center">
+                <CardHeader>
+                    <CardTitle className="font-headline text-2xl text-primary">Verifique seu Endereço de Email</CardTitle>
+                    <CardDescription>
+                        Enviamos um link de ativação para <strong>{user?.email}</strong>. Por favor, clique no link para acessar o painel.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-sm text-muted-foreground">
+                        Não recebeu o email? Verifique sua pasta de spam ou clique no botão abaixo para reenviar.
+                    </p>
+                </CardContent>
+                <CardFooter className="flex-col gap-4">
+                    <Button onClick={handleResendVerification} disabled={sending} className="w-full">
+                        {sending ? <Loader className="mr-2" /> : null}
+                        Reenviar Email de Verificação
+                    </Button>
+                    <Button variant="outline" onClick={handleSignOut} className="w-full">
+                        Usar outro email
+                    </Button>
+                </CardFooter>
+            </Card>
+        </div>
+    );
+}
+
 
 function SubscriptionCard() {
     const { user } = useAuth();

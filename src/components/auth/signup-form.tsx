@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 
 import { auth, db } from '@/lib/firebase';
@@ -48,26 +48,23 @@ export function SignupForm() {
       const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
       const user = userCredential.user;
 
+      await sendEmailVerification(user);
+
       const isAdmin = values.email === 'kawameller@gmail.com';
 
       // Create a user document in Firestore
       await setDoc(doc(db, 'users', user.uid), {
         email: user.email,
-        subscriptions: isAdmin
-          ? {
-              ferramentas: {
-                status: 'active',
-                plan: 'admin',
-                startedAt: null,
-                expiresAt: null,
-              },
-            }
-          : {},
+        subscriptions: {},
         role: isAdmin ? 'admin' : 'user',
       });
 
-      toast({ title: 'Sucesso!', description: 'Sua conta foi criada.' });
-      router.push(isAdmin ? '/admin' : '/dashboard');
+      toast({ 
+        title: 'Verifique seu Email!', 
+        description: 'Enviamos um link de verificação para o seu email. Por favor, clique no link para ativar sua conta antes de fazer o login.',
+        duration: 9000
+      });
+      router.push('/login');
     } catch (error: any) {
       if (error.code === 'auth/email-already-in-use') {
         form.setError('email', {

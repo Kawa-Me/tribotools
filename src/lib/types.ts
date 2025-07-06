@@ -65,6 +65,7 @@ export interface UserData {
   photoURL: string | null;
   subscriptions: { [key: string]: UserSubscription };
   role?: 'admin' | 'user';
+  emailVerified: boolean;
   isAnonymous: boolean;
 }
 
