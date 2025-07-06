@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, onSnapshot, doc, writeBatch, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, doc, writeBatch, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Product, Plan } from '@/lib/types';
 import { initialProducts } from '@/lib/plans';
@@ -104,9 +104,24 @@ export function PlanEditor() {
     setProducts([...products, newProduct]);
   };
 
-  const handleDeleteProduct = (productId: string) => {
+  const handleDeleteProduct = async (productId: string) => {
     if (!window.confirm("Tem certeza que deseja deletar este produto e todos os seus planos? Esta ação não pode ser desfeita.")) return;
+    
+    // Optimistically update UI
     setProducts((prev) => prev.filter(p => p.id !== productId));
+    
+    if (!db) {
+        toast({ variant: 'destructive', title: 'Erro de Conexão', description: 'Serviço de banco de dados indisponível.' });
+        return;
+    }
+    
+    try {
+        await deleteDoc(doc(db, "products", productId));
+        toast({ title: 'Sucesso!', description: 'Produto deletado.' });
+    } catch (error) {
+        console.error("Error deleting product:", error);
+        toast({ variant: 'destructive', title: 'Erro ao Deletar', description: 'Não foi possível remover o produto do servidor. O estado será restaurado.' });
+    }
   };
   
   const handleAddNewPlan = (productId: string) => {
@@ -147,26 +162,9 @@ export function PlanEditor() {
 
     try {
       const batch = writeBatch(db);
-      const productsCollection = collection(db, 'products');
-
-      // Step 1: Get all current product IDs from the database
-      const querySnapshot = await getDocs(productsCollection);
-      const existingIdsOnDb = new Set(querySnapshot.docs.map(doc => doc.id));
       
-      // Step 2: Get all product IDs from the current state
-      const currentIdsInState = new Set(products.map(p => p.id));
-      
-      // Step 3: Determine which products to delete
-      existingIdsOnDb.forEach(id => {
-          if (!currentIdsInState.has(id)) {
-              batch.delete(doc(db, 'products', id));
-          }
-      });
-      
-      // Step 4: Add create/update operations for products in the current state
+      // Deletions are handled immediately, so we only handle creations and updates.
       products.forEach((prod, index) => {
-        // Important: If an ID was changed in the UI, this creates a NEW document.
-        // It's the admin's responsibility to ensure IDs are managed correctly.
         const productRef = doc(db, 'products', prod.id);
         batch.set(productRef, { ...prod, order: index });
       });

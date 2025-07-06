@@ -212,17 +212,21 @@ export function ModuleEditor() {
   };
 
   const handleDeleteModule = async (moduleId: string) => {
+    if (!window.confirm("Tem certeza que deseja deletar este módulo? Esta ação não pode ser desfeita.")) return;
+
+    // Optimistically update UI
+    setModules((prevModules) => prevModules.filter((mod) => mod.id !== moduleId));
+    
     if (!db) {
-        toast({ variant: 'destructive', title: 'Erro', description: 'Serviço de banco de dados indisponível.' });
+        toast({ variant: 'destructive', title: 'Erro de Conexão', description: 'Serviço de banco de dados indisponível.' });
         return;
     }
-    if (!window.confirm("Tem certeza que deseja deletar este módulo? Esta ação não pode ser desfeita.")) return;
     try {
         await deleteDoc(doc(db, "modules", moduleId));
         toast({ title: 'Sucesso!', description: 'Módulo deletado.' });
     } catch (error) {
-        console.error(error);
-        toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível deletar o módulo.' });
+        console.error("Error deleting module:", error);
+        toast({ variant: 'destructive', title: 'Erro ao Deletar', description: 'Não foi possível remover o módulo do servidor. O estado será restaurado.' });
     }
   }
 
