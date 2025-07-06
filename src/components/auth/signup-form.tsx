@@ -65,8 +65,6 @@ export function SignupForm() {
       toast({ title: 'Sucesso!', description: 'Sua conta foi criada.' });
       router.push(isAdmin ? '/admin' : '/dashboard');
     } catch (error: any) {
-      console.error("Signup error:", error);
-
       if (error.code === 'auth/email-already-in-use') {
         form.setError('email', {
           type: 'manual',
