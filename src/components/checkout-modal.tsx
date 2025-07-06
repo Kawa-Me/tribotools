@@ -194,9 +194,16 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
                                         checked={field.value?.includes(plan.id)}
                                         onCheckedChange={(checked) => {
                                           const currentValues = field.value || [];
-                                          return checked
-                                            ? field.onChange([...currentValues, plan.id])
-                                            : field.onChange(currentValues.filter(value => value !== plan.id));
+                                          const planIdsForThisProduct = product.plans.map(p => p.id);
+                                          const otherProductSelections = currentValues.filter(
+                                            selectedPlanId => !planIdsForThisProduct.includes(selectedPlanId)
+                                          );
+                                          
+                                          if (checked) {
+                                            field.onChange([...otherProductSelections, plan.id]);
+                                          } else {
+                                            field.onChange(otherProductSelections);
+                                          }
                                         }}
                                       />
                                     </FormControl>
