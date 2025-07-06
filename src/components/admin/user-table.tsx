@@ -19,7 +19,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -163,6 +162,20 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave }: EditUserDialogPr
     }
   }
 
+  const handleStatusChange = (value: UserSubscription['status']) => {
+    const newSubState = { ...subscription, status: value };
+    if (value === 'none') {
+      newSubState.plan = null;
+      newSubState.expiresAt = null;
+    }
+    setSubscription(newSubState);
+  };
+
+  const handlePlanChange = (value: UserSubscription['plan']) => {
+    setSubscription({ ...subscription, plan: value });
+  };
+
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
@@ -174,29 +187,12 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave }: EditUserDialogPr
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="plan" className="text-right">
-              Plano
-            </Label>
-            <Select
-                value={subscription.plan || ''}
-                onValueChange={(value) => setSubscription({ ...subscription, plan: value as UserSubscription['plan'] })}
-            >
-              <SelectTrigger className="col-span-3">
-                <SelectValue placeholder="Selecione um plano" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="mensal">Mensal</SelectItem>
-                <SelectItem value="trimestral">Trimestral</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-             <Label htmlFor="status" className="text-right">
+            <Label htmlFor="status" className="text-right">
               Status
             </Label>
             <Select
                 value={subscription.status}
-                onValueChange={(value) => setSubscription({ ...subscription, status: value as UserSubscription['status'] })}
+                onValueChange={handleStatusChange}
             >
               <SelectTrigger className="col-span-3">
                 <SelectValue placeholder="Selecione o status" />
@@ -209,6 +205,24 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave }: EditUserDialogPr
             </Select>
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="plan" className="text-right">
+              Plano
+            </Label>
+            <Select
+                disabled={subscription.status === 'none'}
+                value={subscription.plan || ''}
+                onValueChange={handlePlanChange}
+            >
+              <SelectTrigger className="col-span-3">
+                <SelectValue placeholder="Selecione um plano" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mensal">Mensal</SelectItem>
+                <SelectItem value="trimestral">Trimestral</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="expiresAt" className="text-right">
               Expira em
             </Label>
@@ -216,6 +230,7 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave }: EditUserDialogPr
               id="expiresAt"
               type="datetime-local"
               className="col-span-3"
+              disabled={subscription.status === 'none'}
               value={subscription.expiresAt ? format(subscription.expiresAt.toDate(), "yyyy-MM-dd'T'HH:mm") : ''}
               onChange={handleDateChange}
             />
