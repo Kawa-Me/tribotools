@@ -1,4 +1,6 @@
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, updateDoc, doc, Timestamp } from 'firebase/firestore';
@@ -31,13 +33,29 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = await request.json();
-    
-    // Log the entire raw payload from PushInPay for debugging
-    console.log('Webhook Raw Body:', JSON.stringify(body, null, 2));
+    const formData = await request.formData();
+    const event = formData.get('event') as string;
+    const pixJson = formData.get('pix') as string;
 
-    const event = body.event;
-    const pixData = body.pix;
+    // Log the received form data parts for debugging
+    console.log('Webhook Event:', event);
+    console.log('Webhook Pix JSON String:', pixJson);
+
+    if (!pixJson) {
+      console.error('Webhook payload is missing the "pix" field.');
+      try {
+        const fullBody = Object.fromEntries(formData.entries());
+        console.error('Full form data received:', JSON.stringify(fullBody, null, 2));
+      } catch (e) {
+          console.error('Could not serialize full form data.');
+      }
+      return NextResponse.json({ error: 'Invalid webhook payload: missing pix data' }, { status: 400 });
+    }
+    
+    const pixData = JSON.parse(pixJson);
+    
+    // Log the entire reconstructed payload for debugging
+    console.log('Webhook Reconstructed Body:', JSON.stringify({ event, pix: pixData }, null, 2));
 
     if (event !== 'pix_approved' || !pixData || !pixData.customer || !pixData.customer.email) {
       console.log('Webhook ignored: Not a "pix_approved" event or missing essential data.');
