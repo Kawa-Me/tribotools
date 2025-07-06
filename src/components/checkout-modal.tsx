@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { QRCodeSVG } from 'qrcode.react';
 
 import { useAuth } from '@/lib/hooks';
 import { useToast } from '@/hooks/use-toast';
@@ -164,19 +165,33 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
     }
 
     if (pixData) {
-        return (
-             <div className="flex flex-col items-center gap-4">
-                {/* Use a standard img tag for better data URI compatibility and add a white background for scannability */}
-               <img src={pixData.qrcode_image_url} alt="QR Code Pix" width={250} height={250} className="rounded-md border-2 border-primary bg-white p-1" />
-               
-               <Button className="w-full" size="lg" onClick={() => handleCopyToClipboard(pixData.qrcode_text)}>
-                    <ClipboardCopy className="mr-2 h-4 w-4" />
-                    Copiar Código PIX
-               </Button>
+      return (
+        <div className="flex flex-col items-center gap-4">
+          <div className="rounded-md border-2 border-primary bg-white p-2">
+            <QRCodeSVG
+              value={pixData.qrcode_text}
+              size={240}
+              bgColor={'#ffffff'}
+              fgColor={'#000000'}
+              level={'L'}
+              includeMargin={false}
+            />
+          </div>
 
-               <p className="text-xs text-center text-muted-foreground">Após o pagamento, o acesso será liberado automaticamente em alguns instantes.</p>
-            </div>
-        )
+          <Button
+            className="w-full"
+            size="lg"
+            onClick={() => handleCopyToClipboard(pixData.qrcode_text)}
+          >
+            <ClipboardCopy className="mr-2 h-4 w-4" />
+            Copiar Código PIX
+          </Button>
+
+          <p className="text-xs text-center text-muted-foreground">
+            Após o pagamento, o acesso será liberado automaticamente em alguns instantes.
+          </p>
+        </div>
+      );
     }
 
     if (!products.length && !productsLoading) {
