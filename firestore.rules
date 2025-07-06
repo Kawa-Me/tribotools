@@ -3,31 +3,35 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Function to check if a user is an admin by reading their document
+
     function isAdmin() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-
-    // Rules for the 'users' collection
-    match /users/{userId} {
-      // Admins can read/write any user document
-      allow read, write: if request.auth != null && isAdmin();
-      
-      // Users can only read their own document
-      allow read: if request.auth != null && request.auth.uid == userId;
-
-      // Allow the webhook to update user subscriptions without authentication
-      allow update: if request.auth == null;
+      // Check if the user is authenticated and has an 'admin' role in their user document.
+      return request.auth != null &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
     // Rules for the 'modules' collection
     match /modules/{moduleId} {
-      // Any authenticated user can read modules
+      // Any authenticated user can read the list of modules and individual module data.
       allow read: if request.auth != null;
-      
-      // Only admins can write to modules
-      allow write: if request.auth != null && isAdmin();
+
+      // Only admins can create, update, or delete modules.
+      allow write: if isAdmin();
+    }
+
+    // Rules for the 'users' collection
+    match /users/{userId} {
+      // A user can create their own document upon signup.
+      allow create: if request.auth.uid == userId;
+
+      // A user can read or update their own data.
+      // An admin can read, update, or delete any user's data.
+      allow get, update: if request.auth.uid == userId || isAdmin();
+      allow delete: if isAdmin();
+
+      // Only admins can get a list of all users.
+      allow list: if isAdmin();
     }
   }
 }
