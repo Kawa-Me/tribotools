@@ -124,7 +124,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
     return (
       <Dialog>
         <DialogTrigger asChild>{children}</DialogTrigger>
-        <DialogContent className="sm:max-w-md bg-background/95 backdrop-blur-sm border-primary/20 font-body">
+        <DialogContent className="sm:max-w-sm bg-background/95 backdrop-blur-sm border-primary/20 font-body">
           <DialogHeader>
             <DialogTitle className="font-headline text-2xl text-primary">Crie sua conta para continuar</DialogTitle>
             <DialogDescription>
@@ -282,7 +282,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
         }
     }}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-md bg-background/95 backdrop-blur-sm border-primary/20 font-body">
+      <DialogContent className="sm:max-w-sm bg-background/95 backdrop-blur-sm border-primary/20 font-body">
         <DialogHeader>
           <DialogTitle className="font-headline text-2xl text-primary">Plano de Assinatura</DialogTitle>
           <DialogDescription>
@@ -297,3 +297,5 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
+
+    
