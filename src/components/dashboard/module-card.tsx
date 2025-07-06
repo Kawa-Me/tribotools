@@ -27,7 +27,7 @@ export function ModuleCard({ module, isLocked }: ModuleCardProps) {
                 <Lock className="h-3 w-3" /> Bloqueado
               </Badge>
             ) : (
-              <Badge variant="secondary" className="flex items-center gap-1 text-green-400 bg-green-900/50 border-green-700">
+              <Badge variant="default" className="flex items-center gap-1">
                 <Unlock className="h-3 w-3" /> Liberado
               </Badge>
             )}

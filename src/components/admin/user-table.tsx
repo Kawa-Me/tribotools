@@ -92,8 +92,7 @@ export function UserTable({ users }: UserTableProps) {
                 <TableCell className="font-medium">{user.email}</TableCell>
                 <TableCell>{user.subscription.plan || 'N/A'}</TableCell>
                 <TableCell>
-                  <Badge variant={user.subscription.status === 'active' ? 'secondary' : 'destructive'} 
-                   className={user.subscription.status === 'active' ? 'text-green-400 bg-green-900/50 border-green-700' : ''}>
+                  <Badge variant={user.subscription.status === 'active' ? 'default' : 'destructive'}>
                     {user.subscription.status}
                   </Badge>
                 </TableCell>

@@ -6,7 +6,7 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-gradient-to-br from-background to-slate-900">
+    <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-gradient-to-br from-background to-secondary">
         <div className="absolute top-8 left-8">
             <Logo />
         </div>

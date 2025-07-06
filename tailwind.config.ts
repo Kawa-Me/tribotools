@@ -10,8 +10,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        body: ['Inter', 'sans-serif'],
-        headline: ['Space Grotesk', 'sans-serif'],
+        body: ['"Share Tech Mono"', 'monospace'],
+        headline: ['"Share Tech Mono"', 'monospace'],
       },
       colors: {
         background: 'hsl(var(--background))',
