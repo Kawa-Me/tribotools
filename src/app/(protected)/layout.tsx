@@ -16,6 +16,7 @@ import { db } from '@/lib/firebase';
 import type { Module } from '@/lib/types';
 import * as lucideIcons from 'lucide-react';
 import { Rotbar } from '@/components/rotbar';
+import { CheckoutModal } from '@/components/checkout-modal';
 
 const iconComponents: { [key: string]: React.ComponentType<any> } = {
   LayoutDashboard: lucideIcons.LayoutDashboard,
@@ -130,7 +131,9 @@ function Sidebar() {
                         ) : isUnlocked && user.subscription.expiresAt ? (
                             `Expira em: ${new Date(user.subscription.expiresAt.seconds * 1000).toLocaleDateString()}`
                         ) : (
-                            <Button size="sm" className="w-full">Fazer Upgrade</Button>
+                             <CheckoutModal>
+                               <Button size="sm" className="w-full">Fazer Upgrade</Button>
+                             </CheckoutModal>
                         )}
                     </div>
                 </CardContent>
@@ -211,7 +214,9 @@ function Sidebar() {
                         ) : isUnlocked && user.subscription.expiresAt ? (
                             `Expira em: ${new Date(user.subscription.expiresAt.seconds * 1000).toLocaleDateString()}`
                         ) : (
-                            <Button size="sm" className="w-full">Fazer Upgrade</Button>
+                            <CheckoutModal>
+                                <Button size="sm" className="w-full">Fazer Upgrade</Button>
+                            </CheckoutModal>
                         )}
                     </div>
                 </CardContent>

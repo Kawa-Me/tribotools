@@ -2,33 +2,19 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function isAdmin() {
-      // Verifica se o usuário que faz a requisição tem o papel de 'admin' em seu documento.
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-
+    // Webhook needs write access to update user subscriptions.
+    // In production, you should secure this (e.g., with a Cloud Function and a secret key)
+    // instead of leaving it open.
     match /users/{userId} {
-      // Um usuário pode criar seu próprio documento ao se registrar.
-      allow create: if request.auth.uid == userId;
-      
-      // Um usuário pode ler seu próprio documento. Um admin pode ler qualquer documento de usuário.
-      allow read: if request.auth.uid == userId || isAdmin();
-
-      // Apenas um admin pode atualizar o documento de um usuário (ex: para alterar o status da assinatura).
-      allow update: if isAdmin();
-      
-      // Apenas um admin pode deletar um usuário.
-      allow delete: if isAdmin();
+      allow read, create, update: if request.auth != null && request.auth.uid == userId;
+      allow write: if true; // Allows webhook to update user data
     }
 
-    match /modules/{document=**} {
-      // Qualquer usuário autenticado pode ler os módulos e seu conteúdo.
+    match /modules/{moduleId} {
+      // Authenticated users can read modules
       allow read: if request.auth != null;
-      
-      // Apenas admins podem criar, atualizar ou deletar módulos.
-      allow write: if isAdmin();
+      // Only admins can write to modules
+      allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
   }
 }

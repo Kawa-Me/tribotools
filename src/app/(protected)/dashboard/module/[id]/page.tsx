@@ -11,6 +11,7 @@ import { db } from '@/lib/firebase';
 import type { Module } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import * as lucideIcons from 'lucide-react';
+import { CheckoutModal } from '@/components/checkout-modal';
 
 const iconComponents: { [key: string]: React.ComponentType<any> } = {
     LayoutDashboard: lucideIcons.LayoutDashboard,
@@ -127,7 +128,9 @@ function LockedContent() {
           Faça o upgrade do seu plano para desbloquear este e todos os outros módulos,
           e tenha acesso total a todos os recursos da plataforma.
         </p>
-        <Button size="lg" variant="destructive">Fazer Upgrade Agora</Button>
+        <CheckoutModal>
+          <Button size="lg" variant="destructive">Fazer Upgrade Agora</Button>
+        </CheckoutModal>
       </CardContent>
     </Card>
   );
