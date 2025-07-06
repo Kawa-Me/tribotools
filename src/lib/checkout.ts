@@ -1,3 +1,4 @@
+
 'use server';
 
 import { z } from 'zod';
@@ -63,6 +64,9 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     return { error: 'O valor total não pode exceder R$ 150,00.' };
   }
 
+  // --- Based on your n8n example, the API expects the value in cents (integer)
+  const totalPriceInCents = Math.round(totalPrice * 100);
+
   const apiUrl = 'https://api.pushinpay.com.br/api/pix/cashIn';
   const apiToken = process.env.PUSHINPAY_API_TOKEN;
   const webhookUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/api/webhook`;
@@ -77,6 +81,11 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
   }
   // --- END DEBUG LOGGING ---
 
+  // --- The user's n8n example uses `webhook_url`. Let's use that.
+  // --- Also adding an expiration date, as in the example.
+  const expirationDate = new Date();
+  expirationDate.setHours(expirationDate.getHours() + 1); // 1 hour expiration
+
   // The payment provider uses the 'name' field for the customer's name, but we also use it to track plans.
   // We'll combine them, and the webhook will parse the plan IDs from this string.
   const paymentName = `${name} | Tribo Tools - Plans:[${selectedPlanIds.join(',')}]`;
@@ -86,8 +95,9 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     email,
     document,
     phone,
-    value: totalPrice,
-    webhook: webhookUrl,
+    value: totalPriceInCents, // Sending value in cents
+    webhook_url: webhookUrl, // Corrected field name
+    expires_at: expirationDate.toISOString(), // Adding expiration
   };
 
   try {
@@ -95,6 +105,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json', // Adding Accept header as in your example
         'Authorization': `Bearer ${apiToken}`,
       },
       body: JSON.stringify(payload),
