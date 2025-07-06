@@ -11,7 +11,7 @@ export const initialProducts: Product[] = [
         order: 0,
         plans: [
             { id: 'ferramentas_mensal', name: 'Acesso Mensal', price: 57.90, originalPrice: 97.90, description: '30 dias de acesso total.', days: 30, promo: false },
-            { id: 'ferramentas_trimestral', name: 'Acesso Trimestral', price: 150.00, originalPrice: 247.90, description: '🔥 MAIS POPULAR: 90 dias de acesso.', days: 90, promo: true },
+            { id: 'ferramentas_trimestral', name: 'Acesso Trimestral', price: 150.00, originalPrice: 247.90, description: '🔥 MAIS POPULAR: 90 dias de acesso + 5 dias brinde!', days: 90, promo: true },
         ]
     },
     {

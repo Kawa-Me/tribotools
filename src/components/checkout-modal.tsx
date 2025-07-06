@@ -266,7 +266,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
                 )}
                 />
 
-                 <div className="space-y-2 pt-2">
+                 <div className="space-y-4 pt-4 mt-4 border-t border-input">
                     <FormField
                     control={form.control}
                     name="name"
