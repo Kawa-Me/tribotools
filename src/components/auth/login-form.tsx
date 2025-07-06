@@ -65,7 +65,7 @@ export function LoginForm() {
 
       if (error.code) {
         if (error.code === 'auth/invalid-credential') {
-          description = 'Credenciais inválidas. Verifique seu email e senha.';
+          description = 'Credenciais inválidas. Verifique seu email e senha. Se ainda não tiver uma conta, por favor, cadastre-se.';
         } else if (error.code.startsWith('firestore/')) {
           description = 'Ocorreu um erro ao acessar os dados da sua conta. Contate o suporte.';
         } else {

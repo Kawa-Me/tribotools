@@ -71,7 +71,7 @@ export function SignupForm() {
       if (error.code) {
         switch (error.code) {
           case 'auth/email-already-in-use':
-            description = 'Este email já está em uso por outra conta.';
+            description = 'Este email já está cadastrado. Por favor, faça login.';
             break;
           case 'auth/weak-password':
             description = 'Sua senha é muito fraca. Use pelo menos 6 caracteres.';
