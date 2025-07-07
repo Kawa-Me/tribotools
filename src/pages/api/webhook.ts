@@ -1,39 +1,39 @@
 // src/pages/api/webhook.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where, writeBatch, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, writeBatch, Timestamp } from 'firebase/firestore';
 import { initialProducts } from '@/lib/plans';
-import { IncomingMessage } from 'http';
-import { Buffer } from 'buffer';
+import getRawBody from 'raw-body';
 
 export const config = {
   api: {
-    bodyParser: false, // ESSENCIAL: evita o erro de JSON parse
+    bodyParser: false, // desativa o parser automático
   },
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') return res.status(405).end('Método não permitido');
+  if (req.method !== 'POST') {
+    return res.status(405).send('Method Not Allowed');
+  }
 
   try {
-    const rawBody = await getRawBody(req);
+    const rawBodyBuffer = await getRawBody(req);
     const contentType = req.headers['content-type'] || '';
 
-    let bodyData: any = null;
+    let bodyData: Record<string, any> = {};
 
-    if (contentType.includes('application/json')) {
-      bodyData = JSON.parse(rawBody.toString());
-    } else if (
+    if (
       contentType.includes('application/x-www-form-urlencoded') ||
       contentType.includes('text/plain')
     ) {
-      const formData = new URLSearchParams(rawBody.toString());
-      bodyData = {};
-      for (const [key, value] of formData.entries()) {
+      const parsed = new URLSearchParams(rawBodyBuffer.toString('utf-8'));
+      for (const [key, value] of parsed.entries()) {
         bodyData[key] = value;
       }
+    } else if (contentType.includes('application/json')) {
+      bodyData = JSON.parse(rawBodyBuffer.toString('utf-8'));
     } else {
-      return res.status(400).json({ error: 'Unsupported content type' });
+      return res.status(415).json({ error: `Unsupported content type: ${contentType}` });
     }
 
     const eventType = bodyData.event;
@@ -136,13 +136,4 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error(error);
     return res.status(500).json({ error: 'Erro interno do servidor', details: error.message });
   }
-}
-
-function getRawBody(req: IncomingMessage): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: any[] = [];
-    req.on('data', chunk => chunks.push(chunk));
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', err => reject(err));
-  });
 }
