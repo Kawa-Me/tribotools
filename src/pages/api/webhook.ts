@@ -1,22 +1,21 @@
 // src/pages/api/webhook.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import getRawBody from 'raw-body';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where, writeBatch, Timestamp } from 'firebase/firestore';
 import { initialProducts } from '@/lib/plans';
+import { IncomingMessage } from 'http';
+import { Buffer } from 'buffer';
 
 export const config = {
   api: {
-    bodyParser: false, // desativa o bodyParser para podermos ler o body cru
+    bodyParser: false, // ESSENCIAL: evita o erro de JSON parse
   },
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') return res.status(405).end('Method Not Allowed');
+  if (req.method !== 'POST') return res.status(405).end('Método não permitido');
 
   try {
-    console.log('--- WEBHOOK RECEIVED ---');
-
     const rawBody = await getRawBody(req);
     const contentType = req.headers['content-type'] || '';
 
@@ -137,4 +136,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error(error);
     return res.status(500).json({ error: 'Erro interno do servidor', details: error.message });
   }
+}
+
+function getRawBody(req: IncomingMessage): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: any[] = [];
+    req.on('data', chunk => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', err => reject(err));
+  });
 }
