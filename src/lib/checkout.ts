@@ -18,6 +18,7 @@ const initializeAdminApp = () => {
 
   try {
     const serviceAccount = JSON.parse(serviceAccountString);
+    console.log(`[Admin SDK] Initializing for project: ${serviceAccount.project_id}`);
     return admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
@@ -68,26 +69,14 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
 
     const apiToken = process.env.PUSHINPAY_API_TOKEN;
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-    const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
 
-    console.log(`[checkout.ts] Checking environment variables:`);
-    console.log(`- PUSHINPAY_API_TOKEN: ${apiToken ? 'Loaded' : 'MISSING!'}`);
-    console.log(`- NEXT_PUBLIC_SITE_URL: ${siteUrl ? 'Loaded' : 'MISSING!'}`);
-    console.log(`- FIREBASE_SERVICE_ACCOUNT_KEY: ${serviceAccountKey ? 'Loaded' : 'MISSING!'}`);
-
-    if (!apiToken || !siteUrl || !serviceAccountKey) {
-      const missing = [
-        !apiToken && 'PUSHINPAY_API_TOKEN',
-        !siteUrl && 'NEXT_PUBLIC_SITE_URL',
-        !serviceAccountKey && 'FIREBASE_SERVICE_ACCOUNT_KEY'
-      ].filter(Boolean).join(', ');
-      console.error(`[checkout.ts] CRITICAL ERROR: Missing environment variables: ${missing}`);
+    if (!apiToken || !siteUrl) {
+      console.error(`[checkout.ts] CRITICAL ERROR: Missing PUSHINPAY_API_TOKEN or NEXT_PUBLIC_SITE_URL`);
       return { error: 'Erro de configuração do servidor.' };
     }
 
     initializeAdminApp();
     const db = admin.firestore();
-    console.log('[checkout.ts] Firebase Admin SDK initialized.');
 
     const allPlans = await getPlansFromFirestoreAdmin(db);
     console.log(`[checkout.ts] Fetched ${allPlans.length} total plans from Firestore.`);
@@ -109,8 +98,8 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     expirationDate.setHours(expirationDate.getHours() + 1);
 
     const paymentPayload = { name, email, document, phone, value: totalPriceInCents, webhook_url: webhookUrl, expires_at: expirationDate.toISOString() };
-    console.log('[checkout.ts] Sending payload to PushinPay:', JSON.stringify(paymentPayload));
-
+    
+    console.log('[checkout.ts] Sending payload to PushinPay...');
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': `Bearer ${apiToken}` },
@@ -128,19 +117,28 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     const transactionId = data.id;
     console.log(`[checkout.ts] PushinPay API success. Transaction ID: ${transactionId}`);
 
-    const pendingPaymentRef = db.collection('pending_payments').doc(transactionId);
-    const paymentData = {
-        userId: uid,
-        planIds: selectedPlanIds,
-        status: 'pending',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        payerInfo: { name, email, document, phone }
-    };
-    console.log(`[checkout.ts] Preparing to write to Firestore with data:`, JSON.stringify(paymentData));
-    
-    await pendingPaymentRef.set(paymentData);
-    
-    console.log(`✅ [checkout.ts] Successfully created pending_payment document with ID: ${transactionId} for user ${uid}`);
+    // --- CRITICAL STEP: WRITE TO FIRESTORE BEFORE RETURNING ---
+    try {
+      const pendingPaymentRef = db.collection('pending_payments').doc(transactionId);
+      const paymentData = {
+          userId: uid,
+          planIds: selectedPlanIds,
+          status: 'pending',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          payerInfo: { name, email, document, phone }
+      };
+      
+      console.log(`[checkout.ts] Attempting to write pending_payment doc ID: ${transactionId}`);
+      await pendingPaymentRef.set(paymentData);
+      console.log(`✅ [checkout.ts] SUCCESS: pending_payment document created.`);
+
+    } catch (firestoreError: any) {
+        console.error(`---!!! [checkout.ts] CRITICAL FIRESTORE ERROR !!!---`);
+        console.error(`Failed to write pending_payment document for transaction ${transactionId}. Error: ${firestoreError.message}`);
+        // This will prevent the QR code from being shown to the user.
+        throw new Error(`Falha ao registrar o pedido no banco de dados. Por favor, tente novamente.`);
+    }
+    // --- END CRITICAL STEP ---
 
     const imageUrl = `data:image/png;base64,${data.qr_code_base64}`;
 

@@ -16,8 +16,8 @@ const initializeAdminApp = () => {
   }
 
   try {
-    // We need to parse the JSON string from the environment variable
     const serviceAccount = JSON.parse(serviceAccountString);
+    console.log(`[Webhook Admin SDK] Initializing for project: ${serviceAccount.project_id}`);
     return admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
@@ -44,7 +44,6 @@ export async function POST(req: Request) {
   try {
     initializeAdminApp();
     db = admin.firestore();
-    console.log('Webhook: Firebase Admin SDK initialized.');
   } catch(error: any) {
     console.error('Webhook Error: Firestore Admin DB could not be initialized.', error.message);
     return NextResponse.json({ error: 'Internal Server Error: Database service not configured.' }, { status: 500 });
