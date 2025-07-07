@@ -7,27 +7,31 @@ import { initialProducts } from '@/lib/plans';
 
 export async function POST(request: Request) {
   console.log('--- WEBHOOK RECEIVED ---');
-  const webhookSource = request.headers.get('user-agent') || 'Unknown';
-  const contentType = request.headers.get('content-type') || '';
-  console.log(`Webhook received from: ${webhookSource} with Content-Type: ${contentType}`);
-
+  
   try {
-    // 1. Ler o corpo da requisição como texto puro PRIMEIRO.
-    // Isso evita que o Next.js tente analisar como JSON automaticamente.
-    const bodyText = await request.text();
-    console.log('Raw Body Text successfully read:', bodyText);
+    const contentType = request.headers.get('content-type') || '';
+    console.log(`Webhook received with Content-Type: ${contentType}`);
 
-    if (!bodyText) {
-      console.error('Webhook Error: Received an empty request body.');
-      return NextResponse.json({ error: 'Empty request body' }, { status: 400 });
+    let formData;
+
+    if (contentType.includes('application/x-www-form-urlencoded')) {
+      const text = await request.text();
+      console.log('Raw Body Text successfully read:', text);
+      if (!text) {
+        console.error('Webhook Error: Received an empty request body.');
+        return NextResponse.json({ error: 'Empty request body' }, { status: 400 });
+      }
+      formData = new URLSearchParams(text);
+    } else {
+      const bodyForLogging = await request.text().catch(() => 'Could not read body.');
+      console.error(`Unsupported content type: ${contentType}. Body: ${bodyForLogging}`);
+      return NextResponse.json({ error: `Unsupported content-type: ${contentType}` }, { status: 415 });
     }
 
-    // 2. Analisar o texto como um formulário, usando a lógica que você sugeriu.
-    const formData = new URLSearchParams(bodyText);
     const eventType = formData.get('event');
     const pixDataString = formData.get('pix');
 
-    console.log('Parsed Event Type from text:', eventType);
+    console.log('Parsed Event Type from form data:', eventType);
 
     if (eventType !== 'pix.cash-in.received') {
       console.log(`Ignoring event type: ${eventType}`);
@@ -41,7 +45,6 @@ export async function POST(request: Request) {
     
     console.log('Raw PIX Data String from form data:', pixDataString);
 
-    // 3. Analisar os dados PIX aninhados, que também são um formulário.
     const pixParams = new URLSearchParams(pixDataString);
     const pixInfo: { [key: string]: any } = {};
     pixParams.forEach((value, key) => {
@@ -50,7 +53,6 @@ export async function POST(request: Request) {
 
     console.log('Parsed PIX Info from nested form:', pixInfo);
     
-    // 4. Extrair dados e continuar com a lógica de negócio.
     const description = pixInfo.description;
     if (!description || !description.includes('| Tribo Tools - Plans:[')) {
       console.error('Webhook Error: Description field is missing or invalid.', description);
