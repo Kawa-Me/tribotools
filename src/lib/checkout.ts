@@ -85,50 +85,42 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     return { error: 'Erro de configuração do servidor: URL do site não encontrada.' };
   }
 
-  let allPlans;
   try {
-    allPlans = await getPlansFromFirestoreAdmin();
-  } catch (e: any) {
-    console.error("Error fetching plans from Firestore:", e);
-    const errorMessage = e.message || 'An unknown error occurred while fetching plans.';
-    return { error: `Não foi possível carregar os planos do banco de dados: ${errorMessage}` };
-  }
+    const allPlans = await getPlansFromFirestoreAdmin();
+    if (allPlans.length === 0) {
+        return { error: 'Server configuration error: No plans found' };
+    }
+    
+    const selectedPlans = allPlans.filter(p => selectedPlanIds.includes(p.id));
 
-  if (allPlans.length === 0) {
-      return { error: 'Server configuration error: No plans found' };
-  }
-  
-  const selectedPlans = allPlans.filter(p => selectedPlanIds.includes(p.id));
+    if (selectedPlans.length !== selectedPlanIds.length) {
+      return { error: 'Um ou mais planos selecionados são inválidos.' };
+    }
 
-  if (selectedPlans.length !== selectedPlanIds.length) {
-    return { error: 'Um ou mais planos selecionados são inválidos.' };
-  }
+    const totalPrice = selectedPlans.reduce((sum, plan) => sum + plan.price, 0);
 
-  const totalPrice = selectedPlans.reduce((sum, plan) => sum + plan.price, 0);
+    if (totalPrice > 150) {
+      return { error: 'O valor total não pode exceder R$ 150,00.' };
+    }
 
-  if (totalPrice > 150) {
-    return { error: 'O valor total não pode exceder R$ 150,00.' };
-  }
+    const totalPriceInCents = Math.round(totalPrice * 100);
 
-  const totalPriceInCents = Math.round(totalPrice * 100);
+    const apiUrl = 'https://api.pushinpay.com.br/api/pix/cashIn';
+    const webhookUrl = `${siteUrl}/api/webhook`;
+    
+    const expirationDate = new Date();
+    expirationDate.setHours(expirationDate.getHours() + 1);
 
-  const apiUrl = 'https://api.pushinpay.com.br/api/pix/cashIn';
-  const webhookUrl = `${siteUrl}/api/webhook`;
-  
-  const expirationDate = new Date();
-  expirationDate.setHours(expirationDate.getHours() + 1);
+    const paymentPayload = {
+      name,
+      email,
+      document,
+      phone,
+      value: totalPriceInCents,
+      webhook_url: webhookUrl,
+      expires_at: expirationDate.toISOString(),
+    };
 
-  const paymentPayload = {
-    name,
-    email,
-    document,
-    phone,
-    value: totalPriceInCents,
-    webhook_url: webhookUrl,
-    expires_at: expirationDate.toISOString(),
-  };
-
-  try {
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
@@ -150,22 +142,21 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     const transactionId = data.id;
 
     // --- Create pending payment record and update user info using ADMIN SDK ---
-    const batch = db.batch();
-
     const userRef = db.collection('users').doc(uid);
-    batch.update(userRef, { name, document, phone });
-
     const pendingPaymentRef = db.collection('pending_payments').doc(transactionId);
-    batch.set(pendingPaymentRef, {
-      userId: uid,
-      planIds: selectedPlanIds,
-      status: 'pending',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      payerInfo: { name, email, document, phone }
+
+    await db.runTransaction(async (transaction) => {
+        transaction.update(userRef, { name, document, phone });
+        transaction.set(pendingPaymentRef, {
+            userId: uid,
+            planIds: selectedPlanIds,
+            status: 'pending',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            payerInfo: { name, email, document, phone }
+        });
     });
-    
-    await batch.commit();
-    // --- End of batch write ---
+
+    console.log(`✅ Successfully created pending_payment document with ID: ${transactionId} for user ${uid}`);
 
     if (!data.qr_code || !data.qr_code_base64) {
         console.error('Invalid success response from Pushin Pay. Expected "qr_code" and "qr_code_base64". Received:', data);
@@ -181,10 +172,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     };
 
   } catch (error) {
-    console.error('Error creating Pix payment:', error);
-    if ((error as any).code === 7 || (error as any).code === 'permission-denied') { // Check for Firestore error codes
-        return { error: `Erro de Permissão no Servidor: A operação foi bloqueada pelas regras de segurança do Firestore.` };
-    }
+    console.error(`Error creating Pix payment for user ${uid}. Details:`, error);
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     return { error: `Erro inesperado na comunicação: ${errorMessage}` };
   }

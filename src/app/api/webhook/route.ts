@@ -1,8 +1,6 @@
-// src/pages/api/webhook.ts
-import type { NextApiRequest, NextApiResponse } from 'next';
+// src/app/api/webhook/route.ts
+import { NextResponse } from 'next/server';
 import * as admin from 'firebase-admin';
-import type { IncomingMessage } from 'http';
-import { Buffer } from 'buffer';
 import type { Product } from '@/lib/types';
 
 // Helper to initialize Firebase Admin SDK only once
@@ -38,58 +36,38 @@ async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore) {
   );
 }
 
-
-function getRawBody(req: IncomingMessage): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: any[] = [];
-    req.on('data', chunk => chunks.push(chunk));
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', err => reject(err));
-  });
-}
-
-// Disable the default body parser for this route
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).send('Method Not Allowed');
-  }
-
+// The new App Router API Route handler
+export async function POST(req: Request) {
   let db: admin.firestore.Firestore;
   try {
     initializeAdminApp();
     db = admin.firestore();
   } catch(error: any) {
     console.error('Webhook Error: Firestore Admin DB could not be initialized.', error.message);
-    return res.status(500).json({ error: 'Internal Server Error: Database service not configured.' });
+    return NextResponse.json({ error: 'Internal Server Error: Database service not configured.' }, { status: 500 });
   }
 
   try {
-    const rawBodyBuffer = await getRawBody(req);
-    const contentType = req.headers['content-type'] || '';
-    
+    const contentType = req.headers.get('content-type') || '';
     console.log('🔥 Webhook recebido:', contentType);
-    console.log('🟢 Raw Body:', rawBodyBuffer.toString('utf-8'));
+
+    const rawBody = await req.text();
+    console.log('🟢 Raw Body:', rawBody);
 
     let bodyData: Record<string, any> = {};
 
     // The payload comes as x-www-form-urlencoded
     if (contentType.includes('application/x-www-form-urlencoded')) {
-      const parsed = new URLSearchParams(rawBodyBuffer.toString('utf-8'));
+      const parsed = new URLSearchParams(rawBody);
       for (const [key, value] of parsed.entries()) {
         bodyData[key] = value;
       }
     } else if (contentType.includes('application/json')) {
       // Also support JSON just in case
-      bodyData = JSON.parse(rawBodyBuffer.toString('utf-8'));
+      bodyData = JSON.parse(rawBody);
     } else {
       console.error(`Unsupported content type: ${contentType}`);
-      return res.status(415).json({ error: `Unsupported content type: ${contentType}` });
+      return NextResponse.json({ error: `Unsupported content type: ${contentType}` }, { status: 415 });
     }
 
     console.log('📦 Parsed BodyData:', bodyData);
@@ -99,12 +77,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (!transactionId) {
         console.error('Webhook payload missing transaction ID (field "id").');
-        return res.status(400).json({ error: 'Transaction ID not found in payload.' });
+        return NextResponse.json({ error: 'Transaction ID not found in payload.' }, { status: 400 });
     }
 
     if (transactionStatus !== 'paid') {
       console.log(`Ignoring transaction ${transactionId} with status: ${transactionStatus}`);
-      return res.status(200).json({ success: true, message: 'Event ignored, status is not "paid".' });
+      return NextResponse.json({ success: true, message: 'Event ignored, status is not "paid".' }, { status: 200 });
     }
 
     // Find the pending payment using the transaction ID
@@ -113,14 +91,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (!paymentSnap.exists) {
         console.error(`Pending payment with ID ${transactionId} not found in database.`);
-        return res.status(404).json({ error: 'Payment record not found.' });
+        return NextResponse.json({ error: 'Payment record not found.' }, { status: 404 });
     }
 
     const paymentData = paymentSnap.data()!;
 
     if (paymentData.status !== 'pending') {
         console.log(`Payment ${transactionId} already processed with status: ${paymentData.status}.`);
-        return res.status(200).json({ success: true, message: 'Already processed.' });
+        return NextResponse.json({ success: true, message: 'Already processed.' }, { status: 200 });
     }
 
     const { userId, planIds } = paymentData;
@@ -128,7 +106,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!userId || !planIds || planIds.length === 0) {
         console.error(`Invalid payment record for ${transactionId}: missing userId or planIds.`);
         await paymentRef.update({ status: 'error', error: 'Missing userId or planIds' });
-        return res.status(400).json({ error: 'Invalid payment record.' });
+        return NextResponse.json({ error: 'Invalid payment record.' }, { status: 400 });
     }
 
     const userDocRef = db.collection('users').doc(userId);
@@ -137,7 +115,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!userDocSnap.exists) {
         console.error(`User with ID ${userId} from payment ${transactionId} not found.`);
         await paymentRef.update({ status: 'error', error: 'User not found' });
-        return res.status(404).json({ error: 'User not found.' });
+        return NextResponse.json({ error: 'User not found.' }, { status: 404 });
     }
     
     const userData = userDocSnap.data()!;
@@ -147,7 +125,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (allPlans.length === 0) {
         console.error(`Could not fetch plans from Firestore. Aborting activation for user ${userId}.`);
         await paymentRef.update({ status: 'error', error: 'Could not fetch plans from DB.' });
-        return res.status(500).json({ error: 'Could not fetch plans.' });
+        return NextResponse.json({ error: 'Could not fetch plans.' }, { status: 500 });
     }
 
     const newSubscriptions = { ...(userData.subscriptions || {}) };
@@ -201,10 +179,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    return res.status(200).json({ success: true });
+    return NextResponse.json({ success: true }, { status: 200 });
   } catch (error: any) {
     console.error('---!!! FATAL WEBHOOK ERROR !!!---');
     console.error(error);
-    return res.status(500).json({ error: 'Internal Server Error', details: error.message });
+    return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
   }
 }
