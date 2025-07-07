@@ -96,7 +96,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
   const expirationDate = new Date();
   expirationDate.setHours(expirationDate.getHours() + 1);
 
-  const paymentName = `${name} | Tribo Tools - Plans:[${selectedPlanIds.join(',')}]`;
+  const paymentName = `${email}|${name}|Tribo Tools - Plans:[${selectedPlanIds.join(',')}]`;
 
   const payload = {
     name,

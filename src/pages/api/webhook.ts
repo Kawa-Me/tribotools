@@ -31,24 +31,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // --- PASSO 1: LOGS DE DIAGNÓSTICO INICIAL ---
     console.log('🔥 Webhook recebido:', req.headers['content-type']);
     const rawBodyBuffer = await getRawBody(req);
-    console.log('🟢 Raw Body:', rawBodyBuffer.toString('utf-8'));
+    const rawBodyString = rawBodyBuffer.toString('utf-8');
+    console.log('🟢 Raw Body:', rawBodyString);
     // --- FIM PASSO 1 ---
     
     const contentType = req.headers['content-type'] || '';
-
     let bodyData: Record<string, any> = {};
 
-    if (
-      contentType.includes('application/x-www-form-urlencoded') ||
-      contentType.includes('text/plain')
-    ) {
-      const parsed = new URLSearchParams(rawBodyBuffer.toString('utf-8'));
+    if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('text/plain')) {
+      const parsed = new URLSearchParams(rawBodyString);
       for (const [key, value] of parsed.entries()) {
         bodyData[key] = value;
       }
     } else if (contentType.includes('application/json')) {
-      bodyData = JSON.parse(rawBodyBuffer.toString('utf-8'));
+      bodyData = JSON.parse(rawBodyString);
     } else {
+      console.error(`Unsupported content type: ${contentType}`);
       return res.status(415).json({ error: `Unsupported content type: ${contentType}` });
     }
 
@@ -59,12 +57,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('📨 PIX String:', pixDataString);
     // --- FIM PASSO 2 ---
 
-
     if (eventType !== 'pix.cash-in.received') {
+      console.log(`Evento ignorado: ${eventType}`);
       return res.status(200).json({ success: true, message: 'Evento ignorado' });
     }
 
     if (!pixDataString) {
+      console.error('"pix" field not found in bodyData');
       return res.status(400).json({ error: '"pix" field not found' });
     }
 
@@ -75,35 +74,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       pixInfo[key] = value;
     }
     // --- FIM PASSO 3 ---
-
+    
     const description = pixInfo.description;
-    if (!description || !description.includes('| Tribo Tools - Plans:[')) {
-      return res.status(400).json({ error: 'Descrição inválida' });
+    if (!description || !description.includes('|') || !description.includes('Plans:[')) {
+      console.error(`Descrição inválida ou malformada: ${description}`);
+      return res.status(400).json({ error: 'Descrição inválida ou não contém os dados esperados.' });
     }
 
-    const email = description.split(' | ')[0];
-    const name = pixInfo.name;
-    const document = pixInfo.document;
-    const phone = pixInfo.phone;
+    const descriptionParts = description.split('|');
+    const email = descriptionParts[0]?.trim();
+    const name = descriptionParts[1]?.trim();
     const planIdsPart = description.substring(description.indexOf('[') + 1, description.indexOf(']'));
     const selectedPlanIds = planIdsPart.split(',');
+    
+    const document = pixInfo.document || '';
+    const phone = pixInfo.phone || '';
 
     // --- PASSO 4: LOGS DE DADOS EXTRAÍDOS ---
-    console.log('👤 Nome:', name);
-    console.log('📧 Email extraído da descrição:', email);
+    console.log('👤 Nome extraído:', name);
+    console.log('📧 Email extraído:', email);
+    console.log('📄 Documento:', document);
+    console.log('📞 Telefone:', phone);
     console.log('📦 Plano IDs:', selectedPlanIds);
     // --- FIM PASSO 4 ---
+
+    if (!email || selectedPlanIds.length === 0) {
+        console.error('Email ou IDs de plano não puderam ser extraídos da descrição.');
+        return res.status(400).json({ error: 'Email ou IDs de plano não puderam ser extraídos da requisição.' });
+    }
 
     if (!db) {
       console.error('Webhook Error: Firestore DB is not initialized.');
       return res.status(500).json({ error: 'Internal Server Error: Database service not configured.' });
     }
-
+    
     const usersRef = collection(db, 'users');
     const q = query(usersRef, where('email', '==', email));
     const querySnapshot = await getDocs(q);
 
     if (querySnapshot.empty) {
+      console.error(`Usuário com email ${email} não encontrado.`);
       return res.status(404).json({ error: `Usuário com email ${email} não encontrado.` });
     }
 
@@ -143,6 +153,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         phone: phone || userData.phone || '',
       });
       await batch.commit();
+      console.log(`✅ Assinaturas atualizadas para o usuário ${email}`);
+    } else {
+        console.log(`ℹ️ Nenhuma alteração de assinatura necessária para o usuário ${email}`);
     }
 
     // --- PASSO 5: ENVIAR PARA O N8N COM LOGS E ERRO ---
@@ -165,6 +178,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }).catch(err => {
         console.error('❌ Falha ao enviar pro n8n:', err);
       });
+    } else {
+        console.log('ℹ️ URL do webhook N8N não configurada. Pulando etapa.');
     }
     // --- FIM PASSO 5 ---
 
