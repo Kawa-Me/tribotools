@@ -187,8 +187,28 @@ export function ModuleEditor() {
       const batch = writeBatch(db);
       modules.forEach(mod => {
           const moduleRef = doc(db, 'modules', mod.id);
-          const { icon, ...dataToSave } = mod;
-          batch.set(moduleRef, { ...dataToSave, icon: icon, permission: mod.permission || 'ferramentas' });
+          
+          // The component holds the React component for the icon, but Firestore needs the string name.
+          // This is a bit of a workaround because the state holds the component.
+          const iconNameToSave = typeof mod.icon === 'string' ? mod.icon : (mod.icon as any).displayName || 'HelpCircle';
+
+          const dataToSave = {
+              ...mod,
+              icon: iconNameToSave,
+              lessons: mod.lessons.map(lesson => ({
+                ...lesson,
+                // THIS IS THE FIX: Ensure these fields are explicitly saved as empty strings.
+                // This prevents Firestore from keeping the old value if the new value is empty/falsy.
+                accessEmail: lesson.accessEmail || "",
+                accessPassword: lesson.accessPassword || "",
+                imageUrl: lesson.imageUrl || '',
+                accessUrl: lesson.accessUrl || '',
+                buttonText: lesson.buttonText || '',
+                cookies: lesson.cookies || [],
+              }))
+          };
+
+          batch.set(moduleRef, dataToSave);
       });
       await batch.commit();
       toast({ title: 'Sucesso!', description: 'Todas as alterações foram salvas.' });
