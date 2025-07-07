@@ -59,7 +59,7 @@ export default function AdminUsersPage() {
   }, [user, authLoading]);
 
   const handleCleanup = async () => {
-    if (!window.confirm("Tem certeza que deseja excluir todos os usuários anônimos com mais de 1 hora? Esta ação não pode ser desfeita.")) {
+    if (!window.confirm("Tem certeza que deseja excluir todos os usuários anônimos com mais de 1 hora? Esta ação não pode ser desfeita e afeta apenas contas de visitantes, não contas registradas.")) {
       return;
     }
     
