@@ -1,7 +1,9 @@
+
 // src/app/api/webhook/route.ts
 import { NextResponse } from 'next/server';
 import * as admin from 'firebase-admin';
 import type { Product } from '@/lib/types';
+import { URLSearchParams } from 'url';
 
 // Helper to initialize Firebase Admin SDK only once
 const initializeAdminApp = () => {
@@ -48,12 +50,13 @@ export async function POST(req: Request) {
   }
 
   try {
-    // FIX: PushinPay sends webhooks as `form-data`, not `JSON`.
-    // We need to parse the body accordingly.
-    const formData = await req.formData();
-    const rawBody: { [key: string]: any } = Object.fromEntries(formData.entries());
+    // FIX: The payload is `application/x-www-form-urlencoded`.
+    // We will parse it manually from the raw text body to be robust.
+    const bodyText = await req.text();
+    const params = new URLSearchParams(bodyText);
+    const rawBody: { [key:string]: any } = Object.fromEntries(params.entries());
 
-    console.log('📦 Parsed Webhook Body (form-data):', rawBody);
+    console.log('📦 Parsed Webhook Body (x-www-form-urlencoded):', rawBody);
 
     // The 'metadata' field is sent as a JSON string within the form-data, so we need to parse it separately.
     let parsedMetadata;
