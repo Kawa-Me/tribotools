@@ -1,40 +1,51 @@
 
 'use server';
-
 import { NextResponse } from 'next/server';
 
-/**
- * A temporary diagnostic webhook handler.
- * Its only purpose is to receive a request from the payment provider,
- * log the raw body text, and return it in the response.
- * This helps us debug the exact format of the incoming data without
- * any other logic interfering.
- */
+// This is a low-level function to read the request body as raw text.
+// It bypasses any automatic parsing by Next.js/Vercel.
+async function streamToText(stream: ReadableStream<Uint8Array>) {
+    const reader = stream.getReader();
+    const chunks = [];
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+            break;
+        }
+        chunks.push(value);
+    }
+    const bodyUint8Array = new Uint8Array(chunks.reduce((acc, chunk) => acc + chunk.length, 0));
+    let offset = 0;
+    for (const chunk of chunks) {
+        bodyUint8Array.set(chunk, offset);
+        offset += chunk.length;
+    }
+    return new TextDecoder().decode(bodyUint8Array);
+}
+
 export async function POST(request: Request) {
   try {
-    const bodyText = await request.text();
+    // We use the raw request body stream to avoid automatic JSON parsing errors.
+    if (!request.body) {
+        throw new Error("Request body is missing.");
+    }
+    const bodyText = await streamToText(request.body);
 
-    // Log to Vercel's server logs for debugging.
-    console.log('Webhook Raw Body Received:', bodyText);
-
-    // Return a successful response containing the raw body.
-    // This allows us to see the body in the PushInPay panel.
+    // Now, we return the raw text we received. This allows us to see exactly
+    // what PushInPay is sending, without any errors.
     return NextResponse.json({
         success: true,
         message: 'Diagnostic webhook received successfully. Raw body attached.',
         body: bodyText,
     }, { status: 200 });
 
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-    
-    // Log the error to Vercel's server logs.
-    console.error('---!!! FATAL WEBHOOK DIAGNOSTIC ERROR !!!---', error);
-    
-    // Return the specific error message for debugging.
+  } catch (error: any) {
+    console.error('---!!! FATAL WEBHOOK DIAGNOSTIC ERROR !!!---');
+    console.error(`Error Details: ${error.message}`);
+    console.error(`Stack Trace: ${error.stack}`);
     return NextResponse.json({ 
         error: 'Internal Server Error during diagnostic.', 
-        details: errorMessage 
+        details: error.message 
     }, { status: 500 });
   }
 }
