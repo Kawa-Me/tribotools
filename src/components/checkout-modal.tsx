@@ -90,7 +90,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
 
   const onSubmit = async (data: z.infer<typeof FormSchema>) => {
     if (!user?.uid || !user.email) {
-      toast({ variant: 'destructive', title: 'Erro', description: 'Usuário não autenticado.' });
+      toast({ variant: 'destructive', title: 'Erro', description: 'Usuário não autenticado.', duration: 9000 });
       return;
     }
 
@@ -98,7 +98,8 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
       toast({
         variant: 'destructive',
         title: 'Limite de Valor Excedido',
-        description: 'O valor total não pode ultrapassar R$ 150,00. Por favor, adquira um item e depois o outro em compras separadas.',
+        description: 'O valor total não pode ultrapassar R$ 150,00. Adquira os itens em compras separadas.',
+        duration: 9000
       });
       return;
     }
@@ -116,16 +117,30 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
         phone: data.phone,
       });
 
-      if (result.error || !result.qrcode_text || !result.qrcode_image_url) {
-        throw new Error(result.error || 'Não foi possível gerar o Pix. A API retornou uma resposta inesperada.');
+      if (result.error) {
+        toast({ 
+            variant: 'destructive', 
+            title: 'Erro ao Gerar Pagamento', 
+            description: result.error,
+            duration: 9000,
+        });
+        setLoading(false);
+      } else if (result.qrcode_text && result.qrcode_image_url) {
+        setPixData(result as PixData);
+        setLoading(false);
+      } else {
+        toast({ 
+            variant: 'destructive', 
+            title: 'Erro Inesperado', 
+            description: 'Resposta inválida do servidor. Tente novamente.',
+            duration: 9000,
+        });
+        setLoading(false);
       }
-      
-      setPixData(result as PixData);
 
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Ocorreu um erro desconhecido.';
-      toast({ variant: 'destructive', title: 'Erro ao gerar Pix', description: errorMessage });
-    } finally {
+      const errorMessage = error instanceof Error ? error.message : 'Ocorreu um erro desconhecido no navegador.';
+      toast({ variant: 'destructive', title: 'Erro Crítico', description: errorMessage, duration: 9000 });
       setLoading(false);
     }
   };

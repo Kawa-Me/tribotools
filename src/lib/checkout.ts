@@ -3,28 +3,34 @@
 
 import { z } from 'zod';
 import * as admin from 'firebase-admin';
-import type { Product } from '@/lib/types';
+import type { Product, Plan } from '@/lib/types';
 
 // Helper to initialize Firebase Admin SDK only once
 const initializeAdminApp = () => {
+  console.log('[Admin SDK] Attempting to initialize...');
+
   if (admin.apps.length > 0) {
+    console.log('[Admin SDK] Already initialized.');
     return admin.app();
   }
 
   const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
   if (!serviceAccountString) {
-    throw new Error('CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set.');
+    console.error('[Admin SDK] CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY environment variable is NOT SET.');
+    throw new Error('Server configuration error: Service account key is missing.');
   }
+  console.log('[Admin SDK] Service account key environment variable is present.');
 
   try {
     const serviceAccount = JSON.parse(serviceAccountString);
-    console.log(`[Admin SDK] Initializing for project: ${serviceAccount.project_id}`);
+    console.log(`[Admin SDK] Successfully parsed service account key for project: ${serviceAccount.project_id}`);
     return admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
   } catch (e: any) {
-    console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY. Make sure it is a valid JSON string.');
-    throw new Error(`Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY: ${e.message}`);
+    console.error('[Admin SDK] CRITICAL: Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY. Make sure it is a valid JSON string with no newlines or extra characters.');
+    console.error(`[Admin SDK] Parser error: ${e.message}`);
+    throw new Error(`Failed to initialize admin app due to invalid service account key: ${e.message}`);
   }
 };
 
@@ -55,13 +61,12 @@ const CreatePixPaymentSchema = z.object({
 type CreatePixPaymentInput = z.infer<typeof CreatePixPaymentSchema>;
 
 export async function createPixPayment(input: CreatePixPaymentInput) {
-  console.log('--- [checkout.ts] Received request to create PIX payment ---');
-
   try {
+    console.log('[checkout.ts] Function entry point. Validating input...');
     const validation = CreatePixPaymentSchema.safeParse(input);
     if (!validation.success) {
       console.error('[checkout.ts] Validation failed:', validation.error.format());
-      return { error: 'Dados inválidos.', details: validation.error.format() };
+      return { error: 'Dados de formulário inválidos.', details: validation.error.format() };
     }
     
     const { uid, plans: selectedPlanIds, name, email, document, phone } = validation.data;
@@ -72,11 +77,14 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
 
     if (!apiToken || !siteUrl) {
       console.error(`[checkout.ts] CRITICAL ERROR: Missing PUSHINPAY_API_TOKEN or NEXT_PUBLIC_SITE_URL`);
-      return { error: 'Erro de configuração do servidor.' };
+      return { error: 'Erro de configuração do servidor (faltando chaves de API).' };
     }
+    console.log('[checkout.ts] API token and Site URL are present.');
 
-    initializeAdminApp();
+    // Initialize Firebase Admin here to catch errors early
+    const adminApp = initializeAdminApp();
     const db = admin.firestore();
+    console.log('[checkout.ts] Firebase Admin SDK initialized successfully.');
 
     const allPlans = await getPlansFromFirestoreAdmin(db);
     console.log(`[checkout.ts] Fetched ${allPlans.length} total plans from Firestore.`);
@@ -128,32 +136,31 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
           payerInfo: { name, email, document, phone }
       };
       
-      console.log(`[checkout.ts] Attempting to write pending_payment doc ID: ${transactionId}`);
+      console.log(`[checkout.ts] ATTEMPTING to write pending_payment doc ID: ${transactionId}`);
       await pendingPaymentRef.set(paymentData);
       console.log(`✅ [checkout.ts] SUCCESS: pending_payment document created.`);
 
+      // --- ONLY RETURN QR CODE ON SUCCESS ---
+      const imageUrl = `data:image/png;base64,${data.qr_code_base64}`;
+      return {
+        qrcode_text: data.qr_code,
+        qrcode_image_url: imageUrl,
+      };
+
     } catch (firestoreError: any) {
-        console.error(`---!!! [checkout.ts] CRITICAL FIRESTORE ERROR !!!---`);
-        console.error(`Failed to write pending_payment document for transaction ${transactionId}. Error: ${firestoreError.message}`);
-        // This will prevent the QR code from being shown to the user.
-        throw new Error(`Falha ao registrar o pedido no banco de dados. Por favor, tente novamente.`);
+        console.error(`---!!! [checkout.ts] CRITICAL FIRESTORE WRITE ERROR !!!---`);
+        const firestoreErrorMessage = `Code: ${firestoreError.code}. Message: ${firestoreError.message}`;
+        console.error(`Failed to write pending_payment document. Details: ${firestoreErrorMessage}`);
+        // This throw will be caught by the outer catch block
+        throw new Error(`Falha ao registrar o pedido no banco de dados. ${firestoreErrorMessage}`);
     }
-    // --- END CRITICAL STEP ---
-
-    const imageUrl = `data:image/png;base64,${data.qr_code_base64}`;
-
-    return {
-      qrcode_text: data.qr_code,
-      qrcode_image_url: imageUrl,
-    };
 
   } catch (error) {
-    console.error('---!!! [checkout.ts] FATAL ERROR in createPixPayment !!!---');
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-    console.error(errorMessage);
+    console.error(`---!!! [checkout.ts] FATAL ERROR in createPixPayment: ${errorMessage} !!!---`);
     if (error instanceof Error && error.stack) {
       console.error(error.stack);
     }
-    return { error: `Erro inesperado no servidor: ${errorMessage}` };
+    return { error: `Erro no servidor: ${errorMessage}` };
   }
 }
