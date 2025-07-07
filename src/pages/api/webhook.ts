@@ -3,11 +3,22 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, writeBatch, Timestamp } from 'firebase/firestore';
 import { initialProducts } from '@/lib/plans';
-import getRawBody from 'raw-body';
+import type { IncomingMessage } from 'http';
+import { Buffer } from 'buffer';
+
+// Helper function to get raw body from a request
+function getRawBody(req: IncomingMessage): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: any[] = [];
+    req.on('data', chunk => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', err => reject(err));
+  });
+}
 
 export const config = {
   api: {
-    bodyParser: false, // desativa o parser automático
+    bodyParser: false, // ESSENCIAL: evita o erro de JSON parse
   },
 };
 
