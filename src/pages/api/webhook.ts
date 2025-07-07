@@ -6,7 +6,7 @@ import { initialProducts } from '@/lib/plans';
 import type { IncomingMessage } from 'http';
 import { Buffer } from 'buffer';
 
-// Helper function to get raw body from a request
+// Função utilitária pra pegar body cru
 function getRawBody(req: IncomingMessage): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: any[] = [];
@@ -46,7 +46,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } else {
       return res.status(415).json({ error: `Unsupported content type: ${contentType}` });
     }
-
     const eventType = bodyData.event;
     const pixDataString = bodyData.pix;
 
