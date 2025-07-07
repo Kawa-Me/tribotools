@@ -28,9 +28,8 @@ const initializeAdminApp = () => {
 };
 
 // Helper to get Plans using the Admin SDK
-async function getPlansFromFirestoreAdmin() {
+async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore) {
   try {
-    const db = admin.firestore();
     const productsSnapshot = await db.collection('products').get();
     if (productsSnapshot.empty) return [];
     const products = productsSnapshot.docs.map(doc => doc.data() as Product);
@@ -38,7 +37,7 @@ async function getPlansFromFirestoreAdmin() {
       p.plans.map(plan => ({...plan, productId: p.id, productName: p.name}))
     );
   } catch (error: any) {
-    console.error("Error fetching plans with Admin SDK:", error);
+    console.error("[checkout.ts] Error fetching plans with Admin SDK:", error);
     throw new Error("Could not fetch plans from database.", { cause: error });
   }
 }
@@ -55,59 +54,54 @@ const CreatePixPaymentSchema = z.object({
 type CreatePixPaymentInput = z.infer<typeof CreatePixPaymentSchema>;
 
 export async function createPixPayment(input: CreatePixPaymentInput) {
-  console.log('--- Starting createPixPayment ---');
-  console.log('Checking for Service Account Key:', !!process.env.FIREBASE_SERVICE_ACCOUNT_KEY ? 'Found' : 'MISSING!');
-  console.log('Checking for PushinPay API Token:', !!process.env.PUSHINPAY_API_TOKEN ? 'Found' : 'MISSING!');
-  console.log('Checking for Site URL:', !!process.env.NEXT_PUBLIC_SITE_URL ? 'Found' : 'MISSING!');
-
-  const validation = CreatePixPaymentSchema.safeParse(input);
-
-  if (!validation.success) {
-    console.error('Validation failed:', validation.error.format());
-    return { error: 'Dados inválidos.', details: validation.error.format() };
-  }
-  
-  const { uid, plans: selectedPlanIds, name, email, document, phone } = validation.data;
-  console.log(`Input validated for user: ${uid}`);
-
-  // Initialize Admin SDK and Firestore DB
-  let db: admin.firestore.Firestore;
-  try {
-    initializeAdminApp();
-    db = admin.firestore();
-    console.log('Firebase Admin SDK initialized successfully.');
-  } catch(error: any) {
-    console.error('createPixPayment Error: Firestore Admin DB could not be initialized.', error.message);
-    return { error: 'Erro de configuração do servidor: Serviço de banco de dados não configurado.' };
-  }
-
-  const apiToken = process.env.PUSHINPAY_API_TOKEN;
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-  
-  if (!apiToken || !siteUrl) {
-    console.error('CRITICAL ERROR: Missing environment variables.');
-    return { error: 'Erro de configuração do servidor: Chaves de API ou URL do site não encontradas.' };
-  }
+  console.log('--- [checkout.ts] Received request to create PIX payment ---');
 
   try {
-    console.log('Fetching plans from Firestore...');
-    const allPlans = await getPlansFromFirestoreAdmin();
-    if (allPlans.length === 0) {
-        console.error('Server configuration error: No plans found in Firestore.');
-        return { error: 'Server configuration error: No plans found' };
+    const validation = CreatePixPaymentSchema.safeParse(input);
+    if (!validation.success) {
+      console.error('[checkout.ts] Validation failed:', validation.error.format());
+      return { error: 'Dados inválidos.', details: validation.error.format() };
     }
-    console.log('Plans fetched successfully.');
+    
+    const { uid, plans: selectedPlanIds, name, email, document, phone } = validation.data;
+    console.log(`[checkout.ts] Input validated for user: ${uid}`);
+
+    const apiToken = process.env.PUSHINPAY_API_TOKEN;
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+    const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+
+    console.log(`[checkout.ts] Checking environment variables:`);
+    console.log(`- PUSHINPAY_API_TOKEN: ${apiToken ? 'Loaded' : 'MISSING!'}`);
+    console.log(`- NEXT_PUBLIC_SITE_URL: ${siteUrl ? 'Loaded' : 'MISSING!'}`);
+    console.log(`- FIREBASE_SERVICE_ACCOUNT_KEY: ${serviceAccountKey ? 'Loaded' : 'MISSING!'}`);
+
+    if (!apiToken || !siteUrl || !serviceAccountKey) {
+      const missing = [
+        !apiToken && 'PUSHINPAY_API_TOKEN',
+        !siteUrl && 'NEXT_PUBLIC_SITE_URL',
+        !serviceAccountKey && 'FIREBASE_SERVICE_ACCOUNT_KEY'
+      ].filter(Boolean).join(', ');
+      console.error(`[checkout.ts] CRITICAL ERROR: Missing environment variables: ${missing}`);
+      return { error: 'Erro de configuração do servidor.' };
+    }
+
+    initializeAdminApp();
+    const db = admin.firestore();
+    console.log('[checkout.ts] Firebase Admin SDK initialized.');
+
+    const allPlans = await getPlansFromFirestoreAdmin(db);
+    console.log(`[checkout.ts] Fetched ${allPlans.length} total plans from Firestore.`);
     
     const selectedPlans = allPlans.filter(p => selectedPlanIds.includes(p.id));
 
     if (selectedPlans.length !== selectedPlanIds.length) {
-      console.error('Invalid plan ID detected.');
+      console.error('[checkout.ts] Invalid plan ID detected.');
       return { error: 'Um ou mais planos selecionados são inválidos.' };
     }
 
     const totalPrice = selectedPlans.reduce((sum, plan) => sum + plan.price, 0);
     const totalPriceInCents = Math.round(totalPrice * 100);
-    console.log(`Total price calculated: R$${totalPrice.toFixed(2)} (${totalPriceInCents} cents)`);
+    console.log(`[checkout.ts] Total price calculated: R$${totalPrice.toFixed(2)} (${totalPriceInCents} cents)`);
 
     const apiUrl = 'https://api.pushinpay.com.br/api/pix/cashIn';
     const webhookUrl = `${siteUrl}/api/webhook`;
@@ -115,7 +109,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     expirationDate.setHours(expirationDate.getHours() + 1);
 
     const paymentPayload = { name, email, document, phone, value: totalPriceInCents, webhook_url: webhookUrl, expires_at: expirationDate.toISOString() };
-    console.log('Sending payload to PushinPay:', paymentPayload);
+    console.log('[checkout.ts] Sending payload to PushinPay:', JSON.stringify(paymentPayload));
 
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -126,32 +120,27 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     const data = await response.json();
     
     if (!response.ok || !data.id) {
-        console.error('PushinPay API Error Response:', data);
+        console.error('[checkout.ts] PushinPay API Error Response:', data);
         const apiErrorMessage = data.message || (data.errors ? JSON.stringify(data.errors) : `HTTP error! status: ${response.status}`);
-        return { error: `Falha no provedor de pagamento: ${apiErrorMessage}` };
+        throw new Error(`Falha no provedor de pagamento: ${apiErrorMessage}`);
     }
     
-    console.log('Received successful response from PushinPay. Transaction ID:', data.id);
     const transactionId = data.id;
+    console.log(`[checkout.ts] PushinPay API success. Transaction ID: ${transactionId}`);
 
-    // --- Create pending payment record ---
-    console.log('Attempting to create pending_payment document in Firestore...');
-    try {
-        const pendingPaymentRef = db.collection('pending_payments').doc(transactionId);
-        await pendingPaymentRef.set({
-            userId: uid,
-            planIds: selectedPlanIds,
-            status: 'pending',
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            payerInfo: { name, email, document, phone }
-        });
-        console.log(`✅ Successfully created pending_payment document with ID: ${transactionId} for user ${uid}`);
-    } catch (firestoreError: any) {
-        console.error('---!!! FIRESTORE WRITE FAILED !!!---');
-        console.error(`Error writing pending_payment document for transaction ${transactionId}:`, firestoreError);
-        console.error(`Error Code: ${firestoreError.code}, Message: ${firestoreError.message}`);
-        return { error: 'Não foi possível registrar seu pedido no banco de dados. Contate o suporte.', details: firestoreError.message };
-    }
+    const pendingPaymentRef = db.collection('pending_payments').doc(transactionId);
+    const paymentData = {
+        userId: uid,
+        planIds: selectedPlanIds,
+        status: 'pending',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        payerInfo: { name, email, document, phone }
+    };
+    console.log(`[checkout.ts] Preparing to write to Firestore with data:`, JSON.stringify(paymentData));
+    
+    await pendingPaymentRef.set(paymentData);
+    
+    console.log(`✅ [checkout.ts] Successfully created pending_payment document with ID: ${transactionId} for user ${uid}`);
 
     const imageUrl = `data:image/png;base64,${data.qr_code_base64}`;
 
@@ -161,8 +150,12 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     };
 
   } catch (error) {
-    console.error(`FATAL ERROR in createPixPayment for user ${uid}. Details:`, error);
+    console.error('---!!! [checkout.ts] FATAL ERROR in createPixPayment !!!---');
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-    return { error: `Erro inesperado na comunicação: ${errorMessage}` };
+    console.error(errorMessage);
+    if (error instanceof Error && error.stack) {
+      console.error(error.stack);
+    }
+    return { error: `Erro inesperado no servidor: ${errorMessage}` };
   }
 }
