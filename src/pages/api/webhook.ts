@@ -1,11 +1,42 @@
-
 // src/pages/api/webhook.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { db } from '@/lib/firebase';
-import { collection, doc, getDoc, writeBatch, Timestamp, serverTimestamp } from 'firebase/firestore';
-import { getPlansFromFirestore } from '@/lib/checkout';
+import * as admin from 'firebase-admin';
 import type { IncomingMessage } from 'http';
 import { Buffer } from 'buffer';
+import type { Product } from '@/lib/types';
+
+// Helper to initialize Firebase Admin SDK only once
+const initializeAdminApp = () => {
+  if (admin.apps.length > 0) {
+    return admin.app();
+  }
+
+  const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  if (!serviceAccountString) {
+    throw new Error('CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set.');
+  }
+
+  try {
+    const serviceAccount = JSON.parse(serviceAccountString);
+    return admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+  } catch (e: any) {
+    console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY. Make sure it is a valid JSON string.');
+    throw new Error(`Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY: ${e.message}`);
+  }
+};
+
+// Helper to get Plans using the Admin SDK
+async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore) {
+  const productsSnapshot = await db.collection('products').get();
+  if (productsSnapshot.empty) return [];
+  const products = productsSnapshot.docs.map(doc => doc.data() as Product);
+  return products.flatMap(p => 
+    p.plans.map(plan => ({...plan, productId: p.id, productName: p.name}))
+  );
+}
+
 
 function getRawBody(req: IncomingMessage): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -27,9 +58,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).send('Method Not Allowed');
   }
 
-  if (!db) {
-      console.error('Webhook Error: Firestore DB is not initialized.');
-      return res.status(500).json({ error: 'Internal Server Error: Database service not configured.' });
+  let db: admin.firestore.Firestore;
+  try {
+    initializeAdminApp();
+    db = admin.firestore();
+  } catch(error: any) {
+    console.error('Webhook Error: Firestore Admin DB could not be initialized.', error.message);
+    return res.status(500).json({ error: 'Internal Server Error: Database service not configured.' });
   }
 
   try {
@@ -68,15 +103,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ success: true, message: 'Event ignored, status is not "paid".' });
     }
 
-    const paymentRef = doc(db, 'pending_payments', transactionId);
-    const paymentSnap = await getDoc(paymentRef);
+    const paymentRef = db.collection('pending_payments').doc(transactionId);
+    const paymentSnap = await paymentRef.get();
 
-    if (!paymentSnap.exists()) {
+    if (!paymentSnap.exists) {
         console.error(`Pending payment with ID ${transactionId} not found in database.`);
         return res.status(404).json({ error: 'Payment record not found.' });
     }
 
-    const paymentData = paymentSnap.data();
+    const paymentData = paymentSnap.data()!;
 
     if (paymentData.status !== 'pending') {
         console.log(`Payment ${transactionId} already processed with status: ${paymentData.status}.`);
@@ -87,26 +122,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     if (!userId || !planIds || planIds.length === 0) {
         console.error(`Invalid payment record for ${transactionId}: missing userId or planIds.`);
-        await paymentRef.ref.update({ status: 'error', error: 'Missing userId or planIds' });
+        await paymentRef.update({ status: 'error', error: 'Missing userId or planIds' });
         return res.status(400).json({ error: 'Invalid payment record.' });
     }
 
-    const userDocRef = doc(db, 'users', userId);
-    const userDocSnap = await getDoc(userDocRef);
+    const userDocRef = db.collection('users').doc(userId);
+    const userDocSnap = await userDocRef.get();
 
-    if (!userDocSnap.exists()) {
+    if (!userDocSnap.exists) {
         console.error(`User with ID ${userId} from payment ${transactionId} not found.`);
-        await paymentRef.ref.update({ status: 'error', error: 'User not found' });
+        await paymentRef.update({ status: 'error', error: 'User not found' });
         return res.status(404).json({ error: 'User not found.' });
     }
     
-    const userData = userDocSnap.data();
-    // Fetch live plans from Firestore instead of using a static list
-    const allPlans = await getPlansFromFirestore();
+    const userData = userDocSnap.data()!;
+    const allPlans = await getPlansFromFirestoreAdmin(db);
     
     if (allPlans.length === 0) {
         console.error(`Could not fetch plans from Firestore. Aborting activation for user ${userId}.`);
-        await paymentRef.ref.update({ status: 'error', error: 'Could not fetch plans from DB.' });
+        await paymentRef.update({ status: 'error', error: 'Could not fetch plans from DB.' });
         return res.status(500).json({ error: 'Could not fetch plans.' });
     }
 
@@ -122,17 +156,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         newSubscriptions[plan.productId] = {
           status: 'active',
           plan: plan.id,
-          startedAt: serverTimestamp(),
-          expiresAt: Timestamp.fromDate(expiresAt),
+          startedAt: admin.firestore.FieldValue.serverTimestamp(),
+          expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
         };
         changesMade = true;
       }
     }
 
     if (changesMade) {
-        const batch = writeBatch(db);
+        const batch = db.batch();
         batch.update(userDocRef, { subscriptions: newSubscriptions });
-        batch.update(paymentRef, { status: 'completed', processedAt: serverTimestamp() });
+        batch.update(paymentRef, { status: 'completed', processedAt: admin.firestore.FieldValue.serverTimestamp() });
         await batch.commit();
         console.log(`✅ Access granted for user ${userId} for plans: ${planIds.join(', ')}.`);
     }
