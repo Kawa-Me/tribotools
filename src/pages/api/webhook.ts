@@ -1,60 +1,47 @@
-
-'use server';
-
+// src/pages/api/webhook.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, writeBatch, Timestamp } from 'firebase/firestore';
 import { initialProducts } from '@/lib/plans';
+import type { IncomingMessage } from 'http';
+import { Buffer } from 'buffer';
 
 export const config = {
   api: {
-    bodyParser: false,
+    bodyParser: false, // ESSENCIAL: evita o erro de JSON parse
   },
 };
 
+// Helper para ler o corpo bruto da requisição
+function getRawBody(req: IncomingMessage): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: any[] = [];
+    req.on('data', chunk => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', err => reject(err));
+  });
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Método não permitido' });
-  }
+  if (req.method !== 'POST') return res.status(405).end('Método não permitido');
 
   try {
-    let rawBody = '';
-    await new Promise<void>((resolve, reject) => {
-      req.on('data', chunk => {
-        rawBody += chunk;
-      });
-      req.on('end', () => resolve());
-      req.on('error', err => reject(err));
-    });
+    const rawBody = await getRawBody(req);
+    const contentType = req.headers['content-type'] || '';
     
     console.log('--- WEBHOOK RECEIVED ---');
-    console.log(`Raw Body Received:\n${rawBody}`);
+    console.log(`Raw Body Received:\n${rawBody.toString('utf-8')}`);
 
-    const contentType = req.headers['content-type'] || '';
-    let bodyData: any = null;
-
-    if (contentType.includes('application/json')) {
-      bodyData = JSON.parse(rawBody);
-    } else if (
-      contentType.includes('application/x-www-form-urlencoded') ||
-      contentType.includes('text/plain')
-    ) {
-      const formData = new URLSearchParams(rawBody);
-      bodyData = {};
-      for (const [key, value] of formData.entries()) {
-        bodyData[key] = value;
-      }
+    let formData: URLSearchParams;
+    if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('text/plain')) {
+      formData = new URLSearchParams(rawBody.toString('utf-8'));
     } else {
       console.warn(`Unsupported Content-Type: ${contentType}`);
-      return res.status(415).json({ error: 'Unsupported Content-Type' });
-    }
-    
-    if (!bodyData || Object.keys(bodyData).length === 0) {
-      return res.status(400).json({ error: 'Corpo da requisição inválido ou vazio' });
+      return res.status(415).json({ error: `Unsupported content-type: ${contentType}` });
     }
 
-    const eventType = bodyData.event;
-    const pixDataString = bodyData.pix;
+    const eventType = formData.get('event');
+    const pixDataString = formData.get('pix');
     
     console.log('Evento recebido:', eventType);
 
@@ -67,7 +54,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const pixParams = new URLSearchParams(pixDataString);
-    const pixInfo: { [key: string]: any } = {};
+    const pixInfo: Record<string, any> = {};
     pixParams.forEach((value, key) => {
       pixInfo[key] = value;
     });
@@ -84,6 +71,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const planIdsPart = description.substring(description.indexOf('[') + 1, description.indexOf(']'));
     const selectedPlanIds = planIdsPart.split(',');
 
+    if (!db) {
+        console.error('Erro fatal: Conexão com o Firestore não está disponível.');
+        return res.status(500).json({ error: 'Erro de configuração do servidor (DB)' });
+    }
+    
     const usersRef = collection(db, 'users');
     const q = query(usersRef, where('email', '==', email));
     const querySnapshot = await getDocs(q);
