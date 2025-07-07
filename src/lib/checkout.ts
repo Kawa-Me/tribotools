@@ -6,7 +6,7 @@ import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import type { Product } from '@/lib/types';
 
-async function getPlansFromFirestore() {
+export async function getPlansFromFirestore() {
   if (!db) return [];
   const productsSnapshot = await getDocs(collection(db, 'products'));
   const products = productsSnapshot.docs.map(doc => doc.data() as Product);
@@ -122,8 +122,10 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     // --- Create pending payment record and update user info ---
     const batch = writeBatch(db);
 
-    const userRef = doc(db, 'users', uid);
-    batch.update(userRef, { name, document, phone });
+    // This convenience update is removed to diagnose the PERMISSION_DENIED error.
+    // It's possible the user's rules don't allow updating their own profile.
+    // const userRef = doc(db, 'users', uid);
+    // batch.update(userRef, { name, document, phone });
 
     const pendingPaymentRef = doc(db, 'pending_payments', transactionId);
     batch.set(pendingPaymentRef, {

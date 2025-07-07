@@ -3,7 +3,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { db } from '@/lib/firebase';
 import { collection, doc, getDoc, writeBatch, Timestamp, serverTimestamp } from 'firebase/firestore';
-import { initialProducts } from '@/lib/plans';
+import { getPlansFromFirestore } from '@/lib/checkout';
 import type { IncomingMessage } from 'http';
 import { Buffer } from 'buffer';
 
@@ -101,9 +101,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     
     const userData = userDocSnap.data();
-    const allPlans = initialProducts.flatMap(p =>
-      p.plans.map(plan => ({ ...plan, productId: p.id }))
-    );
+    // Fetch live plans from Firestore instead of using a static list
+    const allPlans = await getPlansFromFirestore();
+    
+    if (allPlans.length === 0) {
+        console.error(`Could not fetch plans from Firestore. Aborting activation for user ${userId}.`);
+        await paymentRef.ref.update({ status: 'error', error: 'Could not fetch plans from DB.' });
+        return res.status(500).json({ error: 'Could not fetch plans.' });
+    }
 
     const newSubscriptions = { ...(userData.subscriptions || {}) };
     let changesMade = false;
