@@ -14,13 +14,18 @@ export async function POST(request: Request) {
 
     let formData;
 
-    if (contentType.includes('application/x-www-form-urlencoded')) {
+    if (
+      contentType.includes('application/x-www-form-urlencoded') ||
+      contentType.includes('text/plain')
+    ) {
       const text = await request.text();
       console.log('Raw Body Text successfully read:', text);
+
       if (!text) {
         console.error('Webhook Error: Received an empty request body.');
         return NextResponse.json({ error: 'Empty request body' }, { status: 400 });
       }
+
       formData = new URLSearchParams(text);
     } else {
       const bodyForLogging = await request.text().catch(() => 'Could not read body.');
