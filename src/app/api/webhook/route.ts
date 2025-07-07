@@ -39,10 +39,12 @@ async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore) {
 
 // The new App Router API Route handler
 export async function POST(req: Request) {
+  console.log('--- Webhook POST request received ---');
   let db: admin.firestore.Firestore;
   try {
     initializeAdminApp();
     db = admin.firestore();
+    console.log('Webhook: Firebase Admin SDK initialized.');
   } catch(error: any) {
     console.error('Webhook Error: Firestore Admin DB could not be initialized.', error.message);
     return NextResponse.json({ error: 'Internal Server Error: Database service not configured.' }, { status: 500 });
@@ -50,7 +52,7 @@ export async function POST(req: Request) {
 
   try {
     const contentType = req.headers.get('content-type') || '';
-    console.log('🔥 Webhook recebido:', contentType);
+    console.log('🔥 Webhook content-type:', contentType);
 
     const rawBody = await req.text();
     console.log('🟢 Raw Body:', rawBody);
@@ -80,6 +82,7 @@ export async function POST(req: Request) {
         console.error('Webhook payload missing transaction ID (field "id").');
         return NextResponse.json({ error: 'Transaction ID not found in payload.' }, { status: 400 });
     }
+     console.log(`Processing transaction ID: ${transactionId} with status: ${transactionStatus}`);
 
     if (transactionStatus !== 'paid') {
       console.log(`Ignoring transaction ${transactionId} with status: ${transactionStatus}`);
@@ -91,14 +94,15 @@ export async function POST(req: Request) {
     const paymentSnap = await paymentRef.get();
 
     if (!paymentSnap.exists) {
-        console.error(`Pending payment with ID ${transactionId} not found in database.`);
+        console.error(`CRITICAL: Pending payment with ID ${transactionId} not found in database. The user may have paid, but the system can't grant access.`);
         return NextResponse.json({ error: 'Payment record not found.' }, { status: 404 });
     }
 
     const paymentData = paymentSnap.data()!;
+    console.log('Found pending payment record:', paymentData);
 
     if (paymentData.status !== 'pending') {
-        console.log(`Payment ${transactionId} already processed with status: ${paymentData.status}.`);
+        console.log(`Payment ${transactionId} already processed with status: ${paymentData.status}. Ignoring duplicate webhook.`);
         return NextResponse.json({ success: true, message: 'Already processed.' }, { status: 200 });
     }
 
@@ -120,6 +124,8 @@ export async function POST(req: Request) {
     }
     
     const userData = userDocSnap.data()!;
+    console.log(`Found user ${userData.email} to grant access to.`);
+    
     // Use the Admin SDK to fetch plans, bypassing security rules
     const allPlans = await getPlansFromFirestoreAdmin(db);
     
@@ -145,6 +151,7 @@ export async function POST(req: Request) {
           expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
         };
         changesMade = true;
+        console.log(`Prepared subscription grant for product '${plan.productId}' on plan '${plan.name}' for user ${userId}.`);
       }
     }
 
@@ -153,14 +160,13 @@ export async function POST(req: Request) {
         batch.update(userDocRef, { subscriptions: newSubscriptions });
         batch.update(paymentRef, { status: 'completed', processedAt: admin.firestore.FieldValue.serverTimestamp() });
         await batch.commit();
-        console.log(`✅ Access granted for user ${userId} for plans: ${planIds.join(', ')}.`);
+        console.log(`✅ Access granted and payment record updated for user ${userId}.`);
     }
 
     // Post to n8n if URL is provided
     const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
     if (n8nWebhookUrl) {
-      console.log('🚀 Sending to n8n:', n8nWebhookUrl);
-      // Use the info from the payment provider payload for n8n
+      console.log('🚀 Sending to n8n webhook:', n8nWebhookUrl);
       fetch(n8nWebhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -176,7 +182,7 @@ export async function POST(req: Request) {
           transactionId: transactionId,
         }),
       }).catch(err => {
-        console.error('❌ Failed to send to n8n:', err);
+        console.error('❌ Failed to send data to n8n:', err);
       });
     }
 
