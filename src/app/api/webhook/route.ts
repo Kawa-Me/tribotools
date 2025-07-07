@@ -1,5 +1,5 @@
-
 'use server';
+
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, writeBatch, Timestamp } from 'firebase/firestore';
@@ -7,48 +7,50 @@ import { initialProducts } from '@/lib/plans';
 
 export async function POST(request: Request) {
   console.log('--- WEBHOOK RECEIVED ---');
-  
+
+  let contentType = request.headers.get('content-type') || '';
+  let formData: URLSearchParams | null = null;
+  let bodyData: any = null;
+
   try {
-    const contentType = request.headers.get('content-type') || '';
-    console.log(`Webhook received with Content-Type: ${contentType}`);
+    const rawBody = await request.text();
+    console.log(`Raw Body Received:\n${rawBody}`);
 
-    let formData;
-
-    if (
+    if (contentType.includes('application/json')) {
+      bodyData = JSON.parse(rawBody);
+    } else if (
       contentType.includes('application/x-www-form-urlencoded') ||
       contentType.includes('text/plain')
     ) {
-      const text = await request.text();
-      console.log('Raw Body Text successfully read:', text);
-
-      if (!text) {
-        console.error('Webhook Error: Received an empty request body.');
-        return NextResponse.json({ error: 'Empty request body' }, { status: 400 });
-      }
-
-      formData = new URLSearchParams(text);
+      formData = new URLSearchParams(rawBody);
     } else {
-      const bodyForLogging = await request.text().catch(() => 'Could not read body.');
-      console.error(`Unsupported content type: ${contentType}. Body: ${bodyForLogging}`);
-      return NextResponse.json({ error: `Unsupported content-type: ${contentType}` }, { status: 415 });
+      console.warn(`Unsupported Content-Type: ${contentType}`);
     }
 
-    const eventType = formData.get('event');
-    const pixDataString = formData.get('pix');
+    // 🔄 Convert formData em bodyData (se necessário)
+    if (!bodyData && formData) {
+      bodyData = {};
+      for (const [key, value] of formData.entries()) {
+        bodyData[key] = value;
+      }
+    }
 
-    console.log('Parsed Event Type from form data:', eventType);
+    if (!bodyData) {
+      return NextResponse.json({ error: 'Corpo da requisição inválido ou vazio' }, { status: 400 });
+    }
+
+    const eventType = bodyData.event;
+    const pixDataString = bodyData.pix;
+
+    console.log('Evento recebido:', eventType);
 
     if (eventType !== 'pix.cash-in.received') {
-      console.log(`Ignoring event type: ${eventType}`);
-      return NextResponse.json({ success: true, message: 'Event ignored.' }, { status: 200 });
+      return NextResponse.json({ success: true, message: 'Evento ignorado' }, { status: 200 });
     }
 
     if (!pixDataString) {
-      console.error('Webhook Error: "pix" field not found in form data.');
       return NextResponse.json({ error: '"pix" field not found' }, { status: 400 });
     }
-    
-    console.log('Raw PIX Data String from form data:', pixDataString);
 
     const pixParams = new URLSearchParams(pixDataString);
     const pixInfo: { [key: string]: any } = {};
@@ -56,44 +58,32 @@ export async function POST(request: Request) {
       pixInfo[key] = value;
     });
 
-    console.log('Parsed PIX Info from nested form:', pixInfo);
-    
     const description = pixInfo.description;
     if (!description || !description.includes('| Tribo Tools - Plans:[')) {
-      console.error('Webhook Error: Description field is missing or invalid.', description);
-      return NextResponse.json({ error: 'Invalid description field in PIX data' }, { status: 400 });
+      return NextResponse.json({ error: 'Descrição inválida' }, { status: 400 });
     }
 
+    const email = description.split(' | ')[0];
     const name = pixInfo.name;
     const document = pixInfo.document;
     const phone = pixInfo.phone;
-    const email = description.split(' | ')[0];
     const planIdsPart = description.substring(description.indexOf('[') + 1, description.indexOf(']'));
     const selectedPlanIds = planIdsPart.split(',');
 
-    console.log(`Processing for Email: ${email}, Plan IDs: ${selectedPlanIds.join(', ')}`);
-
-    if (!db) {
-      console.error('FATAL: Firestore database is not configured.');
-      throw new Error('Firestore database is not configured.');
-    }
-    
     const usersRef = collection(db, 'users');
     const q = query(usersRef, where('email', '==', email));
     const querySnapshot = await getDocs(q);
 
     if (querySnapshot.empty) {
-      console.error(`Webhook Error: User with email ${email} not found.`);
-      return NextResponse.json({ error: `User with email ${email} not found.` }, { status: 404 });
+      return NextResponse.json({ error: `Usuário com email ${email} não encontrado.` }, { status: 404 });
     }
 
     const userDoc = querySnapshot.docs[0];
     const userDocRef = userDoc.ref;
     const userData = userDoc.data();
-    console.log(`Found user in Firestore: ${userDoc.id}`);
 
-    const allPlans = initialProducts.flatMap(p => 
-        p.plans.map(plan => ({...plan, productId: p.id, productName: p.name}))
+    const allPlans = initialProducts.flatMap(p =>
+      p.plans.map(plan => ({ ...plan, productId: p.id, productName: p.name }))
     );
 
     const newSubscriptions = { ...(userData.subscriptions || {}) };
@@ -112,30 +102,29 @@ export async function POST(request: Request) {
           expiresAt: Timestamp.fromDate(expiresAt),
         };
         changesMade = true;
-        console.log(`Granting access to product '${plan.productId}' with plan '${plan.name}' until ${expiresAt.toISOString()}`);
-      } else {
-        console.warn(`Plan with ID '${planId}' not found in configuration. Skipping.`);
+        console.log(`Plano '${plan.name}' ativado até ${expiresAt.toISOString()}`);
       }
     }
-    
+
     if (changesMade) {
-        const batch = writeBatch(db);
-        batch.update(userDocRef, { 
-          subscriptions: newSubscriptions,
-          name: name || userData.name || '',
-          document: document || userData.document || '',
-          phone: phone || userData.phone || '',
-        });
-        await batch.commit();
-        console.log(`User ${email} subscriptions updated successfully in Firestore.`);
+      const batch = writeBatch(db);
+      batch.update(userDocRef, {
+        subscriptions: newSubscriptions,
+        name: name || userData.name || '',
+        document: document || userData.document || '',
+        phone: phone || userData.phone || '',
+      });
+      await batch.commit();
+      console.log(`Assinatura de ${email} atualizada com sucesso.`);
     }
 
+    // 🔁 Enviar para n8n
     const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
     if (n8nWebhookUrl) {
-      console.log('Forwarding to n8n webhook...');
+      console.log('Encaminhando para o n8n...');
       fetch(n8nWebhookUrl, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           event: 'payment_success',
           email,
@@ -143,20 +132,19 @@ export async function POST(request: Request) {
           phone,
           document,
           planIds: selectedPlanIds,
-          amount: pixInfo.value ? (pixInfo.value / 100) : 0,
+          amount: pixInfo.value ? pixInfo.value / 100 : 0,
           paymentDate: new Date().toISOString(),
         }),
       }).catch(n8nError => {
-          console.error("Failed to forward to n8n webhook:", n8nError);
+        console.error('Erro ao encaminhar para n8n:', n8nError);
       });
     }
 
-    return NextResponse.json({ success: true, message: 'Webhook processed successfully.' }, { status: 200 });
-
+    return NextResponse.json({ success: true, message: 'Webhook processado com sucesso.' }, { status: 200 });
   } catch (error: any) {
     console.error('---!!! FATAL WEBHOOK PROCESSING ERROR !!!---');
-    console.error(`Error Details: ${error.message}`);
-    console.error(`Stack Trace: ${error.stack}`);
-    return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
+    console.error('Erro:', error.message);
+    console.error('Stack Trace:', error.stack);
+    return NextResponse.json({ error: 'Erro interno do servidor', details: error.message }, { status: 500 });
   }
 }
