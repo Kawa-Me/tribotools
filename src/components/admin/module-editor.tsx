@@ -532,6 +532,13 @@ export function ModuleEditor() {
                                 <Textarea value={lesson.content} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'content', e.target.value)} placeholder="URL de embed do vídeo (ex: https://www.youtube.com/embed/...)" />
                             ) : (
                                 <div className="space-y-4 pt-2">
+
+                                    <div className="space-y-2 pt-2 border-t">
+                                        <Label className="text-xs text-muted-foreground">Botão Principal de Acesso (Opcional)</Label>
+                                        <Input value={lesson.accessUrl || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'accessUrl', e.target.value)} placeholder="URL de Acesso / Link de Download" />
+                                        <Input value={lesson.buttonText || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'buttonText', e.target.value)} placeholder="Texto do Botão (ex: Baixar Arquivo)" />
+                                    </div>
+                                    
                                     <div className="flex items-center space-x-2 pt-2 border-t">
                                       <Switch
                                         id={`hasCredentials-${lesson.id}`}
@@ -542,10 +549,7 @@ export function ModuleEditor() {
                                     </div>
 
                                     {lesson.hasCredentials && (
-                                      <div className="space-y-2 pt-2 border-t">
-                                          <Label className="text-xs text-muted-foreground">Dados de Acesso</Label>
-                                          <Input value={lesson.accessUrl || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'accessUrl', e.target.value)} placeholder="URL de Acesso" />
-                                          <Input value={lesson.buttonText || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'buttonText', e.target.value)} placeholder="Texto do Botão (ex: Acessar Ferramenta)" />
+                                      <div className="space-y-2">
                                           <Input value={lesson.accessEmail || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'accessEmail', e.target.value)} placeholder="Email / Usuário de Acesso" />
                                           <div className="relative">
                                               <Input
