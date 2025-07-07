@@ -75,6 +75,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const planIdsPart = description.substring(description.indexOf('[') + 1, description.indexOf(']'));
     const selectedPlanIds = planIdsPart.split(',');
 
+    if (!db) {
+      console.error('Webhook Error: Firestore DB is not initialized.');
+      return res.status(500).json({ error: 'Internal Server Error: Database service not configured.' });
+    }
+
     const usersRef = collection(db, 'users');
     const q = query(usersRef, where('email', '==', email));
     const querySnapshot = await getDocs(q);
