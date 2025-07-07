@@ -17,6 +17,7 @@ const initializeAdminApp = () => {
   }
 
   try {
+    // We need to parse the JSON string from the environment variable
     const serviceAccount = JSON.parse(serviceAccountString);
     return admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
@@ -47,6 +48,7 @@ function getRawBody(req: IncomingMessage): Promise<Buffer> {
   });
 }
 
+// Disable the default body parser for this route
 export const config = {
   api: {
     bodyParser: false,
@@ -76,12 +78,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     let bodyData: Record<string, any> = {};
 
+    // The payload comes as x-www-form-urlencoded
     if (contentType.includes('application/x-www-form-urlencoded')) {
       const parsed = new URLSearchParams(rawBodyBuffer.toString('utf-8'));
       for (const [key, value] of parsed.entries()) {
         bodyData[key] = value;
       }
     } else if (contentType.includes('application/json')) {
+      // Also support JSON just in case
       bodyData = JSON.parse(rawBodyBuffer.toString('utf-8'));
     } else {
       console.error(`Unsupported content type: ${contentType}`);
@@ -103,6 +107,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ success: true, message: 'Event ignored, status is not "paid".' });
     }
 
+    // Find the pending payment using the transaction ID
     const paymentRef = db.collection('pending_payments').doc(transactionId);
     const paymentSnap = await paymentRef.get();
 
@@ -118,7 +123,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(200).json({ success: true, message: 'Already processed.' });
     }
 
-    const { userId, planIds, payerInfo } = paymentData;
+    const { userId, planIds } = paymentData;
     
     if (!userId || !planIds || planIds.length === 0) {
         console.error(`Invalid payment record for ${transactionId}: missing userId or planIds.`);
@@ -136,6 +141,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     
     const userData = userDocSnap.data()!;
+    // Use the Admin SDK to fetch plans, bypassing security rules
     const allPlans = await getPlansFromFirestoreAdmin(db);
     
     if (allPlans.length === 0) {
@@ -171,18 +177,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log(`✅ Access granted for user ${userId} for plans: ${planIds.join(', ')}.`);
     }
 
+    // Post to n8n if URL is provided
     const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
     if (n8nWebhookUrl) {
       console.log('🚀 Sending to n8n:', n8nWebhookUrl);
+      // Use the info from the payment provider payload for n8n
       fetch(n8nWebhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           event: 'payment_success',
-          email: payerInfo.email,
-          name: payerInfo.name,
-          phone: payerInfo.phone,
-          document: payerInfo.document,
+          email: paymentData.payerInfo.email,
+          name: bodyData.payer_name || paymentData.payerInfo.name,
+          phone: paymentData.payerInfo.phone,
+          document: bodyData.payer_national_registration || paymentData.payerInfo.document,
           planIds: planIds,
           amount: Number(bodyData.value) / 100,
           paymentDate: new Date().toISOString(),
