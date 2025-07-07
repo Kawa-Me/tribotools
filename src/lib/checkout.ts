@@ -2,17 +2,45 @@
 'use server';
 
 import { z } from 'zod';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import * as admin from 'firebase-admin';
 import type { Product } from '@/lib/types';
 
-export async function getPlansFromFirestore() {
-  if (!db) return [];
-  const productsSnapshot = await getDocs(collection(db, 'products'));
-  const products = productsSnapshot.docs.map(doc => doc.data() as Product);
-  return products.flatMap(p => 
-    p.plans.map(plan => ({...plan, productId: p.id, productName: p.name}))
-  );
+// Helper to initialize Firebase Admin SDK only once
+const initializeAdminApp = () => {
+  if (admin.apps.length > 0) {
+    return admin.app();
+  }
+
+  const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  if (!serviceAccountString) {
+    throw new Error('CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set.');
+  }
+
+  try {
+    const serviceAccount = JSON.parse(serviceAccountString);
+    return admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+  } catch (e: any) {
+    console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY. Make sure it is a valid JSON string.');
+    throw new Error(`Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY: ${e.message}`);
+  }
+};
+
+// Helper to get Plans using the Admin SDK
+async function getPlansFromFirestoreAdmin() {
+  try {
+    const db = admin.firestore();
+    const productsSnapshot = await db.collection('products').get();
+    if (productsSnapshot.empty) return [];
+    const products = productsSnapshot.docs.map(doc => doc.data() as Product);
+    return products.flatMap(p => 
+      p.plans.map(plan => ({...plan, productId: p.id, productName: p.name}))
+    );
+  } catch (error: any) {
+    console.error("Error fetching plans with Admin SDK:", error);
+    throw new Error("Could not fetch plans from database.", { cause: error });
+  }
 }
 
 const CreatePixPaymentSchema = z.object({
@@ -35,8 +63,14 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
   
   const { uid, plans: selectedPlanIds, name, email, document, phone } = validation.data;
 
-  if (!db) {
-    return { error: 'Erro de configuração do servidor: Serviço de banco de dados indisponível.' };
+  // Initialize Admin SDK and Firestore DB
+  let db: admin.firestore.Firestore;
+  try {
+    initializeAdminApp();
+    db = admin.firestore();
+  } catch(error: any) {
+    console.error('createPixPayment Error: Firestore Admin DB could not be initialized.', error.message);
+    return { error: 'Erro de configuração do servidor: Serviço de banco de dados não configurado.' };
   }
 
   const apiToken = process.env.PUSHINPAY_API_TOKEN;
@@ -53,15 +87,11 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
 
   let allPlans;
   try {
-    allPlans = await getPlansFromFirestore();
+    allPlans = await getPlansFromFirestoreAdmin();
   } catch (e: any) {
-      if (e.code === 'permission-denied') {
-          console.error("Firestore permission denied in getPlansFromFirestore:", e);
-          return { error: "Erro de permissão ao buscar planos. Verifique as regras de segurança do Firestore." };
-      }
-      console.error("Error fetching plans from Firestore:", e);
-      const errorMessage = e.message || 'An unknown error occurred while fetching plans.';
-      return { error: `Não foi possível carregar os planos do banco de dados: ${errorMessage}` };
+    console.error("Error fetching plans from Firestore:", e);
+    const errorMessage = e.message || 'An unknown error occurred while fetching plans.';
+    return { error: `Não foi possível carregar os planos do banco de dados: ${errorMessage}` };
   }
 
   if (allPlans.length === 0) {
@@ -119,19 +149,18 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
 
     const transactionId = data.id;
 
-    // --- Create pending payment record and update user info ---
-    const batch = writeBatch(db);
+    // --- Create pending payment record and update user info using ADMIN SDK ---
+    const batch = db.batch();
 
-    // Update user info for future checkouts
-    const userRef = doc(db, 'users', uid);
+    const userRef = db.collection('users').doc(uid);
     batch.update(userRef, { name, document, phone });
 
-    const pendingPaymentRef = doc(db, 'pending_payments', transactionId);
+    const pendingPaymentRef = db.collection('pending_payments').doc(transactionId);
     batch.set(pendingPaymentRef, {
       userId: uid,
       planIds: selectedPlanIds,
       status: 'pending',
-      createdAt: serverTimestamp(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
       payerInfo: { name, email, document, phone }
     });
     
@@ -153,6 +182,9 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
 
   } catch (error) {
     console.error('Error creating Pix payment:', error);
+    if ((error as any).code === 7 || (error as any).code === 'permission-denied') { // Check for Firestore error codes
+        return { error: `Erro de Permissão no Servidor: A operação foi bloqueada pelas regras de segurança do Firestore.` };
+    }
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     return { error: `Erro inesperado na comunicação: ${errorMessage}` };
   }
