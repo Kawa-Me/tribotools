@@ -1,32 +1,32 @@
+
 'use server';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, updateDoc, Timestamp, writeBatch } from 'firebase/firestore';
+import { collection, query, where, getDocs, writeBatch, Timestamp } from 'firebase/firestore';
 import { initialProducts } from '@/lib/plans';
 
-// This is the new, robust implementation.
 export async function POST(request: Request) {
   console.log('--- WEBHOOK RECEIVED ---');
-  const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
   const webhookSource = request.headers.get('user-agent') || 'Unknown';
   console.log(`Webhook received from: ${webhookSource}`);
 
   try {
-    // Step 1: Read the entire request body as plain text.
-    // This avoids any automatic JSON parsing by the framework.
+    // Step 1: Read the entire request body as plain text FIRST.
+    // This is the crucial step to prevent the framework from auto-parsing as JSON.
     const bodyText = await request.text();
-    console.log('Raw Body Text:', bodyText);
+    console.log('Raw Body Text successfully read:', bodyText);
 
     if (!bodyText) {
-      throw new Error('Received an empty webhook body.');
+      console.error('Webhook Error: Received an empty request body.');
+      return NextResponse.json({ error: 'Empty request body' }, { status: 400 });
     }
 
-    // Step 2: Manually parse the form-data from the text.
+    // Step 2: Manually parse the form-data from the raw text.
     const formData = new URLSearchParams(bodyText);
     const eventType = formData.get('event');
     const pixDataString = formData.get('pix');
 
-    console.log('Parsed Event Type:', eventType);
+    console.log('Parsed Event Type from text:', eventType);
 
     if (eventType !== 'pix.cash-in.received') {
       console.log(`Ignoring event type: ${eventType}`);
@@ -34,24 +34,26 @@ export async function POST(request: Request) {
     }
 
     if (!pixDataString) {
-      throw new Error('"pix" field not found for a cash-in event.');
+      console.error('Webhook Error: "pix" field not found in form data.');
+      return NextResponse.json({ error: '"pix" field not found' }, { status: 400 });
     }
     
-    console.log('Raw PIX Data String:', pixDataString);
+    console.log('Raw PIX Data String from form data:', pixDataString);
 
-    // Step 3: The 'pix' field is also URL-encoded. Parse it as well.
+    // Step 3: The 'pix' field is also URL-encoded. Parse it as a nested form.
     const pixParams = new URLSearchParams(pixDataString);
     const pixInfo: { [key: string]: any } = {};
     pixParams.forEach((value, key) => {
       pixInfo[key] = value;
     });
 
-    console.log('Parsed PIX Info:', pixInfo);
+    console.log('Parsed PIX Info from nested form:', pixInfo);
     
-    // Step 4: Extract user email and plan IDs from the description.
+    // Step 4: Extract user email and plan IDs from the description field.
     const description = pixInfo.description;
     if (!description || !description.includes('| Tribo Tools - Plans:[')) {
-      throw new Error('Description field is missing or invalid for processing.');
+      console.error('Webhook Error: Description field is missing or invalid.', description);
+      return NextResponse.json({ error: 'Invalid description field in PIX data' }, { status: 400 });
     }
 
     const name = pixInfo.name;
@@ -64,24 +66,26 @@ export async function POST(request: Request) {
     console.log(`Processing for Email: ${email}, Plan IDs: ${selectedPlanIds.join(', ')}`);
 
     if (!db) {
+      console.error('FATAL: Firestore database is not configured.');
       throw new Error('Firestore database is not configured.');
     }
     
-    // Step 5: Find the user by email
+    // Step 5: Find the user in Firestore by email.
     const usersRef = collection(db, 'users');
     const q = query(usersRef, where('email', '==', email));
     const querySnapshot = await getDocs(q);
 
     if (querySnapshot.empty) {
-      throw new Error(`User with email ${email} not found.`);
+      console.error(`Webhook Error: User with email ${email} not found.`);
+      return NextResponse.json({ error: `User with email ${email} not found.` }, { status: 404 });
     }
 
     const userDoc = querySnapshot.docs[0];
     const userDocRef = userDoc.ref;
     const userData = userDoc.data();
-    console.log(`Found user: ${userDoc.id}`);
+    console.log(`Found user in Firestore: ${userDoc.id}`);
 
-    // Step 6: Update user's subscriptions
+    // Step 6: Update the user's subscriptions based on the purchase.
     const allPlans = initialProducts.flatMap(p => 
         p.plans.map(plan => ({...plan, productId: p.id, productName: p.name}))
     );
@@ -117,13 +121,13 @@ export async function POST(request: Request) {
           phone: phone || userData.phone || '',
         });
         await batch.commit();
-        console.log(`User ${email} subscriptions updated successfully.`);
+        console.log(`User ${email} subscriptions updated successfully in Firestore.`);
     }
 
-    // Step 7: Forward to n8n if URL is configured
+    // Step 7: Forward to n8n webhook if the URL is configured.
+    const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
     if (n8nWebhookUrl) {
       console.log('Forwarding to n8n webhook...');
-      // Fire-and-forget, no need to await
       fetch(n8nWebhookUrl, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -134,7 +138,7 @@ export async function POST(request: Request) {
           phone,
           document,
           planIds: selectedPlanIds,
-          amount: pixInfo.value / 100, // convert cents to currency
+          amount: pixInfo.value ? (pixInfo.value / 100) : 0,
           paymentDate: new Date().toISOString(),
         }),
       }).catch(n8nError => {
