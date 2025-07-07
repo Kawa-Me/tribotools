@@ -3,10 +3,9 @@
 
 import { z } from 'zod';
 import { db } from '@/lib/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import type { Product } from '@/lib/types';
 
-// Helper to get plans directly from Firestore on the server
 async function getPlansFromFirestore() {
   if (!db) return [];
   const productsSnapshot = await getDocs(collection(db, 'products'));
@@ -17,6 +16,7 @@ async function getPlansFromFirestore() {
 }
 
 const CreatePixPaymentSchema = z.object({
+  uid: z.string(),
   plans: z.array(z.string()).min(1, { message: 'Selecione pelo menos um plano.' }),
   name: z.string().min(3),
   email: z.string().email(),
@@ -32,8 +32,12 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
   if (!validation.success) {
     return { error: 'Dados inválidos.', details: validation.error.format() };
   }
+  
+  const { uid, plans: selectedPlanIds, name, email, document, phone } = validation.data;
 
-  const { plans: selectedPlanIds, name, email, document, phone } = validation.data;
+  if (!db) {
+    return { error: 'Erro de configuração do servidor: Serviço de banco de dados indisponível.' };
+  }
 
   const apiToken = process.env.PUSHINPAY_API_TOKEN;
   if (!apiToken) {
@@ -46,7 +50,6 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     console.error('CRITICAL ERROR: NEXT_PUBLIC_SITE_URL environment variable not found!');
     return { error: 'Erro de configuração do servidor: URL do site não encontrada.' };
   }
-
 
   let allPlans;
   try {
@@ -81,24 +84,11 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
 
   const apiUrl = 'https://api.pushinpay.com.br/api/pix/cashIn';
   const webhookUrl = `${siteUrl}/api/webhook`;
-
-  if (siteUrl.includes('localhost')) {
-      console.warn(`
-        --- AVISO DE DESENVOLVIMENTO ---
-        Você está usando um endereço localhost para o webhook: ${webhookUrl}
-        O provedor de pagamento (PushInPay) não conseguirá acessar este endereço.
-        A liberação automática de acesso NÃO funcionará no ambiente local.
-        Isto é esperado. Em produção, com uma URL pública, o webhook funcionará normalmente.
-        --- FIM DO AVISO ---
-      `);
-  }
-
+  
   const expirationDate = new Date();
   expirationDate.setHours(expirationDate.getHours() + 1);
 
-  const paymentName = `${email}|${name}|Tribo Tools - Plans:[${selectedPlanIds.join(',')}]`;
-
-  const payload = {
+  const paymentPayload = {
     name,
     email,
     document,
@@ -106,10 +96,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     value: totalPriceInCents,
     webhook_url: webhookUrl,
     expires_at: expirationDate.toISOString(),
-    description: paymentName, // Using description to pass our metadata
   };
-
-  console.log("Enviando payload para PushInPay:", JSON.stringify(payload, null, 2));
 
   try {
     const response = await fetch(apiUrl, {
@@ -119,31 +106,48 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
         'Accept': 'application/json',
         'Authorization': `Bearer ${apiToken}`,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(paymentPayload),
     });
 
     const data = await response.json();
-    console.log("Resposta recebida da PushInPay:", JSON.stringify(data, null, 2));
     
-    if (!response.ok) {
+    if (!response.ok || !data.id) {
         console.error('Pushin Pay API Error Response:', data);
         const apiErrorMessage = data.message || (data.errors ? JSON.stringify(data.errors) : `HTTP error! status: ${response.status}`);
         return { error: `Falha no provedor de pagamento: ${apiErrorMessage}` };
     }
 
-    // Check for the new expected fields: qr_code (text) and qr_code_base64 (image)
+    const transactionId = data.id;
+
+    // --- Create pending payment record and update user info ---
+    const batch = writeBatch(db);
+
+    const userRef = doc(db, 'users', uid);
+    batch.update(userRef, { name, document, phone });
+
+    const pendingPaymentRef = doc(db, 'pending_payments', transactionId);
+    batch.set(pendingPaymentRef, {
+      userId: uid,
+      planIds: selectedPlanIds,
+      status: 'pending',
+      createdAt: serverTimestamp(),
+      payerInfo: { name, email, document, phone }
+    });
+    
+    await batch.commit();
+    // --- End of batch write ---
+
     if (!data.qr_code || !data.qr_code_base64) {
         console.error('Invalid success response from Pushin Pay. Expected "qr_code" and "qr_code_base64". Received:', data);
         const errorDetails = JSON.stringify(data);
         return { error: `O provedor retornou uma resposta inesperada. Detalhes: ${errorDetails}` };
     }
 
-    // The API returns a base64 string for the image. We need to format it as a data URI.
     const imageUrl = `data:image/png;base64,${data.qr_code_base64}`;
 
     return {
-      qrcode_text: data.qr_code, // This is the "copia e cola" text
-      qrcode_image_url: imageUrl, // This is the QR code image
+      qrcode_text: data.qr_code,
+      qrcode_image_url: imageUrl,
     };
 
   } catch (error) {

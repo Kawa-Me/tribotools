@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -63,21 +64,24 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
     resolver: zodResolver(FormSchema),
     defaultValues: {
       plans: [],
-      name: '',
-      document: '',
-      phone: '',
+      name: user?.name || '',
+      document: user?.document || '',
+      phone: user?.phone || '',
     },
   });
+  
+  useEffect(() => {
+    if (user) {
+        form.setValue('name', user.name || '');
+        form.setValue('document', user.document || '');
+        form.setValue('phone', user.phone || '');
+    }
+  }, [user, form]);
+
 
   const selectedPlanIds = form.watch('plans') || [];
   const selectedPlans = allPlans.filter(p => selectedPlanIds.includes(p.id));
   const totalPrice = selectedPlans.reduce((sum, plan) => sum + plan.price, 0);
-
-  useEffect(() => {
-    form.register('name');
-    form.register('document');
-    form.register('phone');
-  }, [form]);
 
   const handleCopyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -85,7 +89,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
   };
 
   const onSubmit = async (data: z.infer<typeof FormSchema>) => {
-    if (!user?.email) {
+    if (!user?.uid || !user.email) {
       toast({ variant: 'destructive', title: 'Erro', description: 'Usuário não autenticado.' });
       return;
     }
@@ -104,6 +108,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
 
     try {
       const result = await createPixPayment({
+        uid: user.uid,
         plans: data.plans,
         email: user.email,
         name: data.name,
@@ -131,7 +136,6 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
     form.reset();
   }
 
-  // Intercept anonymous users and prompt them to create an account
   if (user?.isAnonymous) {
     return (
       <Dialog>

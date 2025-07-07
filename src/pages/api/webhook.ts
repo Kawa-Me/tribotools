@@ -1,12 +1,12 @@
+
 // src/pages/api/webhook.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, writeBatch, Timestamp } from 'firebase/firestore';
+import { collection, doc, getDoc, writeBatch, Timestamp, serverTimestamp } from 'firebase/firestore';
 import { initialProducts } from '@/lib/plans';
 import type { IncomingMessage } from 'http';
 import { Buffer } from 'buffer';
 
-// Função utilitária pra pegar body cru
 function getRawBody(req: IncomingMessage): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: any[] = [];
@@ -18,7 +18,7 @@ function getRawBody(req: IncomingMessage): Promise<Buffer> {
 
 export const config = {
   api: {
-    bodyParser: false, // ESSENCIAL: evita o erro de JSON parse
+    bodyParser: false,
   },
 };
 
@@ -27,108 +27,88 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).send('Method Not Allowed');
   }
 
+  if (!db) {
+      console.error('Webhook Error: Firestore DB is not initialized.');
+      return res.status(500).json({ error: 'Internal Server Error: Database service not configured.' });
+  }
+
   try {
-    // --- PASSO 1: LOGS DE DIAGNÓSTICO INICIAL ---
-    console.log('🔥 Webhook recebido:', req.headers['content-type']);
     const rawBodyBuffer = await getRawBody(req);
-    const rawBodyString = rawBodyBuffer.toString('utf-8');
-    console.log('🟢 Raw Body:', rawBodyString);
-    // --- FIM PASSO 1 ---
-    
     const contentType = req.headers['content-type'] || '';
+    
+    console.log('🔥 Webhook recebido:', contentType);
+    console.log('🟢 Raw Body:', rawBodyBuffer.toString('utf-8'));
+
     let bodyData: Record<string, any> = {};
 
-    if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('text/plain')) {
-      const parsed = new URLSearchParams(rawBodyString);
+    if (contentType.includes('application/x-www-form-urlencoded')) {
+      const parsed = new URLSearchParams(rawBodyBuffer.toString('utf-8'));
       for (const [key, value] of parsed.entries()) {
         bodyData[key] = value;
       }
     } else if (contentType.includes('application/json')) {
-      bodyData = JSON.parse(rawBodyString);
+      bodyData = JSON.parse(rawBodyBuffer.toString('utf-8'));
     } else {
       console.error(`Unsupported content type: ${contentType}`);
       return res.status(415).json({ error: `Unsupported content type: ${contentType}` });
     }
 
-    // --- PASSO 2: LOGS DE PARSING ---
-    console.log('📦 BodyData:', bodyData);
-    const eventType = bodyData.event;
-    const pixDataString = bodyData.pix;
-    console.log('📨 PIX String:', pixDataString);
-    // --- FIM PASSO 2 ---
+    console.log('📦 Parsed BodyData:', bodyData);
 
-    if (eventType !== 'pix.cash-in.received') {
-      console.log(`Evento ignorado: ${eventType}`);
-      return res.status(200).json({ success: true, message: 'Evento ignorado' });
+    const transactionId = bodyData.id;
+    const transactionStatus = bodyData.status;
+
+    if (!transactionId) {
+        console.error('Webhook payload missing transaction ID (field "id").');
+        return res.status(400).json({ error: 'Transaction ID not found in payload.' });
     }
 
-    if (!pixDataString) {
-      console.error('"pix" field not found in bodyData');
-      return res.status(400).json({ error: '"pix" field not found' });
+    if (transactionStatus !== 'paid') {
+      console.log(`Ignoring transaction ${transactionId} with status: ${transactionStatus}`);
+      return res.status(200).json({ success: true, message: 'Event ignored, status is not "paid".' });
     }
 
-    // --- PASSO 3: DECODIFICAR PAYLOAD ANINHADO ---
-    const pixParams = new URLSearchParams(pixDataString);
-    const pixInfo: Record<string, string> = {};
-    for (const [key, value] of pixParams.entries()) {
-      pixInfo[key] = value;
+    const paymentRef = doc(db, 'pending_payments', transactionId);
+    const paymentSnap = await getDoc(paymentRef);
+
+    if (!paymentSnap.exists()) {
+        console.error(`Pending payment with ID ${transactionId} not found in database.`);
+        return res.status(404).json({ error: 'Payment record not found.' });
     }
-    // --- FIM PASSO 3 ---
+
+    const paymentData = paymentSnap.data();
+
+    if (paymentData.status !== 'pending') {
+        console.log(`Payment ${transactionId} already processed with status: ${paymentData.status}.`);
+        return res.status(200).json({ success: true, message: 'Already processed.' });
+    }
+
+    const { userId, planIds, payerInfo } = paymentData;
     
-    const description = pixInfo.description;
-    if (!description || !description.includes('|') || !description.includes('Plans:[')) {
-      console.error(`Descrição inválida ou malformada: ${description}`);
-      return res.status(400).json({ error: 'Descrição inválida ou não contém os dados esperados.' });
+    if (!userId || !planIds || planIds.length === 0) {
+        console.error(`Invalid payment record for ${transactionId}: missing userId or planIds.`);
+        await paymentRef.ref.update({ status: 'error', error: 'Missing userId or planIds' });
+        return res.status(400).json({ error: 'Invalid payment record.' });
     }
 
-    const descriptionParts = description.split('|');
-    const email = descriptionParts[0]?.trim();
-    const name = descriptionParts[1]?.trim();
-    const planIdsPart = description.substring(description.indexOf('[') + 1, description.indexOf(']'));
-    const selectedPlanIds = planIdsPart.split(',');
-    
-    const document = pixInfo.document || '';
-    const phone = pixInfo.phone || '';
+    const userDocRef = doc(db, 'users', userId);
+    const userDocSnap = await getDoc(userDocRef);
 
-    // --- PASSO 4: LOGS DE DADOS EXTRAÍDOS ---
-    console.log('👤 Nome extraído:', name);
-    console.log('📧 Email extraído:', email);
-    console.log('📄 Documento:', document);
-    console.log('📞 Telefone:', phone);
-    console.log('📦 Plano IDs:', selectedPlanIds);
-    // --- FIM PASSO 4 ---
-
-    if (!email || selectedPlanIds.length === 0) {
-        console.error('Email ou IDs de plano não puderam ser extraídos da descrição.');
-        return res.status(400).json({ error: 'Email ou IDs de plano não puderam ser extraídos da requisição.' });
-    }
-
-    if (!db) {
-      console.error('Webhook Error: Firestore DB is not initialized.');
-      return res.status(500).json({ error: 'Internal Server Error: Database service not configured.' });
+    if (!userDocSnap.exists()) {
+        console.error(`User with ID ${userId} from payment ${transactionId} not found.`);
+        await paymentRef.ref.update({ status: 'error', error: 'User not found' });
+        return res.status(404).json({ error: 'User not found.' });
     }
     
-    const usersRef = collection(db, 'users');
-    const q = query(usersRef, where('email', '==', email));
-    const querySnapshot = await getDocs(q);
-
-    if (querySnapshot.empty) {
-      console.error(`Usuário com email ${email} não encontrado.`);
-      return res.status(404).json({ error: `Usuário com email ${email} não encontrado.` });
-    }
-
-    const userDoc = querySnapshot.docs[0];
-    const userDocRef = userDoc.ref;
-    const userData = userDoc.data();
-
+    const userData = userDocSnap.data();
     const allPlans = initialProducts.flatMap(p =>
-      p.plans.map(plan => ({ ...plan, productId: p.id, productName: p.name }))
+      p.plans.map(plan => ({ ...plan, productId: p.id }))
     );
 
     const newSubscriptions = { ...(userData.subscriptions || {}) };
     let changesMade = false;
 
-    for (const planId of selectedPlanIds) {
+    for (const planId of planIds) {
       const plan = allPlans.find(p => p.id === planId);
       if (plan) {
         const expiresAt = new Date();
@@ -137,7 +117,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         newSubscriptions[plan.productId] = {
           status: 'active',
           plan: plan.id,
-          startedAt: Timestamp.now(),
+          startedAt: serverTimestamp(),
           expiresAt: Timestamp.fromDate(expiresAt),
         };
         changesMade = true;
@@ -145,48 +125,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (changesMade) {
-      const batch = writeBatch(db);
-      batch.update(userDocRef, {
-        subscriptions: newSubscriptions,
-        name: name || userData.name || '',
-        document: document || userData.document || '',
-        phone: phone || userData.phone || '',
-      });
-      await batch.commit();
-      console.log(`✅ Assinaturas atualizadas para o usuário ${email}`);
-    } else {
-        console.log(`ℹ️ Nenhuma alteração de assinatura necessária para o usuário ${email}`);
+        const batch = writeBatch(db);
+        batch.update(userDocRef, { subscriptions: newSubscriptions });
+        batch.update(paymentRef, { status: 'completed', processedAt: serverTimestamp() });
+        await batch.commit();
+        console.log(`✅ Access granted for user ${userId} for plans: ${planIds.join(', ')}.`);
     }
 
-    // --- PASSO 5: ENVIAR PARA O N8N COM LOGS E ERRO ---
     const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
     if (n8nWebhookUrl) {
-      console.log('🚀 Enviando pro n8n:', n8nWebhookUrl);
+      console.log('🚀 Sending to n8n:', n8nWebhookUrl);
       fetch(n8nWebhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           event: 'payment_success',
-          email,
-          name,
-          phone,
-          document,
-          planIds: selectedPlanIds,
-          amount: pixInfo.value ? Number(pixInfo.value) / 100 : 0,
+          email: payerInfo.email,
+          name: payerInfo.name,
+          phone: payerInfo.phone,
+          document: payerInfo.document,
+          planIds: planIds,
+          amount: Number(bodyData.value) / 100,
           paymentDate: new Date().toISOString(),
+          transactionId: transactionId,
         }),
       }).catch(err => {
-        console.error('❌ Falha ao enviar pro n8n:', err);
+        console.error('❌ Failed to send to n8n:', err);
       });
-    } else {
-        console.log('ℹ️ URL do webhook N8N não configurada. Pulando etapa.');
     }
-    // --- FIM PASSO 5 ---
 
     return res.status(200).json({ success: true });
   } catch (error: any) {
     console.error('---!!! FATAL WEBHOOK ERROR !!!---');
     console.error(error);
-    return res.status(500).json({ error: 'Erro interno do servidor', details: error.message });
+    return res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
 }
