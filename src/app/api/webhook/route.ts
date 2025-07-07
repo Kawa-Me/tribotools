@@ -17,7 +17,6 @@ const initializeAdminApp = () => {
 
   try {
     const serviceAccount = JSON.parse(serviceAccountString);
-    console.log(`[Webhook Admin SDK] Initializing for project: ${serviceAccount.project_id}`);
     return admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
@@ -50,88 +49,40 @@ export async function POST(req: Request) {
   }
 
   try {
-    const contentType = req.headers.get('content-type') || '';
-    console.log('🔥 Webhook content-type:', contentType);
+    const rawBody = await req.json();
+    console.log('📦 Parsed BodyData:', rawBody);
 
-    const rawBody = await req.text();
-    console.log('🟢 Raw Body:', rawBody);
+    const { status, metadata, id: transactionId, payer_name, payer_national_registration, value } = rawBody;
 
-    let bodyData: Record<string, any> = {};
-
-    // The payload comes as x-www-form-urlencoded
-    if (contentType.includes('application/x-www-form-urlencoded')) {
-      const parsed = new URLSearchParams(rawBody);
-      for (const [key, value] of parsed.entries()) {
-        bodyData[key] = value;
-      }
-    } else if (contentType.includes('application/json')) {
-      // Also support JSON just in case
-      bodyData = JSON.parse(rawBody);
-    } else {
-      console.error(`Unsupported content type: ${contentType}`);
-      return NextResponse.json({ error: `Unsupported content type: ${contentType}` }, { status: 415 });
+    if (status !== 'paid') {
+      console.log(`Ignoring transaction ${transactionId} with status: ${status}`);
+      return NextResponse.json({ success: true, message: `Event ignored, status is not 'paid'.` }, { status: 200 });
     }
 
-    console.log('📦 Parsed BodyData:', bodyData);
-
-    const transactionId = bodyData.id;
-    const transactionStatus = bodyData.status;
-
-    if (!transactionId) {
-        console.error('Webhook payload missing transaction ID (field "id").');
-        return NextResponse.json({ error: 'Transaction ID not found in payload.' }, { status: 400 });
-    }
-     console.log(`Processing transaction ID: ${transactionId} with status: ${transactionStatus}`);
-
-    if (transactionStatus !== 'paid') {
-      console.log(`Ignoring transaction ${transactionId} with status: ${transactionStatus}`);
-      return NextResponse.json({ success: true, message: 'Event ignored, status is not "paid".' }, { status: 200 });
+    if (!metadata || !metadata.userId || !metadata.planIds) {
+        console.error(`CRITICAL: Webhook for transaction ${transactionId} is missing metadata. Cannot grant access.`);
+        return NextResponse.json({ error: 'Webhook payload missing required metadata.' }, { status: 400 });
     }
 
-    // Find the pending payment using the transaction ID
-    const paymentRef = db.collection('pending_payments').doc(transactionId);
-    const paymentSnap = await paymentRef.get();
-
-    if (!paymentSnap.exists) {
-        console.error(`CRITICAL: Pending payment with ID ${transactionId} not found in database. The user may have paid, but the system can't grant access.`);
-        return NextResponse.json({ error: 'Payment record not found.' }, { status: 404 });
-    }
-
-    const paymentData = paymentSnap.data()!;
-    console.log('Found pending payment record:', paymentData);
-
-    if (paymentData.status !== 'pending') {
-        console.log(`Payment ${transactionId} already processed with status: ${paymentData.status}. Ignoring duplicate webhook.`);
-        return NextResponse.json({ success: true, message: 'Already processed.' }, { status: 200 });
-    }
-
-    const { userId, planIds } = paymentData;
+    const { userId, planIds } = metadata;
+    console.log(`Processing user ID: ${userId} for plans: ${planIds.join(', ')}`);
     
-    if (!userId || !planIds || planIds.length === 0) {
-        console.error(`Invalid payment record for ${transactionId}: missing userId or planIds.`);
-        await paymentRef.update({ status: 'error', error: 'Missing userId or planIds' });
-        return NextResponse.json({ error: 'Invalid payment record.' }, { status: 400 });
-    }
-
     const userDocRef = db.collection('users').doc(userId);
     const userDocSnap = await userDocRef.get();
 
     if (!userDocSnap.exists) {
-        console.error(`User with ID ${userId} from payment ${transactionId} not found.`);
-        await paymentRef.update({ status: 'error', error: 'User not found' });
+        console.error(`User with ID ${userId} from transaction ${transactionId} not found.`);
         return NextResponse.json({ error: 'User not found.' }, { status: 404 });
     }
     
     const userData = userDocSnap.data()!;
     console.log(`Found user ${userData.email} to grant access to.`);
     
-    // Use the Admin SDK to fetch plans, bypassing security rules
     const allPlans = await getPlansFromFirestoreAdmin(db);
     
     if (allPlans.length === 0) {
-        console.error(`Could not fetch plans from Firestore. Aborting activation for user ${userId}.`);
-        await paymentRef.update({ status: 'error', error: 'Could not fetch plans from DB.' });
-        return NextResponse.json({ error: 'Could not fetch plans.' }, { status: 500 });
+        console.error(`Could not fetch any plans from Firestore. Aborting activation for user ${userId}.`);
+        return NextResponse.json({ error: 'Could not fetch plans from DB.' }, { status: 500 });
     }
 
     const newSubscriptions = { ...(userData.subscriptions || {}) };
@@ -150,33 +101,31 @@ export async function POST(req: Request) {
           expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
         };
         changesMade = true;
-        console.log(`Prepared subscription grant for product '${plan.productId}' on plan '${plan.name}' for user ${userId}.`);
+        console.log(`Prepared subscription grant for product '${plan.productName}' on plan '${plan.name}' for user ${userId}.`);
+      } else {
+        console.warn(`Plan with ID ${planId} from metadata not found in current plans. It might have been deleted.`);
       }
     }
 
     if (changesMade) {
-        const batch = db.batch();
-        batch.update(userDocRef, { subscriptions: newSubscriptions });
-        batch.update(paymentRef, { status: 'completed', processedAt: admin.firestore.FieldValue.serverTimestamp() });
-        await batch.commit();
-        console.log(`✅ Access granted and payment record updated for user ${userId}.`);
+        await userDocRef.update({ subscriptions: newSubscriptions });
+        console.log(`✅ Access granted and user record updated for user ${userId}.`);
     }
 
-    // Post to n8n if URL is provided
     const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
     if (n8nWebhookUrl) {
-      console.log('🚀 Sending to n8n webhook:', n8nWebhookUrl);
+      console.log('🚀 Sending to n8n webhook...');
       fetch(n8nWebhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           event: 'payment_success',
-          email: paymentData.payerInfo.email,
-          name: bodyData.payer_name || paymentData.payerInfo.name,
-          phone: paymentData.payerInfo.phone,
-          document: bodyData.payer_national_registration || paymentData.payerInfo.document,
+          email: userData.email,
+          name: payer_name || userData.name,
+          phone: userData.phone,
+          document: payer_national_registration || userData.document,
           planIds: planIds,
-          amount: Number(bodyData.value) / 100,
+          amount: Number(value) / 100,
           paymentDate: new Date().toISOString(),
           transactionId: transactionId,
         }),
@@ -189,6 +138,7 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error('---!!! FATAL WEBHOOK ERROR !!!---');
     console.error(error);
-    return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
+    const errorMessage = error.message || 'An unknown error occurred.';
+    return NextResponse.json({ error: 'Internal Server Error', details: errorMessage }, { status: 500 });
   }
 }

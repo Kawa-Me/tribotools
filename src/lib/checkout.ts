@@ -7,30 +7,23 @@ import type { Product, Plan } from '@/lib/types';
 
 // Helper to initialize Firebase Admin SDK only once
 const initializeAdminApp = () => {
-  console.log('[Admin SDK] Attempting to initialize...');
-
   if (admin.apps.length > 0) {
-    console.log('[Admin SDK] Already initialized.');
     return admin.app();
   }
 
   const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
   if (!serviceAccountString) {
-    console.error('[Admin SDK] CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY environment variable is NOT SET.');
-    throw new Error('Server configuration error: Service account key is missing.');
+    throw new Error('CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set.');
   }
-  console.log('[Admin SDK] Service account key environment variable is present.');
 
   try {
     const serviceAccount = JSON.parse(serviceAccountString);
-    console.log(`[Admin SDK] Successfully parsed service account key for project: ${serviceAccount.project_id}`);
     return admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
   } catch (e: any) {
-    console.error('[Admin SDK] CRITICAL: Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY. Make sure it is a valid JSON string with no newlines or extra characters.');
-    console.error(`[Admin SDK] Parser error: ${e.message}`);
-    throw new Error(`Failed to initialize admin app due to invalid service account key: ${e.message}`);
+    console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY. Make sure it is a valid JSON string.');
+    throw new Error(`Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY: ${e.message}`);
   }
 };
 
@@ -62,7 +55,6 @@ type CreatePixPaymentInput = z.infer<typeof CreatePixPaymentSchema>;
 
 export async function createPixPayment(input: CreatePixPaymentInput) {
   try {
-    console.log('[checkout.ts] Function entry point. Validating input...');
     const validation = CreatePixPaymentSchema.safeParse(input);
     if (!validation.success) {
       console.error('[checkout.ts] Validation failed:', validation.error.format());
@@ -70,44 +62,48 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     }
     
     const { uid, plans: selectedPlanIds, name, email, document, phone } = validation.data;
-    console.log(`[checkout.ts] Input validated for user: ${uid}`);
 
     const apiToken = process.env.PUSHINPAY_API_TOKEN;
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
 
     if (!apiToken || !siteUrl) {
-      console.error(`[checkout.ts] CRITICAL ERROR: Missing PUSHINPAY_API_TOKEN or NEXT_PUBLIC_SITE_URL`);
       return { error: 'Erro de configuração do servidor (faltando chaves de API).' };
     }
-    console.log('[checkout.ts] API token and Site URL are present.');
-
-    // Initialize Firebase Admin here to catch errors early
+    
+    // Initialize Firebase Admin to fetch plans securely
     const adminApp = initializeAdminApp();
     const db = admin.firestore();
-    console.log('[checkout.ts] Firebase Admin SDK initialized successfully.');
 
     const allPlans = await getPlansFromFirestoreAdmin(db);
-    console.log(`[checkout.ts] Fetched ${allPlans.length} total plans from Firestore.`);
-    
     const selectedPlans = allPlans.filter(p => selectedPlanIds.includes(p.id));
 
     if (selectedPlans.length !== selectedPlanIds.length) {
-      console.error('[checkout.ts] Invalid plan ID detected.');
       return { error: 'Um ou mais planos selecionados são inválidos.' };
     }
 
     const totalPrice = selectedPlans.reduce((sum, plan) => sum + plan.price, 0);
     const totalPriceInCents = Math.round(totalPrice * 100);
-    console.log(`[checkout.ts] Total price calculated: R$${totalPrice.toFixed(2)} (${totalPriceInCents} cents)`);
 
     const apiUrl = 'https://api.pushinpay.com.br/api/pix/cashIn';
     const webhookUrl = `${siteUrl}/api/webhook`;
     const expirationDate = new Date();
     expirationDate.setHours(expirationDate.getHours() + 1);
 
-    const paymentPayload = { name, email, document, phone, value: totalPriceInCents, webhook_url: webhookUrl, expires_at: expirationDate.toISOString() };
+    // Your brilliant idea in action: passing metadata to the payment provider.
+    const paymentPayload = {
+      name,
+      email,
+      document,
+      phone,
+      value: totalPriceInCents,
+      webhook_url: webhookUrl,
+      expires_at: expirationDate.toISOString(),
+      metadata: {
+        userId: uid,
+        planIds: selectedPlanIds,
+      }
+    };
     
-    console.log('[checkout.ts] Sending payload to PushinPay...');
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': `Bearer ${apiToken}` },
@@ -117,43 +113,16 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     const data = await response.json();
     
     if (!response.ok || !data.id) {
-        console.error('[checkout.ts] PushinPay API Error Response:', data);
         const apiErrorMessage = data.message || (data.errors ? JSON.stringify(data.errors) : `HTTP error! status: ${response.status}`);
         throw new Error(`Falha no provedor de pagamento: ${apiErrorMessage}`);
     }
     
-    const transactionId = data.id;
-    console.log(`[checkout.ts] PushinPay API success. Transaction ID: ${transactionId}`);
-
-    // --- CRITICAL STEP: WRITE TO FIRESTORE BEFORE RETURNING ---
-    try {
-      const pendingPaymentRef = db.collection('pending_payments').doc(transactionId);
-      const paymentData = {
-          userId: uid,
-          planIds: selectedPlanIds,
-          status: 'pending',
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          payerInfo: { name, email, document, phone }
-      };
-      
-      console.log(`[checkout.ts] ATTEMPTING to write pending_payment doc ID: ${transactionId}`);
-      await pendingPaymentRef.set(paymentData);
-      console.log(`✅ [checkout.ts] SUCCESS: pending_payment document created.`);
-
-      // --- ONLY RETURN QR CODE ON SUCCESS ---
-      const imageUrl = `data:image/png;base64,${data.qr_code_base64}`;
-      return {
-        qrcode_text: data.qr_code,
-        qrcode_image_url: imageUrl,
-      };
-
-    } catch (firestoreError: any) {
-        console.error(`---!!! [checkout.ts] CRITICAL FIRESTORE WRITE ERROR !!!---`);
-        const firestoreErrorMessage = `Code: ${firestoreError.code}. Message: ${firestoreError.message}`;
-        console.error(`Failed to write pending_payment document. Details: ${firestoreErrorMessage}`);
-        // This throw will be caught by the outer catch block
-        throw new Error(`Falha ao registrar o pedido no banco de dados. ${firestoreErrorMessage}`);
-    }
+    // Success! Return the QR Code data to the frontend. No DB write needed here.
+    const imageUrl = `data:image/png;base64,${data.qr_code_base64}`;
+    return {
+      qrcode_text: data.qr_code,
+      qrcode_image_url: imageUrl,
+    };
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
