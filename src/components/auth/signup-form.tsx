@@ -5,11 +5,17 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
+import {
+  createUserWithEmailAndPassword,
+  sendEmailVerification,
+  linkWithCredential,
+  EmailAuthProvider,
+} from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 import { auth, db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/lib/hooks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -24,6 +30,7 @@ export function SignupForm() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+  const { user: authUser } = useAuth();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -45,30 +52,53 @@ export function SignupForm() {
 
     setLoading(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
-      const user = userCredential.user;
+      // Se o usuário atual for anônimo, vinculamos a nova credencial à conta existente.
+      if (authUser?.isAnonymous && auth.currentUser) {
+        const credential = EmailAuthProvider.credential(values.email, values.password);
+        await linkWithCredential(auth.currentUser, credential);
+        
+        const upgradedUser = auth.currentUser;
+        await sendEmailVerification(upgradedUser);
 
-      // Always send verification email for new accounts.
-      await sendEmailVerification(user);
+        const isAdmin = upgradedUser.email === 'kawameller@gmail.com';
 
-      // Check if the signing up user is the designated admin.
-      const isAdmin = values.email === 'kawameller@gmail.com';
+        await setDoc(doc(db, 'users', upgradedUser.uid), {
+          uid: upgradedUser.uid,
+          email: upgradedUser.email,
+          subscriptions: {},
+          role: isAdmin ? 'admin' : 'user',
+          createdAt: serverTimestamp(),
+        });
 
-      // Create a user document in Firestore with the appropriate role.
-      await setDoc(doc(db, 'users', user.uid), {
-        uid: user.uid,
-        email: user.email,
-        subscriptions: {}, // Initialize with empty subscriptions
-        role: isAdmin ? 'admin' : 'user', // Set role based on email
-        createdAt: serverTimestamp(), // Use server timestamp for accuracy
-      });
+        toast({ 
+          title: 'Conta Criada!', 
+          description: 'Sua conta de visitante foi convertida. Enviamos um link de verificação para seu email.',
+          duration: 9000
+        });
 
-      toast({ 
-        title: 'Verifique seu Email!', 
-        description: 'Enviamos um link de verificação para o seu email. Por favor, clique no link para ativar sua conta antes de fazer o login.',
-        duration: 9000
-      });
-      // Redirect to the login page so they can log in after verifying.
+      } else {
+        // Fluxo padrão: criar uma conta totalmente nova.
+        const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
+        const user = userCredential.user;
+        await sendEmailVerification(user);
+
+        const isAdmin = values.email === 'kawameller@gmail.com';
+
+        await setDoc(doc(db, 'users', user.uid), {
+          uid: user.uid,
+          email: user.email,
+          subscriptions: {},
+          role: isAdmin ? 'admin' : 'user',
+          createdAt: serverTimestamp(),
+        });
+
+        toast({ 
+          title: 'Verifique seu Email!', 
+          description: 'Enviamos um link de verificação para o seu email. Por favor, clique no link para ativar sua conta antes de fazer o login.',
+          duration: 9000
+        });
+      }
+
       router.push('/login');
     } catch (error: any) {
       if (error.code === 'auth/email-already-in-use') {
@@ -86,6 +116,9 @@ export function SignupForm() {
             case 'auth/invalid-email':
               description = 'O formato do email é inválido.';
               break;
+            case 'auth/credential-already-in-use':
+                description = 'Este email já está associado a outra conta.';
+                break;
             case 'firestore/permission-denied':
               description = 'Não foi possível criar seu perfil. Verifique as permissões do banco de dados.';
               break;
