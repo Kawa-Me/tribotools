@@ -8,11 +8,12 @@ import { initialProducts } from '@/lib/plans';
 export async function POST(request: Request) {
   console.log('--- WEBHOOK RECEIVED ---');
   const webhookSource = request.headers.get('user-agent') || 'Unknown';
-  console.log(`Webhook received from: ${webhookSource}`);
+  const contentType = request.headers.get('content-type') || '';
+  console.log(`Webhook received from: ${webhookSource} with Content-Type: ${contentType}`);
 
   try {
-    // Step 1: Read the entire request body as plain text FIRST.
-    // This is the crucial step to prevent the framework from auto-parsing as JSON.
+    // 1. Ler o corpo da requisição como texto puro PRIMEIRO.
+    // Isso evita que o Next.js tente analisar como JSON automaticamente.
     const bodyText = await request.text();
     console.log('Raw Body Text successfully read:', bodyText);
 
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Empty request body' }, { status: 400 });
     }
 
-    // Step 2: Manually parse the form-data from the raw text.
+    // 2. Analisar o texto como um formulário, usando a lógica que você sugeriu.
     const formData = new URLSearchParams(bodyText);
     const eventType = formData.get('event');
     const pixDataString = formData.get('pix');
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
     
     console.log('Raw PIX Data String from form data:', pixDataString);
 
-    // Step 3: The 'pix' field is also URL-encoded. Parse it as a nested form.
+    // 3. Analisar os dados PIX aninhados, que também são um formulário.
     const pixParams = new URLSearchParams(pixDataString);
     const pixInfo: { [key: string]: any } = {};
     pixParams.forEach((value, key) => {
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
 
     console.log('Parsed PIX Info from nested form:', pixInfo);
     
-    // Step 4: Extract user email and plan IDs from the description field.
+    // 4. Extrair dados e continuar com a lógica de negócio.
     const description = pixInfo.description;
     if (!description || !description.includes('| Tribo Tools - Plans:[')) {
       console.error('Webhook Error: Description field is missing or invalid.', description);
@@ -70,7 +71,6 @@ export async function POST(request: Request) {
       throw new Error('Firestore database is not configured.');
     }
     
-    // Step 5: Find the user in Firestore by email.
     const usersRef = collection(db, 'users');
     const q = query(usersRef, where('email', '==', email));
     const querySnapshot = await getDocs(q);
@@ -85,7 +85,6 @@ export async function POST(request: Request) {
     const userData = userDoc.data();
     console.log(`Found user in Firestore: ${userDoc.id}`);
 
-    // Step 6: Update the user's subscriptions based on the purchase.
     const allPlans = initialProducts.flatMap(p => 
         p.plans.map(plan => ({...plan, productId: p.id, productName: p.name}))
     );
@@ -124,7 +123,6 @@ export async function POST(request: Request) {
         console.log(`User ${email} subscriptions updated successfully in Firestore.`);
     }
 
-    // Step 7: Forward to n8n webhook if the URL is configured.
     const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
     if (n8nWebhookUrl) {
       console.log('Forwarding to n8n webhook...');
