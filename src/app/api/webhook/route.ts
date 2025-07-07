@@ -1,4 +1,3 @@
-
 // src/app/api/webhook/route.ts
 import { NextResponse } from 'next/server';
 import * as admin from 'firebase-admin';
@@ -49,22 +48,37 @@ export async function POST(req: Request) {
   }
 
   try {
-    const rawBody = await req.json();
-    console.log('📦 Parsed BodyData:', rawBody);
+    // FIX: PushinPay sends webhooks as `form-data`, not `JSON`.
+    // We need to parse the body accordingly.
+    const formData = await req.formData();
+    const rawBody: { [key: string]: any } = Object.fromEntries(formData.entries());
 
-    const { status, metadata, id: transactionId, payer_name, payer_national_registration, value } = rawBody;
+    console.log('📦 Parsed Webhook Body (form-data):', rawBody);
+
+    // The 'metadata' field is sent as a JSON string within the form-data, so we need to parse it separately.
+    let parsedMetadata;
+    if (rawBody.metadata && typeof rawBody.metadata === 'string') {
+      try {
+        parsedMetadata = JSON.parse(rawBody.metadata);
+      } catch (e) {
+        console.error('Error parsing metadata from webhook:', rawBody.metadata, e);
+        return NextResponse.json({ error: 'Invalid metadata format in webhook payload.' }, { status: 400 });
+      }
+    }
+
+    const { status, id: transactionId, payer_name, payer_national_registration, value } = rawBody;
 
     if (status !== 'paid') {
       console.log(`Ignoring transaction ${transactionId} with status: ${status}`);
       return NextResponse.json({ success: true, message: `Event ignored, status is not 'paid'.` }, { status: 200 });
     }
 
-    if (!metadata || !metadata.userId || !metadata.planIds) {
-        console.error(`CRITICAL: Webhook for transaction ${transactionId} is missing metadata. Cannot grant access.`);
+    if (!parsedMetadata || !parsedMetadata.userId || !parsedMetadata.planIds) {
+        console.error(`CRITICAL: Webhook for transaction ${transactionId} is missing or has malformed metadata. Cannot grant access.`, parsedMetadata);
         return NextResponse.json({ error: 'Webhook payload missing required metadata.' }, { status: 400 });
     }
 
-    const { userId, planIds } = metadata;
+    const { userId, planIds } = parsedMetadata;
     console.log(`Processing user ID: ${userId} for plans: ${planIds.join(', ')}`);
     
     const userDocRef = db.collection('users').doc(userId);
