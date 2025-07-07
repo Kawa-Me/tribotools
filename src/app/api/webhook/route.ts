@@ -1,155 +1,161 @@
-
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import * as admin from 'firebase-admin';
-import type { Product } from '@/lib/types';
-import { URLSearchParams } from 'url';
+import type { Product, Plan } from '@/lib/types';
+import { addDays, Timestamp } from 'firebase/firestore';
 
-// Helper para inicializar o Firebase Admin SDK (garante uma única instância)
+// Helper to initialize Firebase Admin SDK only once
 const initializeAdminApp = () => {
   if (admin.apps.length > 0) {
     return admin.app();
   }
+
   const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
   if (!serviceAccountString) {
-    throw new Error('CRÍTICO: A variável de ambiente FIREBASE_SERVICE_ACCOUNT_KEY não está definida.');
+    throw new Error('CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set.');
   }
+
   try {
     const serviceAccount = JSON.parse(serviceAccountString);
     return admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
   } catch (e: any) {
-    console.error('Falha ao analisar FIREBASE_SERVICE_ACCOUNT_KEY. Verifique se é um JSON válido.');
-    throw new Error(`Falha ao analisar FIREBASE_SERVICE_ACCOUNT_KEY: ${e.message}`);
+    console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY. Make sure it is a valid JSON string.');
+    throw new Error(`Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY: ${e.message}`);
   }
 };
 
-// Helper para buscar os planos do Firestore usando o Admin SDK
-async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore) {
-  const productsSnapshot = await db.collection('products').get();
-  if (productsSnapshot.empty) return [];
-  const products = productsSnapshot.docs.map(doc => doc.data() as Product);
-  return products.flatMap(p => 
-    p.plans.map(plan => ({...plan, productId: p.id, productName: p.name}))
-  );
+// Helper to get Plans using the Admin SDK
+async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore): Promise<Plan[]> {
+  try {
+    const productsSnapshot = await db.collection('products').get();
+    if (productsSnapshot.empty) return [];
+    const products = productsSnapshot.docs.map(doc => doc.data() as Product);
+    return products.flatMap(p => 
+      p.plans.map(plan => ({...plan, productId: p.id, productName: p.name}))
+    );
+  } catch (error: any) {
+    console.error("[webhook] Error fetching plans with Admin SDK:", error);
+    throw new Error("Could not fetch plans from database.", { cause: error });
+  }
 }
 
-export async function POST(req: NextRequest) {
-    console.log('✅ Webhook do App Router está ativo e processando uma requisição.');
-  
-    let db: admin.firestore.Firestore;
-    try {
-      initializeAdminApp();
-      db = admin.firestore();
-    } catch(error: any) {
-      console.error('Erro no Webhook: Não foi possível inicializar o banco de dados do Admin.', error.message);
-      return NextResponse.json({ error: 'Erro Interno do Servidor: Serviço de banco de dados não configurado.' }, { status: 500 });
+// Function to notify your automation system (n8n)
+async function notifyAutomation(data: any) {
+    const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
+    if (!n8nWebhookUrl) {
+        console.warn('N8N_WEBHOOK_URL is not set. Skipping notification.');
+        return;
     }
 
     try {
+        await fetch(n8nWebhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+        console.log('Successfully notified n8n webhook.');
+    } catch (error) {
+        console.error('---!!! Error notifying n8n webhook !!!---', error);
+    }
+}
+
+// Main handler for the POST request
+export async function POST(req: Request) {
+    try {
         const bodyText = await req.text();
         const params = new URLSearchParams(bodyText);
-        const rawBody: { [key:string]: any } = Object.fromEntries(params.entries());
+        
+        const eventId = params.get('id');
+        const eventType = params.get('type');
 
-        console.log('📦 Corpo do Webhook analisado (x-www-form-urlencoded):', rawBody);
-
-        let parsedMetadata;
-        if (rawBody.metadata && typeof rawBody.metadata === 'string') {
-            try {
-                parsedMetadata = JSON.parse(rawBody.metadata);
-            } catch (e) {
-                console.error('Erro ao analisar os metadados do webhook:', rawBody.metadata, e);
-                return NextResponse.json({ error: 'Formato de metadados inválido no corpo do webhook.' }, { status: 400 });
-            }
+        if (!eventId || !eventType) {
+             return NextResponse.json({ error: 'Missing id or type in webhook payload' }, { status: 400 });
         }
 
-        const { status, id: transactionId, payer_name, payer_national_registration, value } = rawBody;
-
-        if (status !== 'paid') {
-            console.log(`Ignorando transação ${transactionId} com status: ${status}`);
-            return NextResponse.json({ success: true, message: `Evento ignorado, status não é 'paid'.` });
+        // We only care about successful PIX payments
+        if (eventType !== 'pix.transaction.paid') {
+            return NextResponse.json({ message: 'Event type not handled, skipping.' }, { status: 200 });
         }
 
-        if (!parsedMetadata || !parsedMetadata.userId || !parsedMetadata.planIds) {
-            console.error(`CRÍTICO: Webhook para transação ${transactionId} sem metadados ou com metadados malformados. Acesso não pode ser concedido.`, parsedMetadata);
-            return NextResponse.json({ error: 'Corpo do webhook não contém os metadados necessários.' }, { status: 400 });
+        const apiToken = process.env.PUSHINPAY_API_TOKEN;
+        if (!apiToken) {
+            throw new Error('PUSHINPAY_API_TOKEN is not configured on the server.');
+        }
+        
+        // Fetch the full transaction details from PushinPay
+        const transactionUrl = `https://api.pushinpay.com.br/api/pix/cashIn/${eventId}`;
+        const transactionResponse = await fetch(transactionUrl, {
+            headers: { 'Authorization': `Bearer ${apiToken}`, 'Accept': 'application/json' },
+        });
+
+        if (!transactionResponse.ok) {
+            const errorBody = await transactionResponse.text();
+            throw new Error(`Failed to fetch transaction details from PushinPay: ${transactionResponse.status} ${errorBody}`);
         }
 
-        const { userId, planIds } = parsedMetadata;
-        console.log(`Processando usuário ID: ${userId} para planos: ${planIds.join(', ')}`);
+        const transaction = await transactionResponse.json();
+
+        // The metadata we smartly sent earlier
+        const metadata = transaction.metadata;
+        if (!metadata || !metadata.userId || !metadata.planIds) {
+            throw new Error(`Webhook for transaction ${eventId} is missing required metadata.`);
+        }
+
+        const { userId, planIds } = metadata;
+
+        const adminApp = initializeAdminApp();
+        const db = admin.firestore();
+
+        const allPlans = await getPlansFromFirestoreAdmin(db);
+        const purchasedPlans = allPlans.filter(p => planIds.includes(p.id));
+
+        if (purchasedPlans.length === 0) {
+            throw new Error(`No valid plans found for plan IDs: ${planIds.join(', ')}`);
+        }
         
         const userDocRef = db.collection('users').doc(userId);
-        const userDocSnap = await userDocRef.get();
+        const userDoc = await userDoc.get();
 
-        if (!userDocSnap.exists) {
-            console.error(`Usuário com ID ${userId} da transação ${transactionId} não encontrado.`);
-            return NextResponse.json({ error: 'Usuário não encontrado.' }, { status: 404 });
-        }
-        
-        const userData = userDocSnap.data()!;
-        console.log(`Usuário ${userData.email} encontrado para concessão de acesso.`);
-        
-        const allPlans = await getPlansFromFirestoreAdmin(db);
-        
-        if (allPlans.length === 0) {
-            console.error(`Não foi possível buscar nenhum plano do Firestore. Abortando ativação para usuário ${userId}.`);
-            return NextResponse.json({ error: 'Não foi possível buscar planos do banco de dados.' }, { status: 500 });
+        if (!userDoc.exists) {
+            console.error(`User with UID ${userId} not found in Firestore. Cannot grant access.`);
+            // Acknowledge the webhook to prevent retries, but log the severe issue.
+            return NextResponse.json({ message: 'User not found, but webhook acknowledged.' }, { status: 200 });
         }
 
-        const newSubscriptions = { ...(userData.subscriptions || {}) };
-        let changesMade = false;
+        const userData = userDoc.data()!;
+        const existingSubscriptions = userData.subscriptions || {};
 
-        for (const planId of planIds) {
-            const plan = allPlans.find(p => p.id === planId);
-            if (plan) {
-                const expiresAt = new Date();
-                expiresAt.setDate(expiresAt.getDate() + plan.days);
-
-                newSubscriptions[plan.productId] = {
+        // Update subscriptions
+        purchasedPlans.forEach(plan => {
+            const now = new Date();
+            const currentSub = existingSubscriptions[(plan as any).productId];
+            const currentExpiry = currentSub?.expiresAt?.toDate() > now ? currentSub.expiresAt.toDate() : now;
+            
+            existingSubscriptions[(plan as any).productId] = {
                 status: 'active',
                 plan: plan.id,
                 startedAt: admin.firestore.FieldValue.serverTimestamp(),
-                expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
-                };
-                changesMade = true;
-                console.log(`Assinatura preparada para produto '${plan.productName}' no plano '${plan.name}' para o usuário ${userId}.`);
-            } else {
-                console.warn(`Plano com ID ${planId} dos metadados não encontrado nos planos atuais. Pode ter sido excluído.`);
-            }
-        }
+                expiresAt: Timestamp.fromDate(addDays(currentExpiry, plan.days)),
+            };
+        });
 
-        if (changesMade) {
-            await userDocRef.update({ subscriptions: newSubscriptions });
-            console.log(`✅ Acesso concedido e registro do usuário ${userId} atualizado.`);
-        }
+        await db.runTransaction(async (t) => {
+            t.update(userDocRef, { subscriptions: existingSubscriptions });
+        });
 
-        const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
-        if (n8nWebhookUrl) {
-            console.log('🚀 Enviando para o webhook n8n...');
-            fetch(n8nWebhookUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                event: 'payment_success',
-                email: userData.email,
-                name: payer_name || userData.name,
-                phone: userData.phone,
-                document: payer_national_registration || userData.document,
-                planIds: planIds,
-                amount: Number(value) / 100,
-                paymentDate: new Date().toISOString(),
-                transactionId: transactionId,
-                }),
-            }).catch(err => {
-                console.error('❌ Falha ao enviar dados para n8n:', err);
-            });
-        }
+        // Notify n8n for content liberation
+        await notifyAutomation({
+            email: userData.email,
+            name: userData.name || 'Usuário',
+            purchasedPlans: purchasedPlans.map(p => ({ id: p.id, name: p.name, productName: (p as any).productName })),
+            status: 'paid'
+        });
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true, message: 'User subscription updated.' }, { status: 200 });
+
     } catch (error: any) {
-        console.error('---!!! ERRO FATAL NO WEBHOOK !!!---');
-        console.error(error);
-        const errorMessage = error.message || 'Ocorreu um erro desconhecido.';
-        return NextResponse.json({ error: 'Erro Interno do Servidor', details: errorMessage }, { status: 500 });
+        console.error('---!!! FATAL WEBHOOK ERROR !!!---', error);
+        return NextResponse.json({ error: "Internal Server Error", details: error.message }, { status: 500 });
     }
 }

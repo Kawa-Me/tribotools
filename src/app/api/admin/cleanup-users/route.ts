@@ -1,6 +1,6 @@
-
 import { NextResponse } from 'next/server';
 import * as admin from 'firebase-admin';
+import { headers } from 'next/headers';
 
 // Helper to initialize Firebase Admin SDK only once
 const initializeAdminApp = () => {
@@ -24,63 +24,75 @@ const initializeAdminApp = () => {
   }
 };
 
-export async function POST(req: Request) {
+export async function POST() {
     try {
         initializeAdminApp();
-        const auth = admin.auth();
 
-        const authorization = req.headers.get('Authorization');
-        if (!authorization?.startsWith('Bearer ')) {
-            return NextResponse.json({ error: 'Unauthorized: Missing or invalid token.' }, { status: 401 });
+        const headersList = headers();
+        const authorization = headersList.get('authorization');
+
+        if (!authorization || !authorization.startsWith('Bearer ')) {
+            return NextResponse.json({ error: 'Unauthorized: Missing or invalid token' }, { status: 401 });
         }
-        const idToken = authorization.split('Bearer ')[1];
         
-        const userDoc = await auth.verifyIdToken(idToken, true);
+        const token = authorization.split('Bearer ')[1];
+        const decodedToken = await admin.auth().verifyIdToken(token);
+        
+        const userRecord = await admin.auth().getUser(decodedToken.uid);
+        const customClaims = userRecord.customClaims || {};
 
-        // This check is critical. We need to look up the user in our DB to confirm their role.
-        const firestore = admin.firestore();
-        const userDbRecord = await firestore.collection('users').doc(userDoc.uid).get();
-        
-        if (!userDbRecord.exists || userDbRecord.data()?.role !== 'admin') {
-            return NextResponse.json({ error: 'Forbidden: User is not an admin.' }, { status: 403 });
+        if (customClaims.role !== 'admin') {
+             return NextResponse.json({ error: 'Forbidden: User is not an admin' }, { status: 403 });
         }
 
-        // --- Cleanup Logic ---
-        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-        let uidsToDelete: string[] = [];
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        let allUsers: admin.auth.UserRecord[] = [];
         let pageToken: string | undefined;
 
-        console.log("Starting cleanup of anonymous users created before:", oneHourAgo);
-
+        // List all users from Firebase Auth
         do {
-            const listUsersResult = await auth.listUsers(1000, pageToken);
-            const anonymousUsers = listUsersResult.users.filter(user => 
-                user.providerData.length === 0 && user.metadata.creationTime < oneHourAgo
-            );
-            
-            uidsToDelete.push(...anonymousUsers.map(user => user.uid));
+            const listUsersResult = await admin.auth().listUsers(1000, pageToken);
+            allUsers = allUsers.concat(listUsersResult.users);
             pageToken = listUsersResult.pageToken;
         } while (pageToken);
 
-        if (uidsToDelete.length === 0) {
-            return NextResponse.json({ success: true, deletedCount: 0, message: 'No old anonymous users found.' });
-        }
-        
-        console.log(`Found ${uidsToDelete.length} anonymous users to delete.`);
-        const deleteResult = await auth.deleteUsers(uidsToDelete);
-        
-        if (deleteResult.failureCount > 0) {
-             console.error("Failed to delete some users:", deleteResult.errors);
+        // Filter for anonymous users created more than an hour ago
+        const usersToDelete = allUsers.filter(user => {
+            const creationTime = new Date(user.metadata.creationTime);
+            const isAnonymous = user.providerData.length === 0;
+            return isAnonymous && creationTime < oneHourAgo;
+        });
+
+        if (usersToDelete.length === 0) {
+            return NextResponse.json({ deletedCount: 0, message: 'No old anonymous users to delete.' }, { status: 200 });
         }
 
-        console.log(`Successfully deleted ${deleteResult.successCount} users.`);
-        return NextResponse.json({ success: true, deletedCount: deleteResult.successCount, failureCount: deleteResult.failureCount });
+        const uidsToDelete = usersToDelete.map(user => user.uid);
+        
+        // Firebase Admin SDK's deleteUsers can take a maximum of 1000 UIDs at a time.
+        // We'll chunk the array to be safe.
+        const chunkSize = 1000;
+        let totalDeletedCount = 0;
+
+        for (let i = 0; i < uidsToDelete.length; i += chunkSize) {
+            const chunk = uidsToDelete.slice(i, i + chunkSize);
+            const deleteResult = await admin.auth().deleteUsers(chunk);
+            totalDeletedCount += deleteResult.successCount;
+            if (deleteResult.failureCount > 0) {
+                 console.error('Failed to delete some users:', deleteResult.errors);
+            }
+        }
+        
+        return NextResponse.json({ deletedCount: totalDeletedCount }, { status: 200 });
 
     } catch (error: any) {
-        console.error('---!!! FATAL ERROR during anonymous user cleanup !!!---', error);
-        if (error.code === 'auth/id-token-expired' || error.code === 'auth/argument-error') {
-            return NextResponse.json({ error: 'Unauthorized: Invalid token.' }, { status: 401 });
+        console.error('---!!! Cleanup Users Error !!!---', error);
+        if (error.code === 'auth/id-token-expired') {
+            return NextResponse.json({ error: 'Token expired, please log in again.' }, { status: 401 });
         }
-        return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
+         if (error.code === 'auth/argument-error') {
+            return NextResponse.json({ error: 'Invalid token.' }, { status: 401 });
+        }
+        return NextResponse.json({ error: `Internal Server Error: ${error.message}` }, { status: 500 });
     }
 }
