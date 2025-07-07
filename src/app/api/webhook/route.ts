@@ -1,51 +1,34 @@
-
 'use server';
 import { NextResponse } from 'next/server';
 
-// This is a low-level function to read the request body as raw text.
-// It bypasses any automatic parsing by Next.js/Vercel.
-async function streamToText(stream: ReadableStream<Uint8Array>) {
-    const reader = stream.getReader();
-    const chunks = [];
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-            break;
-        }
-        chunks.push(value);
-    }
-    const bodyUint8Array = new Uint8Array(chunks.reduce((acc, chunk) => acc + chunk.length, 0));
-    let offset = 0;
-    for (const chunk of chunks) {
-        bodyUint8Array.set(chunk, offset);
-        offset += chunk.length;
-    }
-    return new TextDecoder().decode(bodyUint8Array);
-}
-
+// This is a diagnostic step to inspect headers without parsing the body.
 export async function POST(request: Request) {
   try {
-    // We use the raw request body stream to avoid automatic JSON parsing errors.
-    if (!request.body) {
-        throw new Error("Request body is missing.");
-    }
-    const bodyText = await streamToText(request.body);
+    const headers: { [key: string]: string } = {};
+    request.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
 
-    // Now, we return the raw text we received. This allows us to see exactly
-    // what PushInPay is sending, without any errors.
-    return NextResponse.json({
+    // This response does not touch the request body, so it should not fail.
+    // It will show us exactly what headers are being sent by the payment provider.
+    return NextResponse.json(
+      {
         success: true,
-        message: 'Diagnostic webhook received successfully. Raw body attached.',
-        body: bodyText,
-    }, { status: 200 });
-
+        message: 'Diagnostic (Headers) webhook received successfully.',
+        headers: headers,
+      },
+      { status: 200 }
+    );
   } catch (error: any) {
     console.error('---!!! FATAL WEBHOOK DIAGNOSTIC ERROR !!!---');
     console.error(`Error Details: ${error.message}`);
     console.error(`Stack Trace: ${error.stack}`);
-    return NextResponse.json({ 
-        error: 'Internal Server Error during diagnostic.', 
-        details: error.message 
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: 'Internal Server Error during diagnostic.',
+        details: error.message,
+      },
+      { status: 500 }
+    );
   }
 }
