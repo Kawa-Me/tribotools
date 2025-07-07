@@ -8,7 +8,6 @@ import { Buffer } from 'buffer';
 
 // Desabilita o body parser padrão do Next.js para esta rota,
 // permitindo que leiamos o corpo da requisição manualmente.
-// Esta é a correção para o erro de timeout (cURL error 28).
 export const config = {
   api: {
     bodyParser: false,
@@ -93,6 +92,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const transactionId = body.id as string;
+    // CORREÇÃO: Esperar uma string nos metadados e fazer o parse.
     const metadataString = body.metadata as string | undefined;
 
     if (!metadataString) {

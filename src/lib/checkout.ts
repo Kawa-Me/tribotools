@@ -89,7 +89,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     const expirationDate = new Date();
     expirationDate.setHours(expirationDate.getHours() + 1);
 
-    // Estrutura de metadados corrigida para o formato de objeto JSON.
+    // CORREÇÃO: Enviar metadados como uma string JSON para garantir compatibilidade.
     const paymentPayload = {
       name,
       email,
@@ -98,10 +98,10 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
       value: totalPriceInCents,
       webhook_url: webhookUrl,
       expires_at: expirationDate.toISOString(),
-      metadata: {
+      metadata: JSON.stringify({ // Stringify the metadata object
         userId: uid,
         planIds: selectedPlanIds,
-      }
+      })
     };
     
     const response = await fetch(apiUrl, {
