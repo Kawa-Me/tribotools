@@ -1,31 +1,44 @@
 // src/pages/api/webhook.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
+import getRawBody from 'raw-body';
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, writeBatch, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, query, where, writeBatch, Timestamp } from 'firebase/firestore';
 import { initialProducts } from '@/lib/plans';
 
 export const config = {
   api: {
-    bodyParser: false, // ESSENCIAL: evita o erro de JSON parse
+    bodyParser: false, // desativa o bodyParser para podermos ler o body cru
   },
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') return res.status(405).end('Método não permitido');
+  if (req.method !== 'POST') return res.status(405).end('Method Not Allowed');
 
   try {
+    console.log('--- WEBHOOK RECEIVED ---');
+
     const rawBody = await getRawBody(req);
     const contentType = req.headers['content-type'] || '';
 
-    let formData: URLSearchParams;
-    if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('text/plain')) {
-      formData = new URLSearchParams(rawBody.toString('utf-8'));
+    let bodyData: any = null;
+
+    if (contentType.includes('application/json')) {
+      bodyData = JSON.parse(rawBody.toString());
+    } else if (
+      contentType.includes('application/x-www-form-urlencoded') ||
+      contentType.includes('text/plain')
+    ) {
+      const formData = new URLSearchParams(rawBody.toString());
+      bodyData = {};
+      for (const [key, value] of formData.entries()) {
+        bodyData[key] = value;
+      }
     } else {
-      return res.status(415).json({ error: `Unsupported content-type: ${contentType}` });
+      return res.status(400).json({ error: 'Unsupported content type' });
     }
 
-    const eventType = formData.get('event');
-    const pixDataString = formData.get('pix');
+    const eventType = bodyData.event;
+    const pixDataString = bodyData.pix;
 
     if (eventType !== 'pix.cash-in.received') {
       return res.status(200).json({ success: true, message: 'Evento ignorado' });
@@ -36,10 +49,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const pixParams = new URLSearchParams(pixDataString);
-    const pixInfo: Record<string, any> = {};
-    pixParams.forEach((value, key) => {
+    const pixInfo: Record<string, string> = {};
+    for (const [key, value] of pixParams.entries()) {
       pixInfo[key] = value;
-    });
+    }
 
     const description = pixInfo.description;
     if (!description || !description.includes('| Tribo Tools - Plans:[')) {
@@ -52,11 +65,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const phone = pixInfo.phone;
     const planIdsPart = description.substring(description.indexOf('[') + 1, description.indexOf(']'));
     const selectedPlanIds = planIdsPart.split(',');
-
-    if (!db) {
-        console.error('Erro fatal: Conexão com o Firestore não está disponível.');
-        return res.status(500).json({ error: 'Erro de configuração do servidor (DB)' });
-    }
 
     const usersRef = collection(db, 'users');
     const q = query(usersRef, where('email', '==', email));
@@ -104,6 +112,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await batch.commit();
     }
 
+    // 🔁 Enviar para o n8n
     const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
     if (n8nWebhookUrl) {
       fetch(n8nWebhookUrl, {
@@ -116,27 +125,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           phone,
           document,
           planIds: selectedPlanIds,
-          amount: pixInfo.value ? pixInfo.value / 100 : 0,
+          amount: pixInfo.value ? Number(pixInfo.value) / 100 : 0,
           paymentDate: new Date().toISOString(),
         }),
-      }).catch((err) => console.error('Erro ao enviar ao n8n:', err));
+      }).catch(err => console.error('Erro ao enviar para o n8n:', err));
     }
 
-    return res.status(200).json({ success: true, message: 'Webhook processado com sucesso.' });
-  } catch (err: any) {
-    console.error('Erro fatal:', err);
-    return res.status(500).json({ error: 'Erro interno', details: err.message });
+    return res.status(200).json({ success: true });
+  } catch (error: any) {
+    console.error('---!!! FATAL WEBHOOK ERROR !!!---');
+    console.error(error);
+    return res.status(500).json({ error: 'Erro interno do servidor', details: error.message });
   }
-}
-
-import { IncomingMessage } from 'http';
-import { Buffer } from 'buffer';
-
-function getRawBody(req: IncomingMessage): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: any[] = [];
-    req.on('data', chunk => chunks.push(chunk));
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', err => reject(err));
-  });
 }
