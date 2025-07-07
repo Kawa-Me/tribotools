@@ -122,10 +122,9 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     // --- Create pending payment record and update user info ---
     const batch = writeBatch(db);
 
-    // This convenience update is removed to diagnose the PERMISSION_DENIED error.
-    // It's possible the user's rules don't allow updating their own profile.
-    // const userRef = doc(db, 'users', uid);
-    // batch.update(userRef, { name, document, phone });
+    // Update user info for future checkouts
+    const userRef = doc(db, 'users', uid);
+    batch.update(userRef, { name, document, phone });
 
     const pendingPaymentRef = doc(db, 'pending_payments', transactionId);
     batch.set(pendingPaymentRef, {
