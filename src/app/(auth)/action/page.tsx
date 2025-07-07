@@ -38,16 +38,16 @@ function AuthActionHandler() {
   });
 
   useEffect(() => {
-    if (!mode || !actionCode) {
-      setMessage('Parâmetros inválidos na URL. O link pode estar quebrado.');
-      setStatus('error');
-      return;
-    }
-
     if (!auth) {
         setMessage('Serviço de autenticação indisponível. Verifique a configuração do Firebase.');
         setStatus('error');
         return;
+    }
+
+    if (!mode || !actionCode) {
+      setMessage('Parâmetros inválidos na URL. O link pode estar quebrado ou incompleto.');
+      setStatus('error');
+      return;
     }
 
     switch (mode) {
@@ -58,7 +58,7 @@ function AuthActionHandler() {
         handleResetPassword(actionCode);
         break;
       default:
-        setMessage('Tipo de ação desconhecido.');
+        setMessage(`Ação desconhecida: ${mode}. O link pode ser inválido.`);
         setStatus('error');
         break;
     }
@@ -79,7 +79,7 @@ function AuthActionHandler() {
   const handleResetPassword = async (code: string) => {
     try {
       await verifyPasswordResetCode(auth, code);
-      setMessage('O código é válido. Por favor, insira sua nova senha.');
+      setMessage('Código validado. Por favor, insira sua nova senha.');
       setStatus('resetPassword');
     } catch (error) {
       console.error('Password reset code verification error:', error);
