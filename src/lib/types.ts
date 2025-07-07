@@ -19,6 +19,8 @@ export interface Lesson {
   accessPassword?: string;
   cookies?: LessonCookie[];
   isActive?: boolean;
+  hasCredentials?: boolean;
+  hasCookies?: boolean;
 }
 
 export interface Module {

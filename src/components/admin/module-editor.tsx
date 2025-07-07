@@ -187,25 +187,31 @@ export function ModuleEditor() {
       const batch = writeBatch(db);
       modules.forEach(mod => {
           const moduleRef = doc(db, 'modules', mod.id);
-          
-          // The component holds the React component for the icon, but Firestore needs the string name.
-          // This is a bit of a workaround because the state holds the component.
           const iconNameToSave = typeof mod.icon === 'string' ? mod.icon : (mod.icon as any).displayName || 'HelpCircle';
 
           const dataToSave = {
               ...mod,
               icon: iconNameToSave,
-              lessons: mod.lessons.map(lesson => ({
-                ...lesson,
-                // THIS IS THE FIX: Ensure these fields are explicitly saved as empty strings.
-                // This prevents Firestore from keeping the old value if the new value is empty/falsy.
-                accessEmail: lesson.accessEmail || "",
-                accessPassword: lesson.accessPassword || "",
-                imageUrl: lesson.imageUrl || '',
-                accessUrl: lesson.accessUrl || '',
-                buttonText: lesson.buttonText || '',
-                cookies: lesson.cookies || [],
-              }))
+              lessons: mod.lessons.map(lesson => {
+                const cleanedLesson = { ...lesson };
+
+                // Clean up data based on switches
+                if (!cleanedLesson.hasCredentials) {
+                    cleanedLesson.accessEmail = '';
+                    cleanedLesson.accessPassword = '';
+                }
+                if (!cleanedLesson.hasCookies) {
+                    cleanedLesson.cookies = [];
+                }
+                
+                // Ensure other fields are not undefined
+                return {
+                    ...cleanedLesson,
+                    imageUrl: cleanedLesson.imageUrl || '',
+                    accessUrl: cleanedLesson.accessUrl || '',
+                    buttonText: cleanedLesson.buttonText || '',
+                };
+              })
           };
 
           batch.set(moduleRef, dataToSave);
@@ -234,7 +240,6 @@ export function ModuleEditor() {
   const handleDeleteModule = async (moduleId: string) => {
     if (!window.confirm("Tem certeza que deseja deletar este módulo? Esta ação não pode ser desfeita.")) return;
 
-    // Optimistically update UI
     setModules((prevModules) => prevModules.filter((mod) => mod.id !== moduleId));
     
     if (!db) {
@@ -271,6 +276,8 @@ export function ModuleEditor() {
                   accessPassword: '',
                   cookies: [],
                   isActive: true,
+                  hasCredentials: false,
+                  hasCookies: false,
                 },
               ],
             }
@@ -525,52 +532,74 @@ export function ModuleEditor() {
                                 <Textarea value={lesson.content} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'content', e.target.value)} placeholder="URL de embed do vídeo (ex: https://www.youtube.com/embed/...)" />
                             ) : (
                                 <div className="space-y-4 pt-2">
-                                    <div className="space-y-2 pt-2 border-t">
-                                        <Label className="text-xs text-muted-foreground">Dados de Acesso</Label>
-                                        <Input value={lesson.accessUrl || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'accessUrl', e.target.value)} placeholder="URL de Acesso" />
-                                        <Input value={lesson.buttonText || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'buttonText', e.target.value)} placeholder="Texto do Botão (ex: Acessar Ferramenta)" />
-                                        <Input value={lesson.accessEmail || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'accessEmail', e.target.value)} placeholder="Email / Usuário de Acesso" />
-                                        <div className="relative">
-                                            <Input
-                                                type={showPasswords[lesson.id] ? 'text' : 'password'}
-                                                value={lesson.accessPassword || ''}
-                                                onChange={(e) => handleLessonChange(mod.id, lesson.id, 'accessPassword', e.target.value)}
-                                                placeholder="Senha de Acesso"
-                                            />
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2"
-                                                onClick={() => setShowPasswords(prev => ({...prev, [lesson.id]: !prev[lesson.id]}))}
-                                            >
-                                                {showPasswords[lesson.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                            </Button>
-                                        </div>
+                                    <div className="flex items-center space-x-2 pt-2 border-t">
+                                      <Switch
+                                        id={`hasCredentials-${lesson.id}`}
+                                        checked={lesson.hasCredentials ?? false}
+                                        onCheckedChange={(checked) => handleLessonChange(mod.id, lesson.id, 'hasCredentials', checked)}
+                                      />
+                                      <Label htmlFor={`hasCredentials-${lesson.id}`}>Ativar Login/Senha</Label>
                                     </div>
 
-                                    <div className="space-y-2 pt-2 border-t">
-                                        <Label className="text-xs text-muted-foreground">Cookies de Acesso (até 7)</Label>
-                                        {(lesson.cookies || []).map((cookie, cookieIndex) => (
-                                            <div key={cookieIndex} className="flex items-start gap-2">
-                                                <Textarea
-                                                    placeholder={`Valor do Cookie ${cookieIndex + 1}`}
-                                                    value={cookie.value}
-                                                    onChange={(e) => handleCookieChange(mod.id, lesson.id, cookieIndex, 'value', e.target.value)}
-                                                    rows={3}
-                                                />
-                                                <Button variant="destructive" size="icon" className="shrink-0" onClick={() => handleDeleteCookie(mod.id, lesson.id, cookieIndex)}>
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        ))}
-                                        {(!lesson.cookies || lesson.cookies.length < 7) && (
-                                            <Button variant="outline" size="sm" className="mt-2" onClick={() => handleAddCookie(mod.id, lesson.id)}>
-                                                <PlusCircle className="mr-2 h-4 w-4" />
-                                                Adicionar Cookie
-                                            </Button>
-                                        )}
+                                    {lesson.hasCredentials && (
+                                      <div className="space-y-2 pt-2 border-t">
+                                          <Label className="text-xs text-muted-foreground">Dados de Acesso</Label>
+                                          <Input value={lesson.accessUrl || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'accessUrl', e.target.value)} placeholder="URL de Acesso" />
+                                          <Input value={lesson.buttonText || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'buttonText', e.target.value)} placeholder="Texto do Botão (ex: Acessar Ferramenta)" />
+                                          <Input value={lesson.accessEmail || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'accessEmail', e.target.value)} placeholder="Email / Usuário de Acesso" />
+                                          <div className="relative">
+                                              <Input
+                                                  type={showPasswords[lesson.id] ? 'text' : 'password'}
+                                                  value={lesson.accessPassword || ''}
+                                                  onChange={(e) => handleLessonChange(mod.id, lesson.id, 'accessPassword', e.target.value)}
+                                                  placeholder="Senha de Acesso"
+                                              />
+                                              <Button
+                                                  type="button"
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2"
+                                                  onClick={() => setShowPasswords(prev => ({...prev, [lesson.id]: !prev[lesson.id]}))}
+                                              >
+                                                  {showPasswords[lesson.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                              </Button>
+                                          </div>
+                                      </div>
+                                    )}
+
+                                    <div className="flex items-center space-x-2 pt-2 border-t">
+                                      <Switch
+                                        id={`hasCookies-${lesson.id}`}
+                                        checked={lesson.hasCookies ?? false}
+                                        onCheckedChange={(checked) => handleLessonChange(mod.id, lesson.id, 'hasCookies', checked)}
+                                      />
+                                      <Label htmlFor={`hasCookies-${lesson.id}`}>Ativar Cookies</Label>
                                     </div>
+                                    
+                                    {lesson.hasCookies && (
+                                      <div className="space-y-2 pt-2 border-t">
+                                          <Label className="text-xs text-muted-foreground">Cookies de Acesso (até 7)</Label>
+                                          {(lesson.cookies || []).map((cookie, cookieIndex) => (
+                                              <div key={cookieIndex} className="flex items-start gap-2">
+                                                  <Textarea
+                                                      placeholder={`Valor do Cookie ${cookieIndex + 1}`}
+                                                      value={cookie.value}
+                                                      onChange={(e) => handleCookieChange(mod.id, lesson.id, cookieIndex, 'value', e.target.value)}
+                                                      rows={3}
+                                                  />
+                                                  <Button variant="destructive" size="icon" className="shrink-0" onClick={() => handleDeleteCookie(mod.id, lesson.id, cookieIndex)}>
+                                                      <Trash2 className="h-4 w-4" />
+                                                  </Button>
+                                              </div>
+                                          ))}
+                                          {(!lesson.cookies || lesson.cookies.length < 7) && (
+                                              <Button variant="outline" size="sm" className="mt-2" onClick={() => handleAddCookie(mod.id, lesson.id)}>
+                                                  <PlusCircle className="mr-2 h-4 w-4" />
+                                                  Adicionar Cookie
+                                              </Button>
+                                          )}
+                                      </div>
+                                    )}
                                     
                                     <div className="space-y-2 pt-2 border-t">
                                         <Label className="text-xs text-muted-foreground">Notas Adicionais</Label>
