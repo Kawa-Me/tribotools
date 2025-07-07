@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useAuth } from '@/lib/hooks';
@@ -20,7 +19,7 @@ export default function DashboardPage() {
           {[...Array(2)].map((_, i) => (
             <div key={i} className="space-y-6">
               <Skeleton className="h-8 w-1/3" />
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {[...Array(4)].map((_, j) => (
                   <Skeleton key={j} className="h-[240px] w-full rounded-lg" />
                 ))}
@@ -42,11 +41,11 @@ export default function DashboardPage() {
           return (
             (module.lessons && module.lessons.length > 0) && (
               <div key={module.id} className="space-y-6">
-                <h2 className="text-2xl font-bold font-headline flex items-center gap-3 text-primary">
+                <h2 className="text-2xl font-bold font-headline flex items-center gap-3 text-primary mb-2">
                     <module.icon className="h-6 w-6" />
                     {module.title}
                 </h2>
-                <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {module.lessons.map((lesson) => (
                     <ToolCard key={lesson.id} lesson={lesson} moduleId={module.id} isLocked={!hasAccess} />
                   ))}

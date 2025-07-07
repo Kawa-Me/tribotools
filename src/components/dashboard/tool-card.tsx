@@ -23,14 +23,14 @@ export function ToolCard({ lesson, moduleId, isLocked }: ToolCardProps) {
   const cardContent = (
     <Card
       className={cn(
-        'group relative flex w-full flex-col overflow-hidden rounded-md border-2 border-transparent bg-[#111111] transition-all duration-300',
-        canAccess && 'hover:border-neon-green hover:shadow-lg hover:shadow-neon-green/10',
+        'group relative flex w-full flex-col overflow-hidden rounded-md border-2 bg-card/60 transition-all duration-300',
+        canAccess ? 'border-transparent hover:border-primary hover:shadow-lg hover:shadow-primary/20' : 'border-transparent',
         isUnlocked && !isToolActive && 'opacity-60 cursor-not-allowed'
       )}
     >
-      <div className="relative w-full aspect-[3/4]">
+      <div className="relative w-full aspect-[4/5]">
         <Image
-          src={lesson.imageUrl || 'https://placehold.co/400x533.png'}
+          src={lesson.imageUrl || 'https://placehold.co/400x500.png'}
           alt={lesson.title}
           fill
           loading="lazy"
@@ -38,16 +38,16 @@ export function ToolCard({ lesson, moduleId, isLocked }: ToolCardProps) {
         />
         {isLocked && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/70 rounded-t-md">
-            <Lock className="h-8 w-8 text-white" />
+            <Lock className="h-8 w-8 text-foreground" />
           </div>
         )}
       </div>
 
       <div className="flex flex-col items-center justify-center p-4 text-center">
-        <h3 className="font-bold text-white">{lesson.title}</h3>
+        <h3 className="font-bold text-foreground">{lesson.title}</h3>
         {isUnlocked && (
            isToolActive ? (
-            <Badge className="mt-2 border-neon-green bg-neon-green/10 text-neon-green hover:bg-neon-green/20">
+            <Badge variant="outline" className="mt-2 border-primary/50 bg-primary/10 text-primary">
               <Check className="mr-1 h-3 w-3" />
               ON
             </Badge>
