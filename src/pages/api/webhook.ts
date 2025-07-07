@@ -28,7 +28,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    // --- PASSO 1: LOGS DE DIAGNÓSTICO INICIAL ---
+    console.log('🔥 Webhook recebido:', req.headers['content-type']);
     const rawBodyBuffer = await getRawBody(req);
+    console.log('🟢 Raw Body:', rawBodyBuffer.toString('utf-8'));
+    // --- FIM PASSO 1 ---
+    
     const contentType = req.headers['content-type'] || '';
 
     let bodyData: Record<string, any> = {};
@@ -46,8 +51,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } else {
       return res.status(415).json({ error: `Unsupported content type: ${contentType}` });
     }
+
+    // --- PASSO 2: LOGS DE PARSING ---
+    console.log('📦 BodyData:', bodyData);
     const eventType = bodyData.event;
     const pixDataString = bodyData.pix;
+    console.log('📨 PIX String:', pixDataString);
+    // --- FIM PASSO 2 ---
+
 
     if (eventType !== 'pix.cash-in.received') {
       return res.status(200).json({ success: true, message: 'Evento ignorado' });
@@ -57,11 +68,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: '"pix" field not found' });
     }
 
+    // --- PASSO 3: DECODIFICAR PAYLOAD ANINHADO ---
     const pixParams = new URLSearchParams(pixDataString);
     const pixInfo: Record<string, string> = {};
     for (const [key, value] of pixParams.entries()) {
       pixInfo[key] = value;
     }
+    // --- FIM PASSO 3 ---
 
     const description = pixInfo.description;
     if (!description || !description.includes('| Tribo Tools - Plans:[')) {
@@ -74,6 +87,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const phone = pixInfo.phone;
     const planIdsPart = description.substring(description.indexOf('[') + 1, description.indexOf(']'));
     const selectedPlanIds = planIdsPart.split(',');
+
+    // --- PASSO 4: LOGS DE DADOS EXTRAÍDOS ---
+    console.log('👤 Nome:', name);
+    console.log('📧 Email extraído da descrição:', email);
+    console.log('📦 Plano IDs:', selectedPlanIds);
+    // --- FIM PASSO 4 ---
 
     if (!db) {
       console.error('Webhook Error: Firestore DB is not initialized.');
@@ -126,9 +145,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await batch.commit();
     }
 
-    // 🔁 Enviar para o n8n
+    // --- PASSO 5: ENVIAR PARA O N8N COM LOGS E ERRO ---
     const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
     if (n8nWebhookUrl) {
+      console.log('🚀 Enviando pro n8n:', n8nWebhookUrl);
       fetch(n8nWebhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -142,8 +162,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           amount: pixInfo.value ? Number(pixInfo.value) / 100 : 0,
           paymentDate: new Date().toISOString(),
         }),
-      }).catch(err => console.error('Erro ao enviar para o n8n:', err));
+      }).catch(err => {
+        console.error('❌ Falha ao enviar pro n8n:', err);
+      });
     }
+    // --- FIM PASSO 5 ---
 
     return res.status(200).json({ success: true });
   } catch (error: any) {
