@@ -6,6 +6,15 @@ import { Timestamp } from 'firebase-admin/firestore';
 import querystring from 'querystring';
 import { Buffer } from 'buffer';
 
+// Desabilita o body parser padrão do Next.js para esta rota,
+// permitindo que leiamos o corpo da requisição manualmente.
+// Esta é a correção para o erro de timeout (cURL error 28).
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
 // Helper to get raw body from request, necessary for x-www-form-urlencoded
 async function getRawBody(req: NextApiRequest): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -78,7 +87,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const body = querystring.parse(rawBody.toString('utf-8'));
     console.log('Webhook recebido:', body);
     
-    // Validação corrigida: checa por status 'paid'
     if (body.status !== 'paid') {
       console.log(`Webhook ignorado: status é "${body.status}", não "paid".`);
       return res.status(200).json({ message: 'Webhook ignorado: evento não relevante.' });
@@ -94,7 +102,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     let metadata: { userId: string, planIds: string[] };
     try {
-      // O metadata vem como uma string JSON que precisa ser parseada
       metadata = JSON.parse(metadataString);
     } catch (e) {
       console.error('CRITICAL: Falha ao parsear os metadados do webhook.', metadataString);
