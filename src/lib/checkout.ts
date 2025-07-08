@@ -74,7 +74,6 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     const adminApp = initializeAdminApp();
     const db = admin.firestore();
 
-    // Fetch plans and validate selection
     const allPlans = await getPlansFromFirestoreAdmin(db);
     const selectedPlans = allPlans.filter(p => selectedPlanIds.includes(p.id));
     if (selectedPlans.length !== selectedPlanIds.length) {
@@ -82,7 +81,6 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     }
     const basePrice = selectedPlans.reduce((sum, plan) => sum + plan.price, 0);
 
-    // Validate coupon and calculate final price
     let finalPrice = basePrice;
     let discountAmount = 0;
     let appliedCoupon: Coupon | null = null;
@@ -116,7 +114,31 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
         return { error: 'O valor final da transação não pode ser inferior a R$ 1,00.' };
     }
 
-    // --- Create a local payment record ---
+    const apiUrl = 'https://api.pushinpay.com.br/api/pix/cashIn';
+    const webhookUrl = `${siteUrl}/api/webhook`;
+
+    // STEP 1: Call PushinPay API first to get their transaction ID.
+    const paymentPayload = {
+      value: totalPriceInCents,
+      payer: { name, document, email, phone },
+      webhook_url: webhookUrl,
+    };
+    
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': `Bearer ${apiToken}` },
+      body: JSON.stringify(paymentPayload),
+    });
+
+    const data = await response.json();
+    
+    if (!response.ok || !data.id) {
+        const apiErrorMessage = data.message || (data.errors ? JSON.stringify(data.errors) : `HTTP error! status: ${response.status}`);
+        // We don't have a payment record to update, so we just throw.
+        throw new Error(`Falha no provedor de pagamento: ${apiErrorMessage}`);
+    }
+    
+    // STEP 2: Now, create the local payment record in a SINGLE write operation.
     const paymentRef = db.collection('payments').doc();
     const localTransactionId = paymentRef.id;
 
@@ -133,43 +155,10 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
       totalPrice: finalPrice,
       status: 'pending',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      pushinpayTransactionId: data.id, // Include the gateway ID from the start.
     });
-    console.log(`[checkout.ts] Created pending payment record: ${localTransactionId}`);
+    console.log(`[checkout.ts] Created pending payment record ${localTransactionId} for PushinPay ID ${data.id}`);
 
-    const apiUrl = 'https://api.pushinpay.com.br/api/pix/cashIn';
-    const webhookUrl = `${siteUrl}/api/webhook`;
-
-    const paymentPayload = {
-      value: totalPriceInCents,
-      payer: {
-        name,
-        document,
-        email,
-        phone,
-      },
-      webhook_url: webhookUrl,
-      // We send our local ID here. If the gateway returns it, great. If not, we have a fallback.
-      order_id: localTransactionId, 
-    };
-    
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': `Bearer ${apiToken}` },
-      body: JSON.stringify(paymentPayload),
-    });
-
-    const data = await response.json();
-    
-    if (!response.ok || !data.id) {
-        const apiErrorMessage = data.message || (data.errors ? JSON.stringify(data.errors) : `HTTP error! status: ${response.status}`);
-        await paymentRef.update({ status: 'failed', failureReason: `PushinPay Error: ${apiErrorMessage}` });
-        throw new Error(`Falha no provedor de pagamento: ${apiErrorMessage}`);
-    }
-    
-    // Save the gateway's transaction ID in our payment document for our own records.
-    await paymentRef.update({ pushinpayTransactionId: data.id });
-    console.log(`[checkout.ts] Associated PushinPay ID ${data.id} with local payment ${localTransactionId}`);
-    
     const imageUrl = `data:image/png;base64,${data.qr_code_base64}`;
     return {
       qrcode_text: data.qr_code,
