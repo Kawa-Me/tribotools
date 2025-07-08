@@ -148,9 +148,9 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
         phone,
       },
       webhook_url: webhookUrl,
-      order_id: localTransactionId,
+      order_id: localTransactionId, // This is the direct link back to our system
       metadata: {
-        localTransactionId: localTransactionId,
+        localTransactionId: localTransactionId, // Sending as metadata as well, just in case.
       },
     };
     
@@ -168,8 +168,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
         throw new Error(`Falha no provedor de pagamento: ${apiErrorMessage}`);
     }
     
-    // Save the gateway's transaction ID in our payment document.
-    // The webhook will use this ID to find the payment.
+    // Save the gateway's transaction ID in our payment document for our own records.
     await paymentRef.update({ pushinpayTransactionId: data.id });
     console.log(`[checkout.ts] Associated PushinPay ID ${data.id} with local payment ${localTransactionId}`);
     

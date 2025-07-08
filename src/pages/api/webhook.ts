@@ -87,8 +87,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ message: 'Webhook ignored: event not relevant.' });
     }
 
-    const pushinpayTransactionId = params.get('id');
     const localTransactionIdFromOrder = params.get('order_id');
+    const pushinpayTransactionId = params.get('id');
 
     initializeAdminApp();
     const db = admin.firestore();
@@ -96,11 +96,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let paymentDoc: admin.firestore.DocumentSnapshot | null = null;
     
     // --- Nova Lógica de Busca ---
+    // Prioridade 1: Usar o order_id para um lookup direto e fortemente consistente.
     if (localTransactionIdFromOrder) {
         console.log(`[webhook.ts] Local ID received via order_id: ${localTransactionIdFromOrder}`);
         paymentRef = db.collection('payments').doc(localTransactionIdFromOrder);
         paymentDoc = await paymentRef.get();
     } else {
+        // Prioridade 2 (Fallback): Se o order_id não vier, buscar pelo ID do gateway.
+        // Isso está sujeito a "race conditions" se a escrita no DB for lenta.
         if (!pushinpayTransactionId) {
              console.error('[webhook.ts] CRITICAL: Webhook payload is missing transaction identifier.');
              return res.status(400).json({ error: 'Webhook payload is missing transaction identifier.' });
