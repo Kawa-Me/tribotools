@@ -94,7 +94,7 @@ export function UserTable({ users }: UserTableProps) {
             {users.map((user) => (
                 <TableRow key={user.uid}>
                   <TableCell className="font-medium">
-                    {user.email ? user.email : <span className="text-muted-foreground italic">Visitante Anônimo</span>}
+                    {user.email}
                   </TableCell>
                   {products.map(p => {
                     const sub = user.subscriptions?.[p.id];

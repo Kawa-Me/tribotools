@@ -40,7 +40,8 @@ export default function AdminUsersPage() {
         querySnapshot.forEach((doc) => {
           usersData.push({ uid: doc.id, ...doc.data() } as UserData);
         });
-        setUsers(usersData);
+        const registeredUsers = usersData.filter(u => u.email);
+        setUsers(registeredUsers);
         setError(null);
         setLoading(false);
       },
