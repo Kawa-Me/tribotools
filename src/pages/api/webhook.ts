@@ -79,14 +79,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    console.log('✅ Webhook do Pages Router está ativo');
     const rawBody = await getRawBody(req);
     const bodyString = rawBody.toString('utf-8');
-    console.log('Corpo bruto do webhook recebido:', bodyString);
-
-    // PushinPay envia webhooks como application/x-www-form-urlencoded
-    const params = new URLSearchParams(bodyString);
     
+    const params = new URLSearchParams(bodyString);
     const status = params.get('status');
     
     if (status !== 'paid') {
@@ -95,26 +91,43 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const pushinpayTransactionId = params.get('id');
-    const localTransactionId = params.get('custom_payload[localTransactionId]');
-
-    if (!localTransactionId) {
-      const processedBody = Object.fromEntries(params.entries());
-      console.error('CRITICAL: Webhook recebido SEM localTransactionId. Impossível identificar o usuário.', processedBody);
-      return res.status(400).json({ error: 'localTransactionId ausente no webhook.' });
-    }
-    console.log(`[webhook.ts] Local transaction ID recebido: ${localTransactionId}`);
+    let localTransactionId = params.get('custom_payload[localTransactionId]');
 
     initializeAdminApp();
     const db = admin.firestore();
+    let paymentRef: admin.firestore.DocumentReference | null = null;
 
-    const paymentRef = db.collection('payments').doc(localTransactionId);
+    if (localTransactionId) {
+      console.log(`[webhook.ts] Local transaction ID recebido via custom_payload: ${localTransactionId}`);
+      paymentRef = db.collection('payments').doc(localTransactionId);
+    } else {
+      // Fallback for older transactions or if custom_payload fails
+      console.warn(`[webhook.ts] localTransactionId ausente no custom_payload. Tentando fallback com pushinpayTransactionId: ${pushinpayTransactionId}`);
+      if (pushinpayTransactionId) {
+        const paymentsQuery = db.collection('payments').where('pushinpayTransactionId', '==', pushinpayTransactionId).limit(1);
+        const querySnapshot = await paymentsQuery.get();
+        if (!querySnapshot.empty) {
+          const paymentDoc = querySnapshot.docs[0];
+          paymentRef = paymentDoc.ref;
+          localTransactionId = paymentDoc.id; // We found it!
+          console.log(`[webhook.ts] Fallback bem-sucedido. Encontrado localTransactionId: ${localTransactionId}`);
+        }
+      }
+    }
+
+    if (!paymentRef || !localTransactionId) {
+      const processedBody = Object.fromEntries(params.entries());
+      console.error('CRITICAL: Impossível identificar o pagamento do webhook, mesmo com fallback.', processedBody);
+      return res.status(400).json({ error: 'Não foi possível identificar a transação local correspondente a este webhook.' });
+    }
+
     const paymentDoc = await paymentRef.get();
 
     if (!paymentDoc.exists) {
         console.error(`CRITICAL: Documento de pagamento com ID ${localTransactionId} não encontrado no Firestore.`);
         throw new Error(`Documento de pagamento não encontrado.`);
     }
-
+    
     const paymentData = paymentDoc.data()!;
     
     if (paymentData.status === 'completed') {
