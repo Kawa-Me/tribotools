@@ -148,10 +148,8 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
         phone,
       },
       webhook_url: webhookUrl,
-      order_id: localTransactionId, // This is the direct link back to our system
-      metadata: {
-        localTransactionId: localTransactionId, // Sending as metadata as well, just in case.
-      },
+      // We send our local ID here. If the gateway returns it, great. If not, we have a fallback.
+      order_id: localTransactionId, 
     };
     
     const response = await fetch(apiUrl, {

@@ -86,43 +86,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log(`[webhook.ts] Webhook ignored: status is "${status}", not "paid".`);
       return res.status(200).json({ message: 'Webhook ignored: event not relevant.' });
     }
-
-    const localTransactionIdFromOrder = params.get('order_id');
-    const pushinpayTransactionId = params.get('id');
-
+    
     initializeAdminApp();
     const db = admin.firestore();
     let paymentRef: admin.firestore.DocumentReference | null = null;
     let paymentDoc: admin.firestore.DocumentSnapshot | null = null;
     
-    // --- Nova Lógica de Busca ---
-    // Prioridade 1: Usar o order_id para um lookup direto e fortemente consistente.
-    if (localTransactionIdFromOrder) {
-        console.log(`[webhook.ts] Local ID received via order_id: ${localTransactionIdFromOrder}`);
-        paymentRef = db.collection('payments').doc(localTransactionIdFromOrder);
-        paymentDoc = await paymentRef.get();
-    } else {
-        // Prioridade 2 (Fallback): Se o order_id não vier, buscar pelo ID do gateway.
-        // Isso está sujeito a "race conditions" se a escrita no DB for lenta.
-        if (!pushinpayTransactionId) {
-             console.error('[webhook.ts] CRITICAL: Webhook payload is missing transaction identifier.');
-             return res.status(400).json({ error: 'Webhook payload is missing transaction identifier.' });
-        }
-        console.log(`[webhook.ts] order_id not found. Querying by pushinpayTransactionId: ${pushinpayTransactionId}`);
-        
-        const paymentsQuery = db.collection('payments')
-            .where('pushinpayTransactionId', '==', pushinpayTransactionId)
-            .limit(1);
-            
-        const querySnapshot = await paymentsQuery.get();
+    const localTransactionIdFromOrder = params.get('order_id');
 
-        if (querySnapshot.empty) {
-            console.error(`[webhook.ts] Payment not found for pushinpayTransactionId: ${pushinpayTransactionId}. This might be a race condition. Responding 404 to trigger a retry from PushinPay.`);
-            return res.status(404).json({ error: 'Payment not found, please retry.' });
-        }
-        
-        paymentDoc = querySnapshot.docs[0];
-        paymentRef = paymentDoc.ref;
+    if (localTransactionIdFromOrder) {
+      console.log(`[webhook.ts] Local ID received via order_id: ${localTransactionIdFromOrder}`);
+      paymentRef = db.collection('payments').doc(localTransactionIdFromOrder);
+      paymentDoc = await paymentRef.get();
+    } else {
+      const pushinpayTransactionId = params.get('id');
+      if (!pushinpayTransactionId) {
+           console.error('[webhook.ts] CRITICAL: Webhook payload is missing transaction identifier.');
+           return res.status(400).json({ error: 'Webhook payload is missing transaction identifier.' });
+      }
+      
+      console.log(`[webhook.ts] order_id not found. Querying by pushinpayTransactionId: ${pushinpayTransactionId}`);
+      
+      // --- ROBUST FALLBACK WITH DELAY ---
+      // This delay gives Firestore time to sync the pushinpayTransactionId written by checkout.ts
+      console.log(`[webhook.ts] Fallback initiated. Waiting 2 seconds for DB to sync...`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      const paymentsQuery = db.collection('payments')
+          .where('pushinpayTransactionId', '==', pushinpayTransactionId)
+          .orderBy('createdAt', 'desc')
+          .limit(1);
+          
+      const querySnapshot = await paymentsQuery.get();
+
+      if (querySnapshot.empty) {
+          console.error(`[webhook.ts] Payment not found for pushinpayTransactionId: ${pushinpayTransactionId} even after delay. This could be a race condition. Responding 404 to trigger a retry from PushinPay.`);
+          return res.status(404).json({ error: 'Payment not found, please retry.' });
+      }
+      
+      paymentDoc = querySnapshot.docs[0];
+      paymentRef = paymentDoc.ref;
     }
     
     if (!paymentDoc || !paymentDoc.exists) {
@@ -175,7 +178,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         plan: plan.id,
         startedAt: Timestamp.fromDate(now),
         expiresAt: Timestamp.fromDate(expiresAt),
-        lastTransactionId: pushinpayTransactionId,
+        lastTransactionId: params.get('id'),
       };
     }
     
@@ -195,7 +198,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       userName: userData?.name || params.get('payer_name'),
       planIds,
       selectedPlans,
-      transactionId: pushinpayTransactionId,
+      transactionId: params.get('id'),
     });
 
     return res.status(200).json({ success: true });
