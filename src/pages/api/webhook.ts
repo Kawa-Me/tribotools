@@ -81,19 +81,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     console.log('✅ Webhook do Pages Router está ativo');
     const rawBody = await getRawBody(req);
-    const body = JSON.parse(rawBody.toString('utf-8'));
-    console.log('Webhook recebido:', body);
+    const bodyString = rawBody.toString('utf-8');
+    console.log('Corpo bruto do webhook recebido:', bodyString);
+
+    // PushinPay envia webhooks como application/x-www-form-urlencoded
+    const params = new URLSearchParams(bodyString);
     
-    if (body.status !== 'paid') {
-      console.log(`Webhook ignorado: status é "${body.status}", não "paid".`);
+    const status = params.get('status');
+    
+    if (status !== 'paid') {
+      console.log(`Webhook ignorado: status é "${status}", não "paid".`);
       return res.status(200).json({ message: 'Webhook ignorado: evento não relevante.' });
     }
 
-    const pushinpayTransactionId = body.id as string;
-    const localTransactionId = body.localTransactionId as string | undefined;
+    const pushinpayTransactionId = params.get('id');
+    const localTransactionId = params.get('custom_payload[localTransactionId]');
 
     if (!localTransactionId) {
-      console.error('CRITICAL: Webhook recebido SEM localTransactionId. Impossível identificar o usuário.', body);
+      const processedBody = Object.fromEntries(params.entries());
+      console.error('CRITICAL: Webhook recebido SEM localTransactionId. Impossível identificar o usuário.', processedBody);
       return res.status(400).json({ error: 'localTransactionId ausente no webhook.' });
     }
     console.log(`[webhook.ts] Local transaction ID recebido: ${localTransactionId}`);
@@ -167,7 +173,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     batch.update(paymentRef, { 
       status: 'completed',
       processedAt: admin.firestore.FieldValue.serverTimestamp(),
-      pushinpayEndToEndId: body.end_to_end_id as string,
+      pushinpayEndToEndId: params.get('end_to_end_id'),
     });
 
     await batch.commit();
@@ -177,7 +183,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await notifyAutomationSystem({
       userId,
       userEmail: userData?.email,
-      userName: userData?.name || body.payer_name,
+      userName: userData?.name || params.get('payer_name'),
       planIds,
       selectedPlans,
       transactionId: pushinpayTransactionId,
