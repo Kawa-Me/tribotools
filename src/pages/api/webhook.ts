@@ -91,11 +91,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const pushinpayTransactionId = body.id as string;
-    const localTransactionId = body.metadata as string | undefined;
+    const localTransactionId = body.localTransactionId as string | undefined;
 
     if (!localTransactionId) {
-      console.error('CRITICAL: Webhook recebido SEM METADADOS (localTransactionId). Impossível identificar o usuário.', body);
-      return res.status(400).json({ error: 'Metadados (localTransactionId) ausentes no webhook.' });
+      console.error('CRITICAL: Webhook recebido SEM localTransactionId. Impossível identificar o usuário.', body);
+      return res.status(400).json({ error: 'localTransactionId ausente no webhook.' });
     }
     console.log(`[webhook.ts] Local transaction ID recebido: ${localTransactionId}`);
 

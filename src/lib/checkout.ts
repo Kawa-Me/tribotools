@@ -137,17 +137,19 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
 
     const apiUrl = 'https://api.pushinpay.com.br/api/pix/cashIn';
     const webhookUrl = `${siteUrl}/api/webhook`;
-    const expirationDate = new Date();
-    expirationDate.setHours(expirationDate.getHours() + 1);
 
     const paymentPayload = {
-      name,
-      email,
-      document,
-      phone,
       value: totalPriceInCents,
+      payer: {
+        name,
+        document,
+        email,
+        phone,
+      },
       webhook_url: webhookUrl,
-      metadata: localTransactionId,
+      customPayload: {
+        localTransactionId: localTransactionId,
+      },
     };
     
     const response = await fetch(apiUrl, {
