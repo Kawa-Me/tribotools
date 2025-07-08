@@ -7,7 +7,7 @@ import type { Coupon, Product } from '@/lib/types';
 import { useProducts } from '@/hooks/use-products';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/hooks';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 
 import {
   Accordion,
@@ -47,7 +47,11 @@ export function CouponEditor() {
       setLoading(false);
     }, (error) => {
       console.error("Error fetching coupons:", error);
-      toast({ variant: 'destructive', title: 'Erro ao carregar cupons.' });
+      toast({ 
+        variant: 'destructive', 
+        title: 'Erro ao carregar cupons.',
+        description: 'Verifique se as regras de segurança do Firestore permitem a leitura da coleção "coupons".'
+      });
       setLoading(false);
     });
     return () => unsubscribe();
@@ -78,6 +82,9 @@ export function CouponEditor() {
   
   const handleAddNewCoupon = async () => {
     if (!db) return;
+    if (isSaving) return;
+
+    setIsSaving(true);
     const newId = `NOVO_CUPOM_${Date.now()}`;
     const now = new Date();
     const endDate = new Date();
@@ -91,17 +98,34 @@ export function CouponEditor() {
       applicableProductIds: [],
       isActive: false,
     };
-    await setDoc(doc(db, 'coupons', newId), newCoupon);
+
+    try {
+      await setDoc(doc(db, 'coupons', newId), newCoupon);
+      toast({ title: "Cupom temporário criado", description: "Edite o código e salve as alterações." });
+    } catch (error: any) {
+      console.error("Error adding new coupon:", error);
+      toast({
+        variant: 'destructive',
+        title: "Erro ao Adicionar Cupom",
+        description: `Falha ao criar o cupom. Verifique as regras de segurança do Firestore. (${error.code})`,
+        duration: 9000,
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
   
   const handleDeleteCoupon = async (couponId: string) => {
     if (!window.confirm("Tem certeza que deseja deletar este cupom?")) return;
     if (!db) return;
+    setIsSaving(true);
     try {
       await deleteDoc(doc(db, 'coupons', couponId));
       toast({ title: "Sucesso", description: "Cupom deletado." });
-    } catch (e) {
-      toast({ variant: 'destructive', title: "Erro", description: "Não foi possível deletar o cupom." });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: "Erro", description: `Não foi possível deletar o cupom. (${e.code})` });
+    } finally {
+      setIsSaving(false);
     }
   };
   
@@ -128,9 +152,9 @@ export function CouponEditor() {
       const couponRef = doc(db, 'coupons', uppercaseId);
       await setDoc(couponRef, { ...coupon, id: uppercaseId });
       toast({ title: "Sucesso!", description: `Cupom ${uppercaseId} salvo.` });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving coupon:", error);
-      toast({ variant: 'destructive', title: "Erro ao Salvar", description: "Não foi possível salvar as alterações." });
+      toast({ variant: 'destructive', title: "Erro ao Salvar", description: `Não foi possível salvar as alterações. (${error.code})` });
     } finally {
         setIsSaving(false);
     }
@@ -143,7 +167,10 @@ export function CouponEditor() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <Button onClick={handleAddNewCoupon}><PlusCircle className="mr-2" />Adicionar Cupom</Button>
+        <Button onClick={handleAddNewCoupon} disabled={isSaving}>
+            {isSaving ? <Loader2 className="mr-2 animate-spin" /> : <PlusCircle className="mr-2" />}
+            Adicionar Cupom
+        </Button>
       </div>
 
       <Accordion type="single" collapsible className="w-full">
@@ -170,6 +197,7 @@ export function CouponEditor() {
                     <Button
                         variant="destructive"
                         size="icon"
+                        disabled={isSaving}
                         onClick={(e) => { e.stopPropagation(); handleDeleteCoupon(coupon.id); }}
                     ><Trash2 className="h-4 w-4" /></Button>
                 </div>
