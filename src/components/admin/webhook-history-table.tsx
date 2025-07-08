@@ -56,9 +56,11 @@ export function WebhookHistoryTable({ payments }: WebhookHistoryTableProps) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Email do Usuário</TableHead>
+            <TableHead>Email</TableHead>
+            <TableHead>Nome</TableHead>
+            <TableHead>Telefone</TableHead>
             <TableHead>Processado Em</TableHead>
-            <TableHead>ID da Transação (Gateway)</TableHead>
+            <TableHead>ID Gateway</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>End-to-End ID</TableHead>
           </TableRow>
@@ -68,6 +70,8 @@ export function WebhookHistoryTable({ payments }: WebhookHistoryTableProps) {
             {payments.map((payment) => (
               <TableRow key={payment.id}>
                 <TableCell className="font-medium">{payment.userEmail}</TableCell>
+                <TableCell>{payment.userName}</TableCell>
+                <TableCell>{payment.userPhone || 'N/A'}</TableCell>
                 <TableCell>
                   {payment.processedAt ? format(payment.processedAt.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 'N/A'}
                 </TableCell>
@@ -105,7 +109,7 @@ export function WebhookHistoryTable({ payments }: WebhookHistoryTableProps) {
             ))}
             {payments.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground">
+                <TableCell colSpan={7} className="text-center text-muted-foreground">
                   Nenhum evento de webhook encontrado.
                 </TableCell>
               </TableRow>

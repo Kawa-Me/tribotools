@@ -2,7 +2,7 @@
 
 import { createContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { doc, onSnapshot, Timestamp } from 'firebase/firestore';
+import { doc, onSnapshot, Timestamp, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import type { UserData, AuthContextType } from '@/lib/types';
 
@@ -18,16 +18,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (!firebaseUser) {
         setUser(null);
         setLoading(false);
         return;
       }
       
-      // For anonymous users, create a minimal user object immediately.
-      // No need to query Firestore for them.
       if (firebaseUser.isAnonymous) {
+          try {
+            const userDocRef = doc(db, 'users', firebaseUser.uid);
+            const docSnap = await getDoc(userDocRef);
+            if (!docSnap.exists()) {
+                await setDoc(userDocRef, {
+                    uid: firebaseUser.uid,
+                    email: null,
+                    role: 'user',
+                    createdAt: serverTimestamp(),
+                    subscriptions: {},
+                });
+            }
+          } catch (e) {
+            console.error("AuthProvider: Failed to create anonymous user doc:", e);
+          }
+
           setUser({
               uid: firebaseUser.uid,
               email: null,

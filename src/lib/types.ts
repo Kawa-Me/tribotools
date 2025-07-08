@@ -80,6 +80,7 @@ export interface UserData {
   role?: 'admin' | 'user';
   emailVerified: boolean;
   isAnonymous: boolean;
+  createdAt?: Timestamp;
 }
 
 export interface AuthContextType {
@@ -92,6 +93,7 @@ export interface Payment {
   userId: string;
   userEmail: string;
   userName: string;
+  userPhone?: string;
   planIds: string[];
   basePrice: number;
   appliedCoupon: { id: string; discountPercentage: number } | null;

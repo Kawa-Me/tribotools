@@ -51,6 +51,7 @@ export function PaymentHistoryTable({ payments }: PaymentHistoryTableProps) {
         <TableHeader>
           <TableRow>
             <TableHead>Email do Usuário</TableHead>
+            <TableHead>Nome</TableHead>
             <TableHead>Data</TableHead>
             <TableHead>ID da Transação</TableHead>
             <TableHead>Valor</TableHead>
@@ -61,6 +62,7 @@ export function PaymentHistoryTable({ payments }: PaymentHistoryTableProps) {
           {payments.map((payment) => (
             <TableRow key={payment.id}>
               <TableCell className="font-medium">{payment.userEmail}</TableCell>
+              <TableCell>{payment.userName}</TableCell>
               <TableCell>
                 {payment.createdAt ? format(payment.createdAt.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 'N/A'}
               </TableCell>
@@ -77,7 +79,7 @@ export function PaymentHistoryTable({ payments }: PaymentHistoryTableProps) {
           ))}
           {payments.length === 0 && (
             <TableRow>
-              <TableCell colSpan={5} className="text-center text-muted-foreground">
+              <TableCell colSpan={6} className="text-center text-muted-foreground">
                 Nenhum pagamento encontrado.
               </TableCell>
             </TableRow>

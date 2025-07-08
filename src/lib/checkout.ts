@@ -124,6 +124,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
       userId: uid,
       userEmail: email,
       userName: name,
+      userPhone: phone,
       planIds: selectedPlanIds,
       basePrice: basePrice,
       appliedCoupon: appliedCoupon ? { id: appliedCoupon.id, discountPercentage: appliedCoupon.discountPercentage } : null,
@@ -146,7 +147,6 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
       phone,
       value: totalPriceInCents,
       webhook_url: webhookUrl,
-      expires_at: expirationDate.toISOString(),
       metadata: localTransactionId,
     };
     
