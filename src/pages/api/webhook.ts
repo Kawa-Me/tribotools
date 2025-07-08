@@ -3,7 +3,6 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import * as admin from 'firebase-admin';
 import type { Plan, Product } from '@/lib/types';
 import { Timestamp } from 'firebase-admin/firestore';
-import { Buffer } from 'buffer';
 
 // Desabilita o body parser padrão do Next.js para esta rota.
 export const config = {
@@ -56,7 +55,7 @@ async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore): Promis
 async function notifyAutomationSystem(payload: any) {
     const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
     if (!n8nWebhookUrl) {
-        console.warn('N8N_WEBHOOK_URL não está configurado. Pulando notificação.');
+        console.warn('[webhook.ts] N8N_WEBHOOK_URL is not configured. Skipping notification.');
         return;
     }
     try {
@@ -65,9 +64,9 @@ async function notifyAutomationSystem(payload: any) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
         });
-        console.log('Notificação enviada com sucesso para o sistema de automação.');
+        console.log('[webhook.ts] Successfully sent notification to automation system.');
     } catch (error) {
-        console.error('Falha ao enviar notificação para o sistema de automação:', error);
+        console.error('[webhook.ts] Failed to send notification to automation system:', error);
     }
 }
 
@@ -80,91 +79,78 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const rawBody = await getRawBody(req);
-    const bodyString = rawBody.toString('utf-8');
+    const params = new URLSearchParams(rawBody.toString('utf-8'));
     
-    const params = new URLSearchParams(bodyString);
     const status = params.get('status');
-    
     if (status !== 'paid') {
-      console.log(`Webhook ignorado: status é "${status}", não "paid".`);
-      return res.status(200).json({ message: 'Webhook ignorado: evento não relevante.' });
+      console.log(`[webhook.ts] Webhook ignored: status is "${status}", not "paid".`);
+      return res.status(200).json({ message: 'Webhook ignored: event not relevant.' });
     }
 
     const pushinpayTransactionId = params.get('id');
-    let localTransactionId = params.get('order_id');
+    const localTransactionId = params.get('order_id');
 
     initializeAdminApp();
     const db = admin.firestore();
-    let paymentRef: admin.firestore.DocumentReference | null = null;
-    let paymentDocSnapshot: admin.firestore.DocumentSnapshot | null = null;
+    let paymentQuery;
 
+    // Prioritize the local ID if present, otherwise fall back to the gateway's ID
     if (localTransactionId) {
-      console.log(`[webhook.ts] ID local recebido via order_id: ${localTransactionId}`);
-      paymentRef = db.collection('payments').doc(localTransactionId);
+      console.log(`[webhook.ts] Local ID received via order_id: ${localTransactionId}`);
+      paymentQuery = db.collection('payments').doc(localTransactionId);
+    } else if (pushinpayTransactionId) {
+      console.log(`[webhook.ts] order_id not found. Querying by pushinpayTransactionId: ${pushinpayTransactionId}`);
+      paymentQuery = db.collection('payments').where('pushinpayTransactionId', '==', pushinpayTransactionId).limit(1);
     } else {
-      console.warn(`[webhook.ts] ID local não recebido no payload. Iniciando busca por ID do gateway: ${pushinpayTransactionId}`);
-      if (pushinpayTransactionId) {
-        for (let i = 0; i < 5; i++) {
-          console.log(`[webhook.ts] Tentativa de busca ${i + 1}/5...`);
-          // Adicionamos um orderBy para forçar a necessidade de um índice composto e obter um link de criação claro.
-          const paymentsQuery = db.collection('payments').where('pushinpayTransactionId', '==', pushinpayTransactionId).orderBy('createdAt', 'desc').limit(1);
-          const querySnapshot = await paymentsQuery.get();
-          if (!querySnapshot.empty) {
-            paymentDocSnapshot = querySnapshot.docs[0];
-            paymentRef = paymentDocSnapshot.ref;
-            localTransactionId = paymentDocSnapshot.id;
-            console.log(`[webhook.ts] Fallback bem-sucedido na tentativa ${i + 1}. Encontrado localTransactionId: ${localTransactionId}`);
-            break;
-          }
-          if (i < 4) {
-             console.log(`[webhook.ts] Nenhum documento encontrado. Aguardando 3 segundos...`);
-             await new Promise(resolve => setTimeout(resolve, 3000));
-          }
-        }
-      }
+        console.error('[webhook.ts] CRITICAL: Webhook received without id or order_id.', Object.fromEntries(params));
+        return res.status(400).json({ error: 'Webhook payload is missing required transaction identifiers.' });
     }
 
-    if (!paymentRef || !localTransactionId) {
-      const processedBody = Object.fromEntries(params.entries());
-      console.error('CRITICAL: Impossível identificar o pagamento do webhook, mesmo com fallback.', processedBody);
-      return res.status(400).json({ error: 'Não foi possível identificar a transação local correspondente a este webhook.' });
-    }
+    const paymentDocSnapshot = await paymentQuery.get();
     
-    const paymentDoc = paymentDocSnapshot || await paymentRef.get();
+    let paymentDoc: admin.firestore.DocumentSnapshot | undefined;
+    if ('docs' in paymentDocSnapshot) { // It's a QuerySnapshot from the fallback
+        if (paymentDocSnapshot.empty) {
+            console.error(`[webhook.ts] Payment not found for pushinpayTransactionId: ${pushinpayTransactionId}. This might be a race condition. Responding 404 to trigger a retry from PushinPay.`);
+            return res.status(404).json({ error: 'Payment not found, please retry.' });
+        }
+        paymentDoc = paymentDocSnapshot.docs[0];
+    } else { // It's a DocumentSnapshot from the direct lookup
+        paymentDoc = paymentDocSnapshot;
+    }
 
     if (!paymentDoc.exists) {
-        console.error(`CRITICAL: Documento de pagamento com ID ${localTransactionId} não encontrado no Firestore.`);
-        throw new Error(`Documento de pagamento não encontrado.`);
+      console.error(`[webhook.ts] Payment document with ID ${localTransactionId} not found. Responding 404 to trigger a retry from PushinPay.`);
+      return res.status(404).json({ error: `Payment with id ${localTransactionId} not found, please retry.` });
     }
     
+    const paymentRef = paymentDoc.ref;
     const paymentData = paymentDoc.data()!;
     
     if (paymentData.status === 'completed') {
-        console.log(`[webhook.ts] Pagamento ${localTransactionId} já foi processado. Ignorando.`);
-        return res.status(200).json({ success: true, message: "Pagamento já processado." });
+        console.log(`[webhook.ts] Payment ${paymentRef.id} has already been processed. Ignoring.`);
+        return res.status(200).json({ success: true, message: "Payment already processed." });
     }
 
     const { userId, planIds } = paymentData;
-
     if (!userId || !Array.isArray(planIds) || planIds.length === 0) {
-      console.error('Dados inválidos ou incompletos no documento de pagamento do Firestore.', paymentData);
-      throw new Error('Dados inválidos no Firestore: userId ou planIds ausentes/inválidos.');
+      console.error('[webhook.ts] Invalid or incomplete data in the Firestore payment document.', paymentData);
+      throw new Error('Invalid data in Firestore: userId or planIds are missing/invalid.');
     }
 
     const allPlans = await getPlansFromFirestoreAdmin(db);
     const selectedPlans = allPlans.filter(p => planIds.includes(p.id));
 
     if (selectedPlans.length !== planIds.length) {
-      throw new Error(`Planos inválidos referenciados no pagamento ${localTransactionId}. IDs: ${planIds.join(', ')}`);
+      throw new Error(`Invalid plans referenced in payment ${paymentRef.id}. IDs: ${planIds.join(', ')}`);
     }
 
     const userRef = db.collection('users').doc(userId);
     const userDoc = await userRef.get();
 
     if (!userDoc.exists) {
-      throw new Error(`Usuário com UID ${userId} não encontrado no Firestore.`);
+      throw new Error(`User with UID ${userId} not found in Firestore.`);
     }
-
     const userData = userDoc.data()!;
     const existingSubscriptions = userData.subscriptions || {};
 
@@ -173,11 +159,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     for (const plan of selectedPlans) {
       const now = new Date();
       const currentSub = existingSubscriptions[plan.productId];
-      
       const startDate = (currentSub && currentSub.status === 'active' && currentSub.expiresAt.toDate() > now) 
           ? currentSub.expiresAt.toDate() 
           : now;
-          
       const expiresAt = new Date(startDate.getTime());
       expiresAt.setDate(expiresAt.getDate() + plan.days);
 
@@ -191,16 +175,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     
     batch.update(userRef, { subscriptions: existingSubscriptions });
-    
     batch.update(paymentRef, { 
       status: 'completed',
       processedAt: admin.firestore.FieldValue.serverTimestamp(),
       pushinpayEndToEndId: params.get('end_to_end_id'),
     });
-
     await batch.commit();
 
-    console.log(`Assinaturas atualizadas com sucesso para o usuário ${userId}`);
+    console.log(`[webhook.ts] Successfully updated subscriptions for user ${userId}`);
     
     await notifyAutomationSystem({
       userId,
@@ -214,12 +196,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({ success: true });
 
   } catch (error: any) {
-    if (error.message && error.message.includes('requires an index')) {
-        console.error('---!!! FATAL WEBHOOK ERROR: INDEX MISSING !!!---');
-        console.error('Por favor, crie o índice do Firestore conforme sugerido no log de erro detalhado. O erro foi: ', error.message);
-        return res.status(500).json({ error: 'Internal Server Error', details: 'A required database index is missing. Check function logs.' });
-    }
-    console.error('---!!! FATAL WEBHOOK ERROR !!!---', error);
+    console.error('---!!! [webhook.ts] FATAL WEBHOOK ERROR !!!---', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return res.status(500).json({ error: 'Internal Server Error', details: errorMessage });
   }
