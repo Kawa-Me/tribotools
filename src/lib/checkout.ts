@@ -168,12 +168,10 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
         throw new Error(`Falha no provedor de pagamento: ${apiErrorMessage}`);
     }
     
-    // Create a direct lookup document to solve the webhook race condition
-    const lookupRef = db.collection('pushinpay_lookup').doc(data.id);
-    await lookupRef.set({ paymentId: localTransactionId });
-    
-    // Also save the transaction ID in the main payment document for record-keeping
+    // Save the gateway's transaction ID in our payment document.
+    // The webhook will use this ID to find the payment.
     await paymentRef.update({ pushinpayTransactionId: data.id });
+    console.log(`[checkout.ts] Associated PushinPay ID ${data.id} with local payment ${localTransactionId}`);
     
     const imageUrl = `data:image/png;base64,${data.qr_code_base64}`;
     return {
