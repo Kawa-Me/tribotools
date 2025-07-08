@@ -70,7 +70,6 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
       return { error: 'Erro de configuração do servidor (faltando chaves de API).' };
     }
     
-    // Initialize Firebase Admin to fetch plans securely
     const adminApp = initializeAdminApp();
     const db = admin.firestore();
 
@@ -84,12 +83,27 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     const totalPrice = selectedPlans.reduce((sum, plan) => sum + plan.price, 0);
     const totalPriceInCents = Math.round(totalPrice * 100);
 
+    // --- NEW LOGIC: Create a local payment record ---
+    const paymentRef = db.collection('payments').doc();
+    const localTransactionId = paymentRef.id;
+
+    await paymentRef.set({
+      userId: uid,
+      userEmail: email,
+      userName: name,
+      planIds: selectedPlanIds,
+      totalPrice: totalPrice,
+      status: 'pending',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    console.log(`[checkout.ts] Created pending payment record: ${localTransactionId}`);
+    // --- END NEW LOGIC ---
+
     const apiUrl = 'https://api.pushinpay.com.br/api/pix/cashIn';
     const webhookUrl = `${siteUrl}/api/webhook`;
     const expirationDate = new Date();
     expirationDate.setHours(expirationDate.getHours() + 1);
 
-    // CORREÇÃO: Enviar metadados como uma string JSON para garantir compatibilidade.
     const paymentPayload = {
       name,
       email,
@@ -98,10 +112,8 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
       value: totalPriceInCents,
       webhook_url: webhookUrl,
       expires_at: expirationDate.toISOString(),
-      metadata: JSON.stringify({ // Stringify the metadata object
-        userId: uid,
-        planIds: selectedPlanIds,
-      })
+      // Send our local ID as the metadata. This is the crucial change.
+      metadata: localTransactionId,
     };
     
     const response = await fetch(apiUrl, {
@@ -117,7 +129,9 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
         throw new Error(`Falha no provedor de pagamento: ${apiErrorMessage}`);
     }
     
-    // Success! Return the QR Code data to the frontend. No DB write needed here.
+    // Update our local record with the ID from PushinPay
+    await paymentRef.update({ pushinpayTransactionId: data.id });
+    
     const imageUrl = `data:image/png;base64,${data.qr_code_base64}`;
     return {
       qrcode_text: data.qr_code,

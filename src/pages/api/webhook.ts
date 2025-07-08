@@ -6,15 +6,14 @@ import { Timestamp } from 'firebase-admin/firestore';
 import querystring from 'querystring';
 import { Buffer } from 'buffer';
 
-// Desabilita o body parser padrão do Next.js para esta rota,
-// permitindo que leiamos o corpo da requisição manualmente.
+// Desabilita o body parser padrão do Next.js para esta rota.
 export const config = {
   api: {
     bodyParser: false,
   },
 };
 
-// Helper to get raw body from request, necessary for x-www-form-urlencoded
+// Helper para ler o corpo da requisição manualmente.
 async function getRawBody(req: NextApiRequest): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -24,7 +23,7 @@ async function getRawBody(req: NextApiRequest): Promise<Buffer> {
   });
 }
 
-// Helper para inicializar o Firebase Admin SDK apenas uma vez
+// Helper para inicializar o Firebase Admin SDK apenas uma vez.
 const initializeAdminApp = () => {
   if (admin.apps.length > 0) {
     return admin.app();
@@ -54,7 +53,7 @@ async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore): Promis
   );
 }
 
-// Helper para notificar seu sistema de automação (n8n)
+// Helper para notificar seu sistema de automação (n8n).
 async function notifyAutomationSystem(payload: any) {
     const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
     if (!n8nWebhookUrl) {
@@ -91,38 +90,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ message: 'Webhook ignorado: evento não relevante.' });
     }
 
-    const transactionId = body.id as string;
-    // CORREÇÃO: Esperar uma string nos metadados e fazer o parse.
-    const metadataString = body.metadata as string | undefined;
+    const pushinpayTransactionId = body.id as string;
+    const localTransactionId = body.metadata as string | undefined;
 
-    if (!metadataString) {
-      console.error('CRITICAL: Webhook recebido SEM METADADOS. Impossível identificar o usuário.', body);
-      return res.status(400).json({ error: 'Metadados ausentes no webhook.' });
+    if (!localTransactionId) {
+      console.error('CRITICAL: Webhook recebido SEM METADADOS (localTransactionId). Impossível identificar o usuário.', body);
+      return res.status(400).json({ error: 'Metadados (localTransactionId) ausentes no webhook.' });
     }
-    
-    let metadata: { userId: string, planIds: string[] };
-    try {
-      metadata = JSON.parse(metadataString);
-    } catch (e) {
-      console.error('CRITICAL: Falha ao parsear os metadados do webhook.', metadataString);
-      return res.status(500).json({ error: 'Formato de metadados inválido.' });
-    }
-
-    const { userId, planIds } = metadata;
-
-    if (!userId || !Array.isArray(planIds) || planIds.length === 0) {
-      console.error('Metadados inválidos ou incompletos no webhook.', metadata);
-      throw new Error('Metadados inválidos: userId ou planIds ausentes/inválidos.');
-    }
+    console.log(`[webhook.ts] Local transaction ID recebido: ${localTransactionId}`);
 
     initializeAdminApp();
     const db = admin.firestore();
+
+    const paymentRef = db.collection('payments').doc(localTransactionId);
+    const paymentDoc = await paymentRef.get();
+
+    if (!paymentDoc.exists) {
+        console.error(`CRITICAL: Documento de pagamento com ID ${localTransactionId} não encontrado no Firestore.`);
+        throw new Error(`Documento de pagamento não encontrado.`);
+    }
+
+    const paymentData = paymentDoc.data()!;
+    
+    if (paymentData.status === 'completed') {
+        console.log(`[webhook.ts] Pagamento ${localTransactionId} já foi processado. Ignorando.`);
+        return res.status(200).json({ success: true, message: "Pagamento já processado." });
+    }
+
+    const { userId, planIds } = paymentData;
+
+    if (!userId || !Array.isArray(planIds) || planIds.length === 0) {
+      console.error('Dados inválidos ou incompletos no documento de pagamento do Firestore.', paymentData);
+      throw new Error('Dados inválidos no Firestore: userId ou planIds ausentes/inválidos.');
+    }
 
     const allPlans = await getPlansFromFirestoreAdmin(db);
     const selectedPlans = allPlans.filter(p => planIds.includes(p.id));
 
     if (selectedPlans.length !== planIds.length) {
-      throw new Error(`Planos inválidos recebidos no webhook. IDs: ${planIds.join(', ')}`);
+      throw new Error(`Planos inválidos referenciados no pagamento ${localTransactionId}. IDs: ${planIds.join(', ')}`);
     }
 
     const userRef = db.collection('users').doc(userId);
@@ -132,14 +138,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       throw new Error(`Usuário com UID ${userId} não encontrado no Firestore.`);
     }
 
-    const userData = userDoc.data();
-    const existingSubscriptions = userData?.subscriptions || {};
+    const userData = userDoc.data()!;
+    const existingSubscriptions = userData.subscriptions || {};
 
     const batch = db.batch();
 
     for (const plan of selectedPlans) {
       const now = new Date();
-      const expiresAt = new Date(now.getTime());
+      const currentSub = existingSubscriptions[plan.productId];
+      
+      const startDate = (currentSub && currentSub.status === 'active' && currentSub.expiresAt.toDate() > now) 
+          ? currentSub.expiresAt.toDate() 
+          : now;
+          
+      const expiresAt = new Date(startDate.getTime());
       expiresAt.setDate(expiresAt.getDate() + plan.days);
 
       existingSubscriptions[plan.productId] = {
@@ -147,16 +159,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         plan: plan.id,
         startedAt: Timestamp.fromDate(now),
         expiresAt: Timestamp.fromDate(expiresAt),
-        lastTransactionId: transactionId,
+        lastTransactionId: pushinpayTransactionId,
       };
     }
     
     batch.update(userRef, { subscriptions: existingSubscriptions });
     
-    batch.update(userRef, {
-        name: userData?.name || body.payer_name as string,
-        document: userData?.document || body.payer_national_registration as string,
-        phone: userData?.phone || body.phone as string,
+    batch.update(paymentRef, { 
+      status: 'completed',
+      processedAt: admin.firestore.FieldValue.serverTimestamp(),
+      pushinpayEndToEndId: body.end_to_end_id as string,
     });
 
     await batch.commit();
@@ -169,7 +181,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       userName: userData?.name || body.payer_name,
       planIds,
       selectedPlans,
-      transactionId,
+      transactionId: pushinpayTransactionId,
     });
 
     return res.status(200).json({ success: true });
