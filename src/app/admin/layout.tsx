@@ -1,47 +1,25 @@
 'use client';
 
 import { useEffect } from 'react';
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks';
-import { cn } from '@/lib/utils';
 import { Loader } from '@/components/loader';
-import { Logo } from '@/components/logo';
-import { UserNav } from '@/components/dashboard/user-nav';
-import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
-import { Menu, Users, BookOpen, Shield, Package, TicketPercent, CreditCard, Webhook } from 'lucide-react';
+import { AdminSidebar } from '@/components/admin/admin-sidebar';
+import { AdminHeader } from '@/components/admin/admin-header';
 import { Rotbar } from '@/components/rotbar';
-
-const adminNavItems = [
-  { href: '/admin', label: 'Dashboard', icon: Shield },
-  { href: '/admin/users', label: 'Usuários', icon: Users },
-  { href: '/admin/modules', label: 'Módulos', icon: BookOpen },
-  { href: '/admin/plans', label: 'Planos', icon: Package },
-  { href: '/admin/coupons', label: 'Cupons', icon: TicketPercent },
-  { href: '/admin/payments', label: 'Pagamentos', icon: CreditCard },
-  { href: '/admin/webhooks', label: 'Webhooks', icon: Webhook },
-];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    // Wait for the auth state to be fully resolved.
-    if (loading) {
-      return;
-    }
+    if (loading) return;
 
-    // If there is no user or the user is not an admin, they should not be here.
     if (!user || user.role !== 'admin') {
-      // Redirect non-admins to the main dashboard.
       router.replace('/dashboard');
     }
   }, [user, loading, router]);
 
-  // Show a loader while authentication is in progress.
-  // Also, show loader and prevent content flash if a non-admin briefly hits this page before redirecting.
   if (loading || !user || user.role !== 'admin') {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
@@ -50,13 +28,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  // If we've passed all checks, render the admin layout.
   return (
     <>
       <div className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
-        <Sidebar />
+        <AdminSidebar />
         <div className="flex flex-col overflow-y-auto">
-          <Header />
+          <AdminHeader />
           <main className="flex-1 bg-background p-4 md:p-6 lg:p-8">
             <div className="mx-auto w-full max-w-7xl">
               {children}
@@ -68,87 +45,3 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     </>
   );
 }
-
-function Sidebar() {
-    const pathname = usePathname();
-  
-    return (
-      <div className="hidden border-r bg-muted/40 md:block">
-        <div className="flex h-full max-h-screen flex-col gap-2">
-          <div className="flex h-[140px] items-center justify-center border-b px-4 lg:px-6">
-            <Link href="/admin" className="flex items-center gap-2 font-semibold">
-              <Logo />
-              <span className="text-sm font-bold text-primary">(Admin)</span>
-            </Link>
-          </div>
-          <div className="flex-1">
-            <nav className="grid items-start px-2 text-sm font-medium lg:px-4">
-              {adminNavItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
-                    pathname === item.href && 'bg-muted text-primary'
-                  )}
-                >
-                  <item.icon className="h-4 w-4" />
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
-          </div>
-        </div>
-      </div>
-    );
-  }
-  
-  function Header() {
-    const pathname = usePathname();
-  
-    return (
-      <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-neutral-800 bg-background/95 px-4 shadow-md backdrop-blur-sm lg:h-[60px] lg:px-6">
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button variant="outline" size="icon" className="shrink-0 md:hidden">
-              <Menu className="h-5 w-5" />
-              <span className="sr-only">Toggle navigation menu</span>
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="flex flex-col bg-background">
-            <SheetHeader>
-              <SheetTitle className="sr-only">Menu Administrador</SheetTitle>
-              <SheetDescription className="sr-only">Navegue pela área de administração.</SheetDescription>
-            </SheetHeader>
-            <nav className="grid gap-2 text-lg font-medium">
-              <Link
-                href="/admin"
-                className="flex items-center justify-center gap-2 text-lg font-semibold mb-4 h-[140px] border-b"
-              >
-                <Logo />
-                 <span className="text-sm font-bold text-primary">(Admin)</span>
-              </Link>
-              {adminNavItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    'flex items-center gap-4 rounded-xl px-3 py-2 text-muted-foreground hover:text-foreground',
-                     pathname === item.href && 'bg-muted text-foreground'
-                  )}
-                >
-                  <item.icon className="h-5 w-5" />
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
-          </SheetContent>
-        </Sheet>
-  
-        <div className="w-full flex-1">
-          {/* Can add search bar here if needed */}
-        </div>
-        <UserNav />
-      </header>
-    );
-  }

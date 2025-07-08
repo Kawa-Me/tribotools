@@ -1,73 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import type { Module, Lesson } from '@/lib/types';
-import * as lucideIcons from 'lucide-react';
-import { useAuth } from '@/lib/hooks';
-
-const iconComponents: { [key: string]: React.ComponentType<any> } = {
-  LayoutDashboard: lucideIcons.LayoutDashboard,
-  BookOpen: lucideIcons.BookOpen,
-  Users: lucideIcons.Users,
-  Settings: lucideIcons.Settings,
-  ShieldCheck: lucideIcons.ShieldCheck,
-  KeyRound: lucideIcons.KeyRound,
-  SearchCode: lucideIcons.SearchCode,
-  BrainCircuit: lucideIcons.BrainCircuit,
-  Paintbrush: lucideIcons.Paintbrush,
-  TrendingUp: lucideIcons.TrendingUp,
-  MessageSquare: lucideIcons.MessageSquare,
-};
+import { useContext } from 'react';
+import { ModulesContext } from '@/components/providers/modules-provider';
 
 export function useModules() {
-  const [modules, setModules] = useState<Module[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [dbConfigured, setDbConfigured] = useState(true);
-  const { user, loading: authLoading } = useAuth();
-
-  useEffect(() => {
-    if (authLoading) {
-      return; // Wait for auth to be ready
-    }
-    if (!user) {
-      setLoading(false); // No user, no data to fetch
-      return;
-    }
-
-    if (!db) {
-      setLoading(false);
-      setDbConfigured(false);
-      return;
-    }
-
-    const unsubscribe = onSnapshot(collection(db, "modules"), (snapshot) => {
-      const modulesData = snapshot.docs
-        .map(doc => {
-            const data = doc.data();
-            const iconName = data.icon as keyof typeof iconComponents;
-            const icon = iconComponents[iconName] || lucideIcons.HelpCircle;
-            return { 
-              id: doc.id, 
-              ...data,
-              lessons: (data.lessons || []).sort((a: Lesson, b: Lesson) => (a.order ?? 0) - (b.order ?? 0)),
-              icon,
-              order: data.order ?? 0,
-              permission: data.permission || 'ferramentas', // Default permission
-            } as Module;
-        })
-        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-
-      setModules(modulesData);
-      setLoading(false);
-    }, (error) => {
-        console.error("Firestore snapshot error in useModules:", error);
-        setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [user, authLoading]);
-
-  return { modules, loading, dbConfigured };
+  const context = useContext(ModulesContext);
+  if (context === undefined) {
+    throw new Error('useModules must be used within a ModulesProvider');
+  }
+  return context;
 }
