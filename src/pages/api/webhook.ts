@@ -106,7 +106,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (pushinpayTransactionId) {
         for (let i = 0; i < 5; i++) {
           console.log(`[webhook.ts] Tentativa de busca ${i + 1}/5...`);
-          const paymentsQuery = db.collection('payments').where('pushinpayTransactionId', '==', pushinpayTransactionId).limit(1);
+          // Adicionamos um orderBy para forçar a necessidade de um índice composto e obter um link de criação claro.
+          const paymentsQuery = db.collection('payments').where('pushinpayTransactionId', '==', pushinpayTransactionId).orderBy('createdAt', 'desc').limit(1);
           const querySnapshot = await paymentsQuery.get();
           if (!querySnapshot.empty) {
             paymentDocSnapshot = querySnapshot.docs[0];
