@@ -36,7 +36,8 @@ async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore): Promis
     return products.flatMap(p => 
       p.plans.map(plan => ({...plan, productId: p.id, productName: p.name}))
     );
-  } catch (error: any) {
+  } catch (error: any)
+{
     console.error("[checkout.ts] Error fetching plans with Admin SDK:", error);
     throw new Error("Could not fetch plans from database.", { cause: error });
   }
@@ -134,7 +135,6 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     
     if (!response.ok || !data.id) {
         const apiErrorMessage = data.message || (data.errors ? JSON.stringify(data.errors) : `HTTP error! status: ${response.status}`);
-        // We don't have a payment record to update, so we just throw.
         throw new Error(`Falha no provedor de pagamento: ${apiErrorMessage}`);
     }
     
@@ -155,9 +155,9 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
       totalPrice: finalPrice,
       status: 'pending',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      pushinpayTransactionId: data.id, // Include the gateway ID from the start.
+      pushinpayTransactionId: data.id.toUpperCase(), // Store as uppercase
     });
-    console.log(`[checkout.ts] Created pending payment record ${localTransactionId} for PushinPay ID ${data.id}`);
+    console.log(`[checkout.ts] Created pending payment record ${localTransactionId} for PushinPay ID ${data.id.toUpperCase()}`);
 
     const imageUrl = `data:image/png;base64,${data.qr_code_base64}`;
     return {
