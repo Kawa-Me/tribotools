@@ -16,15 +16,15 @@ export const metadata: Metadata = {
   description: 'Sua área de membros exclusiva para ferramentas hacker.',
   icons: {
     icon: {
-      url: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo/tribo-logo.png',
+      url: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//tribo-logo.png',
       type: 'image/png',
     },
     shortcut: {
-      url: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo/tribo-logo.png',
+      url: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//tribo-logo.png',
       type: 'image/png',
     },
     apple: {
-      url: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo/tribo-logo.png',
+      url: 'https://pjuifgyrftpnjpurmzzn.supabase.co/storage/v1/object/public/tribo//tribo-logo.png',
       type: 'image/png',
     },
   },
