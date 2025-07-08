@@ -1,3 +1,4 @@
+
 'use server';
 
 import { z } from 'zod';
@@ -147,9 +148,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
         phone,
       },
       webhook_url: webhookUrl,
-      metadata: {
-        localTransactionId: localTransactionId,
-      },
+      localTransactionId: localTransactionId,
     };
     
     const response = await fetch(apiUrl, {
