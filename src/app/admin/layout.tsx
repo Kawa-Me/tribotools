@@ -10,7 +10,7 @@ import { Logo } from '@/components/logo';
 import { UserNav } from '@/components/dashboard/user-nav';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
-import { Menu, Users, BookOpen, Shield, Package } from 'lucide-react';
+import { Menu, Users, BookOpen, Shield, Package, TicketPercent } from 'lucide-react';
 import { Rotbar } from '@/components/rotbar';
 
 const adminNavItems = [
@@ -18,6 +18,7 @@ const adminNavItems = [
   { href: '/admin/users', label: 'Usuários', icon: Users },
   { href: '/admin/modules', label: 'Módulos', icon: BookOpen },
   { href: '/admin/plans', label: 'Planos', icon: Package },
+  { href: '/admin/coupons', label: 'Cupons', icon: TicketPercent },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -86,7 +87,8 @@ function Sidebar() {
                   href={item.href}
                   className={cn(
                     'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
-                    pathname === item.href && 'bg-muted text-primary'
+                    pathname.startsWith(item.href) && item.href !== '/admin' && 'bg-muted text-primary',
+                    pathname === '/admin' && item.href === '/admin' && 'bg-muted text-primary'
                   )}
                 >
                   <item.icon className="h-4 w-4" />
@@ -131,7 +133,8 @@ function Sidebar() {
                   href={item.href}
                   className={cn(
                     'flex items-center gap-4 rounded-xl px-3 py-2 text-muted-foreground hover:text-foreground',
-                     pathname === item.href && 'bg-muted text-foreground'
+                     pathname.startsWith(item.href) && item.href !== '/admin' && 'bg-muted text-foreground',
+                     pathname === '/admin' && item.href === '/admin' && 'bg-muted text-foreground'
                   )}
                 >
                   <item.icon className="h-5 w-5" />

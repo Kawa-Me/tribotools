@@ -1,9 +1,8 @@
-
 'use server';
 
 import { z } from 'zod';
 import * as admin from 'firebase-admin';
-import type { Product, Plan } from '@/lib/types';
+import type { Product, Plan, Coupon } from '@/lib/types';
 
 // Helper to initialize Firebase Admin SDK only once
 const initializeAdminApp = () => {
@@ -49,6 +48,7 @@ const CreatePixPaymentSchema = z.object({
   email: z.string().email(),
   document: z.string().min(11),
   phone: z.string().min(10),
+  couponCode: z.string().optional().nullable(),
 });
 
 type CreatePixPaymentInput = z.infer<typeof CreatePixPaymentSchema>;
@@ -61,7 +61,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
       return { error: 'Dados de formulário inválidos.', details: validation.error.format() };
     }
     
-    const { uid, plans: selectedPlanIds, name, email, document, phone } = validation.data;
+    const { uid, plans: selectedPlanIds, name, email, document, phone, couponCode } = validation.data;
 
     const apiToken = process.env.PUSHINPAY_API_TOKEN;
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
@@ -73,17 +73,49 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     const adminApp = initializeAdminApp();
     const db = admin.firestore();
 
+    // Fetch plans and validate selection
     const allPlans = await getPlansFromFirestoreAdmin(db);
     const selectedPlans = allPlans.filter(p => selectedPlanIds.includes(p.id));
-
     if (selectedPlans.length !== selectedPlanIds.length) {
       return { error: 'Um ou mais planos selecionados são inválidos.' };
     }
+    const basePrice = selectedPlans.reduce((sum, plan) => sum + plan.price, 0);
 
-    const totalPrice = selectedPlans.reduce((sum, plan) => sum + plan.price, 0);
-    const totalPriceInCents = Math.round(totalPrice * 100);
+    // Validate coupon and calculate final price
+    let finalPrice = basePrice;
+    let discountAmount = 0;
+    let appliedCoupon: Coupon | null = null;
+    
+    if (couponCode) {
+      const couponRef = db.collection('coupons').doc(couponCode);
+      const couponDoc = await couponRef.get();
+      
+      if (couponDoc.exists) {
+        const coupon = couponDoc.data() as Coupon;
+        const now = admin.firestore.Timestamp.now();
 
-    // --- NEW LOGIC: Create a local payment record ---
+        if (coupon.isActive && now >= coupon.startDate && now <= coupon.endDate) {
+          appliedCoupon = coupon;
+          const applicablePlans = selectedPlans.filter(plan => 
+            coupon.applicableProductIds.length === 0 || coupon.applicableProductIds.includes(plan.productId)
+          );
+          const eligiblePrice = applicablePlans.reduce((sum, plan) => sum + plan.price, 0);
+          discountAmount = eligiblePrice * (coupon.discountPercentage / 100);
+          finalPrice = basePrice - discountAmount;
+        } else {
+          return { error: 'O cupom fornecido não é mais válido.' };
+        }
+      } else {
+        return { error: 'O cupom fornecido não existe.' };
+      }
+    }
+
+    const totalPriceInCents = Math.round(finalPrice * 100);
+    if (totalPriceInCents < 100) {
+        return { error: 'O valor final da transação não pode ser inferior a R$ 1,00.' };
+    }
+
+    // --- Create a local payment record ---
     const paymentRef = db.collection('payments').doc();
     const localTransactionId = paymentRef.id;
 
@@ -92,12 +124,14 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
       userEmail: email,
       userName: name,
       planIds: selectedPlanIds,
-      totalPrice: totalPrice,
+      basePrice: basePrice,
+      appliedCoupon: appliedCoupon ? { id: appliedCoupon.id, discountPercentage: appliedCoupon.discountPercentage } : null,
+      discountAmount: discountAmount,
+      totalPrice: finalPrice,
       status: 'pending',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     console.log(`[checkout.ts] Created pending payment record: ${localTransactionId}`);
-    // --- END NEW LOGIC ---
 
     const apiUrl = 'https://api.pushinpay.com.br/api/pix/cashIn';
     const webhookUrl = `${siteUrl}/api/webhook`;
@@ -112,7 +146,6 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
       value: totalPriceInCents,
       webhook_url: webhookUrl,
       expires_at: expirationDate.toISOString(),
-      // Send our local ID as the metadata. This is the crucial change.
       metadata: localTransactionId,
     };
     
@@ -126,10 +159,10 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     
     if (!response.ok || !data.id) {
         const apiErrorMessage = data.message || (data.errors ? JSON.stringify(data.errors) : `HTTP error! status: ${response.status}`);
+        await paymentRef.update({ status: 'failed', failureReason: `PushinPay Error: ${apiErrorMessage}` });
         throw new Error(`Falha no provedor de pagamento: ${apiErrorMessage}`);
     }
     
-    // Update our local record with the ID from PushinPay
     await paymentRef.update({ pushinpayTransactionId: data.id });
     
     const imageUrl = `data:image/png;base64,${data.qr_code_base64}`;

@@ -50,6 +50,15 @@ export interface Product {
     plans: Plan[];
 }
 
+export interface Coupon {
+  id: string; // The coupon code itself, case-insensitive
+  discountPercentage: number;
+  startDate: Timestamp;
+  endDate: Timestamp;
+  applicableProductIds: string[]; // List of product IDs it applies to. Empty array means ALL products.
+  isActive: boolean;
+}
+
 export interface UserSubscription {
   status: 'active' | 'expired' | 'none';
   plan: string | null;

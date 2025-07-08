@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -7,6 +6,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { QRCodeSVG } from 'qrcode.react';
+import { doc, getDoc, Timestamp } from "firebase/firestore";
+import { db } from '@/lib/firebase';
+import type { Coupon } from '@/lib/types';
 
 import { useAuth } from '@/lib/hooks';
 import { useToast } from '@/hooks/use-toast';
@@ -28,9 +30,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { ClipboardCopy } from 'lucide-react';
+import { ClipboardCopy, Loader2, TicketPercent, XCircle } from 'lucide-react';
 import { Skeleton } from './ui/skeleton';
-import { Separator } from './ui/separator';
 
 const FormSchema = z.object({
   plans: z.array(z.string()).min(1, {
@@ -45,6 +46,7 @@ const FormSchema = z.object({
   phone: z.string().min(10, {
     message: 'O telefone deve ter pelo menos 10 dígitos (com DDD).',
   }),
+  couponCode: z.string().optional(),
 });
 
 interface PixData {
@@ -59,6 +61,12 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [pixData, setPixData] = useState<PixData | null>(null);
+
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
   
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
@@ -67,6 +75,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
       name: user?.name || '',
       document: user?.document || '',
       phone: user?.phone || '',
+      couponCode: '',
     },
   });
   
@@ -78,10 +87,80 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
     }
   }, [user, form]);
 
-
   const selectedPlanIds = form.watch('plans') || [];
   const selectedPlans = allPlans.filter(p => selectedPlanIds.includes(p.id));
-  const totalPrice = selectedPlans.reduce((sum, plan) => sum + plan.price, 0);
+  const basePrice = selectedPlans.reduce((sum, plan) => sum + plan.price, 0);
+
+  useEffect(() => {
+    if (appliedCoupon) {
+      const applicablePlans = selectedPlans.filter(plan => 
+        appliedCoupon.applicableProductIds.length === 0 || appliedCoupon.applicableProductIds.includes(plan.productId)
+      );
+      const eligiblePrice = applicablePlans.reduce((sum, plan) => sum + plan.price, 0);
+      const discount = eligiblePrice * (appliedCoupon.discountPercentage / 100);
+      setDiscountAmount(discount);
+    } else {
+      setDiscountAmount(0);
+    }
+  }, [appliedCoupon, selectedPlans]);
+
+  const totalPrice = basePrice - discountAmount;
+
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) return;
+    if (!db) {
+        toast({ variant: 'destructive', title: 'Erro de Configuração', description: 'Serviço de banco de dados não disponível.' });
+        return;
+    }
+    setCouponLoading(true);
+    setCouponError(null);
+    setAppliedCoupon(null);
+    setDiscountAmount(0);
+
+    const couponId = couponCode.trim().toUpperCase();
+    const couponRef = doc(db, 'coupons', couponId);
+
+    try {
+        const docSnap = await getDoc(couponRef);
+        if (!docSnap.exists()) {
+            setCouponError("Cupom inválido ou não encontrado.");
+            return;
+        }
+
+        const coupon = docSnap.data() as Coupon;
+        const now = Timestamp.now();
+
+        if (!coupon.isActive) {
+            setCouponError("Este cupom não está mais ativo.");
+            return;
+        }
+        if (now < coupon.startDate) {
+            setCouponError("Este cupom ainda não é válido.");
+            return;
+        }
+        if (now > coupon.endDate) {
+            setCouponError("Este cupom já expirou.");
+            return;
+        }
+
+        setAppliedCoupon(coupon);
+        form.setValue('couponCode', coupon.id);
+        toast({ title: 'Sucesso!', description: 'Cupom aplicado!' });
+
+    } catch (error) {
+        setCouponError("Ocorreu um erro ao validar o cupom.");
+    } finally {
+        setCouponLoading(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setCouponCode('');
+    setAppliedCoupon(null);
+    setDiscountAmount(0);
+    setCouponError(null);
+    form.setValue('couponCode', '');
+  }
 
   const handleCopyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -115,6 +194,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
         name: data.name,
         document: data.document,
         phone: data.phone,
+        couponCode: appliedCoupon?.id || null,
       });
 
       if (result.error) {
@@ -148,6 +228,10 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
   const resetState = () => {
     setLoading(false);
     setPixData(null);
+    setCouponCode('');
+    setAppliedCoupon(null);
+    setDiscountAmount(0);
+    setCouponError(null);
     form.reset();
   }
 
@@ -197,7 +281,6 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
               includeMargin={false}
             />
           </div>
-
           <Button
             className="w-full"
             size="lg"
@@ -206,7 +289,6 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
             <ClipboardCopy className="mr-2 h-4 w-4" />
             Copiar Código PIX
           </Button>
-
           <p className="text-xs text-center text-muted-foreground">
             Após o pagamento, o acesso será liberado automaticamente em alguns instantes.
           </p>
@@ -220,7 +302,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
 
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-2">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <FormField
                 control={form.control}
                 name="plans"
@@ -236,7 +318,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
                                 control={form.control}
                                 name="plans"
                                 render={({ field }) => (
-                                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-3 rounded-md border border-input has-[:checked]:border-primary has-[:checked]:bg-muted/50 transition-all">
+                                <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-3 rounded-md border border-input has-[:checked]:border-primary has-[:checked]:bg-muted/50 transition-all">
                                     <FormControl>
                                     <Checkbox
                                         checked={field.value?.includes(plan.id)}
@@ -285,50 +367,45 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
                     </FormItem>
                 )}
                 />
-
-                <div className="space-y-4 pt-4 mt-4 border-t border-input">
-                    <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel className="text-xs">Nome Completo</FormLabel>
-                        <FormControl>
-                            <Input placeholder="Seu nome" {...field} />
-                        </FormControl>
-                        <FormMessage className="text-xs" />
-                        </FormItem>
-                    )}
-                    />
-                     <FormField
-                    control={form.control}
-                    name="document"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel className="text-xs">CPF ou CNPJ</FormLabel>
-                        <FormControl>
-                            <Input placeholder="Apenas números" {...field} />
-                        </FormControl>
-                        <FormMessage className="text-xs" />
-                        </FormItem>
-                    )}
-                    />
-                    <FormField
-                    control={form.control}
-                    name="phone"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel className="text-xs">Telefone (com DDD)</FormLabel>
-                        <FormControl>
-                            <Input placeholder="(99) 99999-9999" {...field} />
-                        </FormControl>
-                        <FormMessage className="text-xs" />
-                        </FormItem>
-                    )}
-                    />
+                
+                <div className="space-y-2 pt-4 border-t">
+                    <Label>Cupom de Desconto</Label>
+                    <div className="flex gap-2">
+                        <Input 
+                            placeholder="Ex: TRIBO30OFF" 
+                            value={couponCode} 
+                            onChange={(e) => setCouponCode(e.target.value)} 
+                            disabled={!!appliedCoupon}
+                        />
+                        {appliedCoupon ? (
+                             <Button type="button" variant="destructive" onClick={handleRemoveCoupon}>Remover</Button>
+                        ) : (
+                            <Button type="button" onClick={handleApplyCoupon} disabled={couponLoading}>
+                                {couponLoading ? <Loader2 className="animate-spin" /> : "Aplicar"}
+                            </Button>
+                        )}
+                    </div>
+                    {couponError && <p className="text-xs text-destructive">{couponError}</p>}
                 </div>
 
-                <div className="!mt-4 space-y-1 border-t pt-2">
+                <div className="space-y-4 pt-4 mt-4 border-t border-input">
+                    <FormField control={form.control} name="name" render={({ field }) => (<FormItem><FormLabel className="text-xs">Nome Completo</FormLabel><FormControl><Input placeholder="Seu nome" {...field} /></FormControl><FormMessage className="text-xs" /></FormItem>)} />
+                    <FormField control={form.control} name="document" render={({ field }) => (<FormItem><FormLabel className="text-xs">CPF ou CNPJ</FormLabel><FormControl><Input placeholder="Apenas números" {...field} /></FormControl><FormMessage className="text-xs" /></FormItem>)} />
+                    <FormField control={form.control} name="phone" render={({ field }) => (<FormItem><FormLabel className="text-xs">Telefone (com DDD)</FormLabel><FormControl><Input placeholder="(99) 99999-9999" {...field} /></FormControl><FormMessage className="text-xs" /></FormItem>)} />
+                </div>
+                <div className="!mt-4 space-y-2 border-t pt-2">
+                    {discountAmount > 0 && (
+                        <>
+                            <div className="text-sm flex justify-between">
+                                <span>Subtotal:</span>
+                                <span>R$ {basePrice.toFixed(2).replace('.', ',')}</span>
+                            </div>
+                            <div className="text-sm flex justify-between text-primary">
+                                <span>Desconto ({appliedCoupon?.id}):</span>
+                                <span>- R$ {discountAmount.toFixed(2).replace('.', ',')}</span>
+                            </div>
+                        </>
+                    )}
                     <div className="text-base font-bold flex justify-between">
                         <span>Total:</span>
                         <span>R$ {totalPrice.toFixed(2).replace('.', ',')}</span>
