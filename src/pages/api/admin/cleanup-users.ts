@@ -45,31 +45,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(403).json({ error: 'Forbidden: User is not an admin.' });
     }
 
-    // Anonymous users are identified by having `email: null` in our Firestore setup.
-    // They are also considered for deletion only if created more than 1 hour ago.
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    const oneHourAgoTimestamp = admin.firestore.Timestamp.fromDate(oneHourAgo);
 
-    const snapshot = await db.collection('users')
+    // Fetch all anonymous users first, then filter by date in code to avoid needing a composite index.
+    const anonymousUsersSnapshot = await db.collection('users')
         .where('email', '==', null)
-        .where('createdAt', '<=', oneHourAgoTimestamp)
         .get();
 
-    if (snapshot.empty) {
-      return res.status(200).json({ message: 'No expired anonymous users to delete.', deletedCount: 0 });
+    if (anonymousUsersSnapshot.empty) {
+      return res.status(200).json({ message: 'No anonymous users found to process.', deletedCount: 0 });
     }
 
-    const uidsToDelete: string[] = snapshot.docs.map(doc => doc.id);
+    const uidsToDelete: string[] = [];
+    const docsToDelete: admin.firestore.QueryDocumentSnapshot[] = [];
 
+    anonymousUsersSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const createdAt = data.createdAt as admin.firestore.Timestamp | undefined;
+
+        // Only consider users with a creation date that is older than one hour
+        if (createdAt && createdAt.toDate() < oneHourAgo) {
+            uidsToDelete.push(doc.id);
+            docsToDelete.push(doc);
+        }
+    });
+
+    if (uidsToDelete.length === 0) {
+      return res.status(200).json({ message: 'No expired anonymous users to delete.', deletedCount: 0 });
+    }
+    
     // Delete from Firestore
     const batch = db.batch();
-    snapshot.docs.forEach(doc => {
+    docsToDelete.forEach(doc => {
       batch.delete(doc.ref);
     });
     await batch.commit();
 
     // Delete from Firebase Auth
-    // Auth deletions must be done one by one or in batches of up to 1000
+    // Auth deletions can be done in batches of up to 1000
     const deleteAuthUsersResult = await auth.deleteUsers(uidsToDelete);
     
     const deletedCount = deleteAuthUsersResult.successCount;

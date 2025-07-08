@@ -62,7 +62,7 @@ export function UserTable({ users }: UserTableProps) {
       });
       toast({
         title: 'Sucesso!',
-        description: `Dados de ${selectedUser.email} atualizados.`,
+        description: `Dados de ${selectedUser.email || 'usuário'} atualizados.`,
       });
       setIsDialogOpen(false);
     } catch (error) {
@@ -93,7 +93,9 @@ export function UserTable({ users }: UserTableProps) {
           <TableBody>
             {users.map((user) => (
                 <TableRow key={user.uid}>
-                  <TableCell className="font-medium">{user.email}</TableCell>
+                  <TableCell className="font-medium">
+                    {user.email ? user.email : <span className="text-muted-foreground italic">Visitante Anônimo</span>}
+                  </TableCell>
                   {products.map(p => {
                     const sub = user.subscriptions?.[p.id];
                     const isExpired = sub?.expiresAt && sub.expiresAt.toDate() < new Date();
@@ -194,7 +196,7 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave, products }: EditUs
         <DialogHeader>
           <DialogTitle>Editar Assinaturas de Usuário</DialogTitle>
           <DialogDescription>
-            Gerencie todas as assinaturas para {user.email}.
+            Gerencie todas as assinaturas para {user.email || 'este visitante'}.
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-[60vh] overflow-y-auto space-y-6 py-4 pr-3">
