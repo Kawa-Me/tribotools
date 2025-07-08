@@ -59,7 +59,7 @@ export default function AdminUsersPage() {
   }, [user, authLoading]);
 
   const handleCleanup = async () => {
-    if (!window.confirm("Tem certeza que deseja excluir todos os usuários anônimos com mais de 1 hora? Esta ação não pode ser desfeita e afeta apenas contas de visitantes, não contas registradas.")) {
+    if (!window.confirm("Tem certeza que deseja excluir todos os usuários anônimos (contas sem e-mail) criados há mais de 1 hora? Esta ação não pode ser desfeita.")) {
       return;
     }
     
@@ -94,10 +94,11 @@ export default function AdminUsersPage() {
         });
 
     } catch (error: any) {
+        console.error("Cleanup error:", error);
         toast({
             variant: 'destructive',
             title: 'Erro na Limpeza',
-            description: error.message,
+            description: error.message || 'Não foi possível completar a operação. Verifique os logs do servidor.',
         });
     } finally {
         setIsCleaning(false);
