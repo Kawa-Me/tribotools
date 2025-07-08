@@ -91,26 +91,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const pushinpayTransactionId = params.get('id');
-    let localTransactionId = params.get('custom_payload[localTransactionId]');
+    let localTransactionId = params.get('metadata[localTransactionId]');
 
     initializeAdminApp();
     const db = admin.firestore();
     let paymentRef: admin.firestore.DocumentReference | null = null;
 
     if (localTransactionId) {
-      console.log(`[webhook.ts] Local transaction ID recebido via custom_payload: ${localTransactionId}`);
+      console.log(`[webhook.ts] Local transaction ID recebido via metadata: ${localTransactionId}`);
       paymentRef = db.collection('payments').doc(localTransactionId);
     } else {
-      // Fallback for older transactions or if custom_payload fails
-      console.warn(`[webhook.ts] localTransactionId ausente no custom_payload. Tentando fallback com pushinpayTransactionId: ${pushinpayTransactionId}`);
+      console.warn(`[webhook.ts] localTransactionId ausente no metadata. Tentando fallback com pushinpayTransactionId: ${pushinpayTransactionId}`);
       if (pushinpayTransactionId) {
-        const paymentsQuery = db.collection('payments').where('pushinpayTransactionId', '==', pushinpayTransactionId).limit(1);
-        const querySnapshot = await paymentsQuery.get();
-        if (!querySnapshot.empty) {
-          const paymentDoc = querySnapshot.docs[0];
-          paymentRef = paymentDoc.ref;
-          localTransactionId = paymentDoc.id; // We found it!
-          console.log(`[webhook.ts] Fallback bem-sucedido. Encontrado localTransactionId: ${localTransactionId}`);
+        // Retry logic for potential race condition between checkout and webhook
+        for (let i = 0; i < 3; i++) { // Retry up to 3 times
+          const paymentsQuery = db.collection('payments').where('pushinpayTransactionId', '==', pushinpayTransactionId).limit(1);
+          const querySnapshot = await paymentsQuery.get();
+          if (!querySnapshot.empty) {
+            const paymentDoc = querySnapshot.docs[0];
+            paymentRef = paymentDoc.ref;
+            localTransactionId = paymentDoc.id; // We found it!
+            console.log(`[webhook.ts] Fallback bem-sucedido na tentativa ${i + 1}. Encontrado localTransactionId: ${localTransactionId}`);
+            break; // Exit loop if found
+          }
+          if (i < 2) { // Don't wait on the last attempt
+             console.log(`[webhook.ts] Tentativa ${i + 1} do fallback falhou. Tentando novamente em 2 segundos...`);
+             await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+          }
         }
       }
     }

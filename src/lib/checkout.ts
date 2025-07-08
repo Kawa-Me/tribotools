@@ -148,7 +148,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
         phone,
       },
       webhook_url: webhookUrl,
-      custom_payload: {
+      metadata: {
         localTransactionId: localTransactionId,
       },
     };
