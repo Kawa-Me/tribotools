@@ -4,9 +4,13 @@ import { usePayments } from '@/hooks/use-payments';
 import { PaymentHistoryTable } from '@/components/admin/payment-history-table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function AdminPaymentsPage() {
   const { payments, loading, error } = usePayments();
+
+  const paidPayments = payments.filter(p => p.status === 'completed');
+  const pendingPayments = payments.filter(p => p.status === 'pending' || p.status === 'failed');
 
   return (
     <div className="space-y-8">
@@ -36,7 +40,20 @@ export default function AdminPaymentsPage() {
         </Card>
       )}
 
-      {!loading && !error && <PaymentHistoryTable payments={payments} />}
+      {!loading && !error && (
+        <Tabs defaultValue="paid" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 md:w-[400px]">
+                <TabsTrigger value="paid">Pagos ({paidPayments.length})</TabsTrigger>
+                <TabsTrigger value="pending">Pendentes & Falhados ({pendingPayments.length})</TabsTrigger>
+            </TabsList>
+            <TabsContent value="paid" className="mt-4">
+                <PaymentHistoryTable payments={paidPayments} />
+            </TabsContent>
+            <TabsContent value="pending" className="mt-4">
+                <PaymentHistoryTable payments={pendingPayments} />
+            </TabsContent>
+        </Tabs>
+      )}
     </div>
   );
 }
