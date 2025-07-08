@@ -148,7 +148,9 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
         phone,
       },
       webhook_url: webhookUrl,
-      localTransactionId: localTransactionId,
+      custom_payload: {
+        localTransactionId: localTransactionId,
+      },
     };
     
     const response = await fetch(apiUrl, {

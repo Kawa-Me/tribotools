@@ -3,7 +3,6 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import * as admin from 'firebase-admin';
 import type { Plan, Product } from '@/lib/types';
 import { Timestamp } from 'firebase-admin/firestore';
-import querystring from 'querystring';
 import { Buffer } from 'buffer';
 
 // Desabilita o body parser padrão do Next.js para esta rota.
@@ -82,7 +81,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     console.log('✅ Webhook do Pages Router está ativo');
     const rawBody = await getRawBody(req);
-    const body = querystring.parse(rawBody.toString('utf-8'));
+    const body = JSON.parse(rawBody.toString('utf-8'));
     console.log('Webhook recebido:', body);
     
     if (body.status !== 'paid') {
