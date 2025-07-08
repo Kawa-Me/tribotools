@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { ClipboardCopy, Loader2 } from 'lucide-react';
@@ -318,7 +319,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
 
            <div className="mt-4 w-full rounded-lg border border-amber-500/50 bg-amber-950/50 p-4 text-center">
               <p className="text-sm text-amber-300">
-                  CASO SUA COMPRA NÃO SEJA ATIVADA AUTOMATICamente, BASTA NOS ENVIAR MENSAGEM NO WHATSAPP, COM O EMAIL DA SUA CONTA E O COMPROVANTE DO PAGAMENTO
+                  CASO SUA COMPRA NÃO SEJA ATIVADA AUTOMATICAMENTE, BASTA NOS ENVIAR MENSAGEM NO WHATSAPP, COM O EMAIL DA SUA CONTA E O COMPROVANTE DO PAGAMENTO
               </p>
               <Button asChild variant="link" className="mt-3 text-white">
                   <a href="https://wa.me/5545984325338" target="_blank" rel="noopener noreferrer">
