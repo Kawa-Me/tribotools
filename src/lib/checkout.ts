@@ -35,7 +35,7 @@ async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore): Promis
     return products.flatMap(p => 
       p.plans.map(plan => ({...plan, productId: p.id, productName: p.name}))
     );
-  } catch (error: any) {
+  } catch (error: any)
     console.error("[checkout.ts] Error fetching plans with Admin SDK:", error);
     throw new Error("Could not fetch plans from database.", { cause: error });
   }
@@ -147,7 +147,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
         phone,
       },
       webhook_url: webhookUrl,
-      customPayload: {
+      metadata: {
         localTransactionId: localTransactionId,
       },
     };
