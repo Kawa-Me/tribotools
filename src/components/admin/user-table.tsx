@@ -88,7 +88,7 @@ export function UserTable({ users }: UserTableProps) {
             <TableRow>
               <TableHead>Email</TableHead>
               <TableHead>Criado em</TableHead>
-              {products.map(p => <TableHead key={p.id}>{p.name}</TableHead>)}
+              {products.map(p => <TableHead key={p.id} className="text-center">{p.name}</TableHead>)}
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -108,12 +108,15 @@ export function UserTable({ users }: UserTableProps) {
                     const sub = user.subscriptions?.[p.id];
                     const isExpired = sub?.expiresAt && sub.expiresAt.toDate() < new Date();
                     const effectiveStatus = sub?.status === 'active' && isExpired ? 'expired' : sub?.status;
+                    
                     return (
-                      <TableCell key={p.id}>
-                        {sub && sub.status && sub.status !== 'none' ? (
-                           <Badge variant={effectiveStatus === 'active' ? 'default' : 'destructive'}>
-                              {effectiveStatus || 'none'}
-                            </Badge>
+                      <TableCell key={p.id} className="text-center">
+                        {effectiveStatus === 'active' && sub.expiresAt ? (
+                            <span className="text-sm font-medium text-primary">
+                                {format(sub.expiresAt.toDate(), 'dd/MM/yyyy', { locale: ptBR })}
+                            </span>
+                        ) : effectiveStatus === 'expired' ? (
+                            <Badge variant="destructive">Expirado</Badge>
                         ) : (
                           <Badge variant="secondary">N/A</Badge>
                         )}
