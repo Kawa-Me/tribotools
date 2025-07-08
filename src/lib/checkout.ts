@@ -27,7 +27,7 @@ const initializeAdminApp = () => {
 };
 
 // Helper to get Plans using the Admin SDK
-async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore) {
+async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore): Promise<Plan[]> {
   try {
     const productsSnapshot = await db.collection('products').get();
     if (productsSnapshot.empty) return [];
@@ -120,6 +120,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     const localTransactionId = paymentRef.id;
 
     await paymentRef.set({
+      id: localTransactionId,
       userId: uid,
       userEmail: email,
       userName: name,

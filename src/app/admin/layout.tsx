@@ -10,7 +10,7 @@ import { Logo } from '@/components/logo';
 import { UserNav } from '@/components/dashboard/user-nav';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
-import { Menu, Users, BookOpen, Shield, Package, TicketPercent } from 'lucide-react';
+import { Menu, Users, BookOpen, Shield, Package, TicketPercent, CreditCard } from 'lucide-react';
 import { Rotbar } from '@/components/rotbar';
 
 const adminNavItems = [
@@ -19,6 +19,7 @@ const adminNavItems = [
   { href: '/admin/modules', label: 'Módulos', icon: BookOpen },
   { href: '/admin/plans', label: 'Planos', icon: Package },
   { href: '/admin/coupons', label: 'Cupons', icon: TicketPercent },
+  { href: '/admin/payments', label: 'Pagamentos', icon: CreditCard },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

@@ -9,6 +9,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { doc, getDoc, Timestamp } from "firebase/firestore";
 import { db } from '@/lib/firebase';
 import type { Coupon } from '@/lib/types';
+import { FaWhatsapp } from 'react-icons/fa';
 
 import { useAuth } from '@/lib/hooks';
 import { useToast } from '@/hooks/use-toast';
@@ -31,7 +32,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { ClipboardCopy, Loader2, TicketPercent, XCircle } from 'lucide-react';
+import { ClipboardCopy, Loader2 } from 'lucide-react';
 import { Skeleton } from './ui/skeleton';
 
 const FormSchema = z.object({
@@ -293,6 +294,18 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
           <p className="text-xs text-center text-muted-foreground">
             Após o pagamento, o acesso será liberado automaticamente em alguns instantes.
           </p>
+
+           <div className="mt-4 w-full rounded-lg border border-amber-500/50 bg-amber-950/50 p-4 text-center">
+              <p className="text-sm text-amber-300">
+                  CASO SUA COMPRA NÃO SEJA ATIVADA AUTOMATICAMENTE, BASTA NOS ENVIAR MENSAGEM NO WHATSAPP, COM O EMAIL DA SUA CONTA E O COMPROVANTE DO PAGAMENTO
+              </p>
+              <Button asChild variant="link" className="mt-3 text-white">
+                  <a href="https://wa.me/5545984325338" target="_blank" rel="noopener noreferrer">
+                      <FaWhatsapp className="mr-2" />
+                      Enviar Mensagem
+                  </a>
+              </Button>
+          </div>
         </div>
       );
     }

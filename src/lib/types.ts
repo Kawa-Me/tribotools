@@ -41,13 +41,15 @@ export interface Plan {
     description: string;
     days: number;
     promo: boolean;
+    productId: string;
+    productName: string;
 }
 
 export interface Product {
     id: string;
     name: string;
     order: number;
-    plans: Plan[];
+    plans: Omit<Plan, 'productId' | 'productName'>[];
 }
 
 export interface Coupon {
@@ -83,4 +85,21 @@ export interface UserData {
 export interface AuthContextType {
   user: UserData | null;
   loading: boolean;
+}
+
+export interface Payment {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  planIds: string[];
+  basePrice: number;
+  appliedCoupon: { id: string; discountPercentage: number } | null;
+  discountAmount: number;
+  totalPrice: number;
+  status: 'pending' | 'completed' | 'failed';
+  createdAt: Timestamp;
+  processedAt?: Timestamp;
+  pushinpayTransactionId?: string;
+  failureReason?: string;
 }
