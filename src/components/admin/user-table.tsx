@@ -28,6 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '../ui/badge';
 import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '../ui/skeleton';
 
 interface UserTableProps {
@@ -86,6 +87,7 @@ export function UserTable({ users }: UserTableProps) {
           <TableHeader>
             <TableRow>
               <TableHead>Email</TableHead>
+              <TableHead>Criado em</TableHead>
               {products.map(p => <TableHead key={p.id}>{p.name}</TableHead>)}
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
@@ -95,6 +97,12 @@ export function UserTable({ users }: UserTableProps) {
                 <TableRow key={user.uid}>
                   <TableCell className="font-medium">
                     {user.email}
+                  </TableCell>
+                  <TableCell>
+                    {user.createdAt
+                        ? format(user.createdAt.toDate(), 'dd/MM/yyyy', { locale: ptBR })
+                        : 'N/A'
+                    }
                   </TableCell>
                   {products.map(p => {
                     const sub = user.subscriptions?.[p.id];
@@ -123,7 +131,7 @@ export function UserTable({ users }: UserTableProps) {
             ))}
              {users.length === 0 && (
                 <TableRow>
-                    <TableCell colSpan={products.length + 2} className="text-center text-muted-foreground">
+                    <TableCell colSpan={products.length + 3} className="text-center text-muted-foreground">
                         Nenhum usuário encontrado.
                     </TableCell>
                 </TableRow>
