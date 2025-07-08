@@ -101,5 +101,6 @@ export interface Payment {
   createdAt: Timestamp;
   processedAt?: Timestamp;
   pushinpayTransactionId?: string;
+  pushinpayEndToEndId?: string;
   failureReason?: string;
 }
