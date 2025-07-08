@@ -27,7 +27,6 @@ import {
   DialogTrigger,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -104,7 +103,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
     } else {
       setDiscountAmount(0);
     }
-  }, [appliedCoupon, selectedPlans]);
+  }, [appliedCoupon, selectedPlans, allPlans]);
 
   const totalPrice = basePrice - discountAmount;
 
@@ -126,6 +125,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
         const docSnap = await getDoc(couponRef);
         if (!docSnap.exists()) {
             setCouponError("Cupom inválido ou não encontrado.");
+            setCouponLoading(false);
             return;
         }
 
@@ -134,15 +134,36 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
 
         if (!coupon.isActive) {
             setCouponError("Este cupom não está mais ativo.");
+            setCouponLoading(false);
             return;
         }
         if (now < coupon.startDate) {
             setCouponError("Este cupom ainda não é válido.");
+            setCouponLoading(false);
             return;
         }
         if (now > coupon.endDate) {
             setCouponError("Este cupom já expirou.");
+            setCouponLoading(false);
             return;
+        }
+
+        // Validate if coupon is applicable to any item in the cart
+        const selectedPlanIdsInForm = form.getValues('plans') || [];
+        if (coupon.applicableProductIds && coupon.applicableProductIds.length > 0 && selectedPlanIdsInForm.length > 0) {
+            const isCouponApplicableToAnyCartItem = allPlans
+                .filter(plan => selectedPlanIdsInForm.includes(plan.id))
+                .some(cartPlan => coupon.applicableProductIds.includes(cartPlan.productId));
+
+            if (!isCouponApplicableToAnyCartItem) {
+                const applicableProductNames = products
+                    .filter(p => coupon.applicableProductIds.includes(p.id))
+                    .map(p => `"${p.name}"`)
+                    .join(' ou ');
+                setCouponError(`Este cupom é válido apenas para: ${applicableProductNames}.`);
+                setCouponLoading(false);
+                return;
+            }
         }
 
         setAppliedCoupon(coupon);
@@ -297,7 +318,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
 
            <div className="mt-4 w-full rounded-lg border border-amber-500/50 bg-amber-950/50 p-4 text-center">
               <p className="text-sm text-amber-300">
-                  CASO SUA COMPRA NÃO SEJA ATIVADA AUTOMATICAMENTE, BASTA NOS ENVIAR MENSAGEM NO WHATSAPP, COM O EMAIL DA SUA CONTA E O COMPROVANTE DO PAGAMENTO
+                  CASO SUA COMPRA NÃO SEJA ATIVADA AUTOMATICamente, BASTA NOS ENVIAR MENSAGEM NO WHATSAPP, COM O EMAIL DA SUA CONTA E O COMPROVANTE DO PAGAMENTO
               </p>
               <Button asChild variant="link" className="mt-3 text-white">
                   <a href="https://wa.me/5545984325338" target="_blank" rel="noopener noreferrer">
