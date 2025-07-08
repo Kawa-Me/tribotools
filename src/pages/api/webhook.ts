@@ -91,35 +91,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const pushinpayTransactionId = params.get('id');
-    // Tentativa 1 (ideal): Obter nosso ID diretamente do webhook, se o gateway o enviar de volta.
-    // Estamos tentando `order_id` e `metadata[localTransactionId]`.
-    let localTransactionId = params.get('order_id') || params.get('metadata[localTransactionId]');
+    let localTransactionId = params.get('order_id');
 
     initializeAdminApp();
     const db = admin.firestore();
     let paymentRef: admin.firestore.DocumentReference | null = null;
+    let paymentDocSnapshot: admin.firestore.DocumentSnapshot | null = null;
 
     if (localTransactionId) {
-      console.log(`[webhook.ts] ID local recebido diretamente no payload: ${localTransactionId}`);
+      console.log(`[webhook.ts] ID local recebido via order_id: ${localTransactionId}`);
       paymentRef = db.collection('payments').doc(localTransactionId);
     } else {
-      // Tentativa 2 (fallback): Se nosso ID não veio, buscamos pelo ID do gateway.
-      // Isso pode falhar por condição de corrida, por isso a retentativa.
-      console.warn(`[webhook.ts] ID local não recebido no payload. Tentando fallback com ID do gateway: ${pushinpayTransactionId}`);
+      console.warn(`[webhook.ts] ID local não recebido no payload. Iniciando busca por ID do gateway: ${pushinpayTransactionId}`);
       if (pushinpayTransactionId) {
-        for (let i = 0; i < 3; i++) { // Tenta até 3 vezes
+        for (let i = 0; i < 5; i++) {
+          console.log(`[webhook.ts] Tentativa de busca ${i + 1}/5...`);
           const paymentsQuery = db.collection('payments').where('pushinpayTransactionId', '==', pushinpayTransactionId).limit(1);
           const querySnapshot = await paymentsQuery.get();
           if (!querySnapshot.empty) {
-            const paymentDoc = querySnapshot.docs[0];
-            paymentRef = paymentDoc.ref;
-            localTransactionId = paymentDoc.id; // Encontramos!
+            paymentDocSnapshot = querySnapshot.docs[0];
+            paymentRef = paymentDocSnapshot.ref;
+            localTransactionId = paymentDocSnapshot.id;
             console.log(`[webhook.ts] Fallback bem-sucedido na tentativa ${i + 1}. Encontrado localTransactionId: ${localTransactionId}`);
-            break; // Sai do loop
+            break;
           }
-          if (i < 2) { // Não espera na última tentativa
-             console.log(`[webhook.ts] Tentativa ${i + 1} do fallback falhou. Tentando novamente em 2 segundos...`);
-             await new Promise(resolve => setTimeout(resolve, 2000)); // Espera 2 segundos
+          if (i < 4) {
+             console.log(`[webhook.ts] Nenhum documento encontrado. Aguardando 3 segundos...`);
+             await new Promise(resolve => setTimeout(resolve, 3000));
           }
         }
       }
@@ -130,8 +128,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.error('CRITICAL: Impossível identificar o pagamento do webhook, mesmo com fallback.', processedBody);
       return res.status(400).json({ error: 'Não foi possível identificar a transação local correspondente a este webhook.' });
     }
-
-    const paymentDoc = await paymentRef.get();
+    
+    const paymentDoc = paymentDocSnapshot || await paymentRef.get();
 
     if (!paymentDoc.exists) {
         console.error(`CRITICAL: Documento de pagamento com ID ${localTransactionId} não encontrado no Firestore.`);
@@ -215,6 +213,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({ success: true });
 
   } catch (error: any) {
+    if (error.message && error.message.includes('requires an index')) {
+        console.error('---!!! FATAL WEBHOOK ERROR: INDEX MISSING !!!---');
+        console.error('Por favor, crie o índice do Firestore conforme sugerido no log de erro detalhado. O erro foi: ', error.message);
+        return res.status(500).json({ error: 'Internal Server Error', details: 'A required database index is missing. Check function logs.' });
+    }
     console.error('---!!! FATAL WEBHOOK ERROR !!!---', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return res.status(500).json({ error: 'Internal Server Error', details: errorMessage });
