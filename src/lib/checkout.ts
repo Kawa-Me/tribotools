@@ -148,6 +148,9 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
         phone,
       },
       webhook_url: webhookUrl,
+      // Sending our local ID in a standard field name. This has the highest chance of success.
+      order_id: localTransactionId,
+      // Also keeping it in metadata as a secondary attempt.
       metadata: {
         localTransactionId: localTransactionId,
       },

@@ -91,32 +91,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const pushinpayTransactionId = params.get('id');
-    let localTransactionId = params.get('metadata[localTransactionId]');
+    // Tentativa 1 (ideal): Obter nosso ID diretamente do webhook, se o gateway o enviar de volta.
+    // Estamos tentando `order_id` e `metadata[localTransactionId]`.
+    let localTransactionId = params.get('order_id') || params.get('metadata[localTransactionId]');
 
     initializeAdminApp();
     const db = admin.firestore();
     let paymentRef: admin.firestore.DocumentReference | null = null;
 
     if (localTransactionId) {
-      console.log(`[webhook.ts] Local transaction ID recebido via metadata: ${localTransactionId}`);
+      console.log(`[webhook.ts] ID local recebido diretamente no payload: ${localTransactionId}`);
       paymentRef = db.collection('payments').doc(localTransactionId);
     } else {
-      console.warn(`[webhook.ts] localTransactionId ausente no metadata. Tentando fallback com pushinpayTransactionId: ${pushinpayTransactionId}`);
+      // Tentativa 2 (fallback): Se nosso ID não veio, buscamos pelo ID do gateway.
+      // Isso pode falhar por condição de corrida, por isso a retentativa.
+      console.warn(`[webhook.ts] ID local não recebido no payload. Tentando fallback com ID do gateway: ${pushinpayTransactionId}`);
       if (pushinpayTransactionId) {
-        // Retry logic for potential race condition between checkout and webhook
-        for (let i = 0; i < 3; i++) { // Retry up to 3 times
+        for (let i = 0; i < 3; i++) { // Tenta até 3 vezes
           const paymentsQuery = db.collection('payments').where('pushinpayTransactionId', '==', pushinpayTransactionId).limit(1);
           const querySnapshot = await paymentsQuery.get();
           if (!querySnapshot.empty) {
             const paymentDoc = querySnapshot.docs[0];
             paymentRef = paymentDoc.ref;
-            localTransactionId = paymentDoc.id; // We found it!
+            localTransactionId = paymentDoc.id; // Encontramos!
             console.log(`[webhook.ts] Fallback bem-sucedido na tentativa ${i + 1}. Encontrado localTransactionId: ${localTransactionId}`);
-            break; // Exit loop if found
+            break; // Sai do loop
           }
-          if (i < 2) { // Don't wait on the last attempt
+          if (i < 2) { // Não espera na última tentativa
              console.log(`[webhook.ts] Tentativa ${i + 1} do fallback falhou. Tentando novamente em 2 segundos...`);
-             await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+             await new Promise(resolve => setTimeout(resolve, 2000)); // Espera 2 segundos
           }
         }
       }
