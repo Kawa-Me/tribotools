@@ -57,9 +57,8 @@ export function WebhookHistoryTable({ payments }: WebhookHistoryTableProps) {
         <TableHeader>
           <TableRow>
             <TableHead>Email</TableHead>
-            <TableHead>Nome</TableHead>
-            <TableHead>Telefone</TableHead>
             <TableHead>Processado Em</TableHead>
+            <TableHead>ID Local</TableHead>
             <TableHead>ID Gateway</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>End-to-End ID</TableHead>
@@ -70,12 +69,37 @@ export function WebhookHistoryTable({ payments }: WebhookHistoryTableProps) {
             {payments.map((payment) => (
               <TableRow key={payment.id}>
                 <TableCell className="font-medium">{payment.userEmail}</TableCell>
-                <TableCell>{payment.userName}</TableCell>
-                <TableCell>{payment.userPhone || 'N/A'}</TableCell>
                 <TableCell>
                   {payment.processedAt ? format(payment.processedAt.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 'N/A'}
                 </TableCell>
-                <TableCell className="font-mono text-xs">{payment.pushinpayTransactionId || 'N/A'}</TableCell>
+                <TableCell className="font-mono text-xs">
+                  <div className="flex items-center gap-2">
+                    <span>{payment.id.substring(0, 10)}...</span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(payment.id, 'ID Local')}>
+                          <ClipboardCopy className="h-3 w-3" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent><p>{payment.id}</p></TooltipContent>
+                    </Tooltip>
+                  </div>
+                </TableCell>
+                <TableCell className="font-mono text-xs">
+                    {payment.pushinpayTransactionId ? (
+                        <div className="flex items-center gap-2">
+                           <span>{payment.pushinpayTransactionId.substring(0, 10)}...</span>
+                           <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(payment.pushinpayTransactionId!, 'ID Gateway')}>
+                                        <ClipboardCopy className="h-3 w-3" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent><p>{payment.pushinpayTransactionId}</p></TooltipContent>
+                           </Tooltip>
+                        </div>
+                    ) : 'N/A'}
+                </TableCell>
                 <TableCell>
                   <Tooltip>
                     <TooltipTrigger>
@@ -109,7 +133,7 @@ export function WebhookHistoryTable({ payments }: WebhookHistoryTableProps) {
             ))}
             {payments.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                <TableCell colSpan={6} className="text-center text-muted-foreground">
                   Nenhum evento de webhook encontrado.
                 </TableCell>
               </TableRow>
