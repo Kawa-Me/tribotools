@@ -148,9 +148,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
         phone,
       },
       webhook_url: webhookUrl,
-      // Sending our local ID in a standard field name. This has the highest chance of success.
       order_id: localTransactionId,
-      // Also keeping it in metadata as a secondary attempt.
       metadata: {
         localTransactionId: localTransactionId,
       },
@@ -170,6 +168,11 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
         throw new Error(`Falha no provedor de pagamento: ${apiErrorMessage}`);
     }
     
+    // Create a direct lookup document to solve the webhook race condition
+    const lookupRef = db.collection('pushinpay_lookup').doc(data.id);
+    await lookupRef.set({ paymentId: localTransactionId });
+    
+    // Also save the transaction ID in the main payment document for record-keeping
     await paymentRef.update({ pushinpayTransactionId: data.id });
     
     const imageUrl = `data:image/png;base64,${data.qr_code_base64}`;

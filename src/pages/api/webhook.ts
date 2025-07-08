@@ -88,43 +88,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const pushinpayTransactionId = params.get('id');
-    const localTransactionId = params.get('order_id');
+    const localTransactionIdFromOrder = params.get('order_id');
 
     initializeAdminApp();
     const db = admin.firestore();
-    let paymentQuery;
-
-    // Prioritize the local ID if present, otherwise fall back to the gateway's ID
-    if (localTransactionId) {
-      console.log(`[webhook.ts] Local ID received via order_id: ${localTransactionId}`);
-      paymentQuery = db.collection('payments').doc(localTransactionId);
-    } else if (pushinpayTransactionId) {
-      console.log(`[webhook.ts] order_id not found. Querying by pushinpayTransactionId: ${pushinpayTransactionId}`);
-      paymentQuery = db.collection('payments').where('pushinpayTransactionId', '==', pushinpayTransactionId).limit(1);
-    } else {
-        console.error('[webhook.ts] CRITICAL: Webhook received without id or order_id.', Object.fromEntries(params));
-        return res.status(400).json({ error: 'Webhook payload is missing required transaction identifiers.' });
-    }
-
-    const paymentDocSnapshot = await paymentQuery.get();
+    let paymentRef: admin.firestore.DocumentReference;
     
-    let paymentDoc: admin.firestore.DocumentSnapshot | undefined;
-    if ('docs' in paymentDocSnapshot) { // It's a QuerySnapshot from the fallback
-        if (paymentDocSnapshot.empty) {
-            console.error(`[webhook.ts] Payment not found for pushinpayTransactionId: ${pushinpayTransactionId}. This might be a race condition. Responding 404 to trigger a retry from PushinPay.`);
-            return res.status(404).json({ error: 'Payment not found, please retry.' });
+    // --- Nova Lógica de Busca ---
+    if (localTransactionIdFromOrder) {
+        // Se o `order_id` for enviado, usamos ele para uma busca direta e confiável.
+        console.log(`[webhook.ts] Local ID received via order_id: ${localTransactionIdFromOrder}`);
+        paymentRef = db.collection('payments').doc(localTransactionIdFromOrder);
+    } else {
+        // Se `order_id` não vier, usamos a tabela de lookup como fallback.
+        if (!pushinpayTransactionId) {
+             console.error('[webhook.ts] CRITICAL: Webhook payload is missing transaction identifier.');
+             return res.status(400).json({ error: 'Webhook payload is missing transaction identifier.' });
         }
-        paymentDoc = paymentDocSnapshot.docs[0];
-    } else { // It's a DocumentSnapshot from the direct lookup
-        paymentDoc = paymentDocSnapshot;
+        console.log(`[webhook.ts] order_id not found. Using lookup table with pushinpayTransactionId: ${pushinpayTransactionId}`);
+        const lookupRef = db.collection('pushinpay_lookup').doc(pushinpayTransactionId);
+        const lookupDoc = await lookupRef.get();
+
+        if (!lookupDoc.exists) {
+            console.error(`[webhook.ts] Lookup document not found for pushinpayTransactionId: ${pushinpayTransactionId}. Responding 404 to trigger retry.`);
+            return res.status(404).json({ error: 'Payment lookup failed, please retry.' });
+        }
+        const { paymentId } = lookupDoc.data()!;
+        if (!paymentId) {
+            console.error(`[webhook.ts] Lookup document for ${pushinpayTransactionId} is missing the paymentId field.`);
+            return res.status(500).json({ error: 'Internal Server Error: Malformed lookup document.' });
+        }
+        paymentRef = db.collection('payments').doc(paymentId);
     }
+    
+    const paymentDoc = await paymentRef.get();
 
     if (!paymentDoc.exists) {
-      console.error(`[webhook.ts] Payment document with ID ${localTransactionId} not found. Responding 404 to trigger a retry from PushinPay.`);
-      return res.status(404).json({ error: `Payment with id ${localTransactionId} not found, please retry.` });
+      console.error(`[webhook.ts] Payment document with ID ${paymentRef.id} not found in payments collection. This should not happen if the lookup table is correct.`);
+      return res.status(404).json({ error: `Payment document ${paymentRef.id} not found, please retry.` });
     }
     
-    const paymentRef = paymentDoc.ref;
     const paymentData = paymentDoc.data()!;
     
     if (paymentData.status === 'completed') {
