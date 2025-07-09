@@ -39,14 +39,35 @@ async function notifyAutomationSystem(payload: any) {
         return;
     }
 
-    console.log('[webhook.ts] Attempting to send notification to n8n...');
-    console.log('[webhook.ts] n8n Payload:', JSON.stringify(payload, null, 2)); // Log the exact payload
+    console.log('[webhook.ts] Attempting to send notification to n8n via GET...');
+    console.log('[webhook.ts] n8n Payload:', JSON.stringify(payload, null, 2));
 
     try {
-        const response = await fetch(n8nWebhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
+        const params = new URLSearchParams();
+        
+        // Handle simple fields
+        if (payload.userId) params.append('userId', payload.userId);
+        if (payload.userEmail) params.append('userEmail', payload.userEmail);
+        if (payload.userName) params.append('userName', payload.userName);
+        if (payload.transactionId) params.append('transactionId', payload.transactionId);
+
+        // Handle arrays and objects by stringifying them
+        if (payload.planIds && Array.isArray(payload.planIds)) {
+            // n8n GET usually works better with comma-separated values for arrays
+            params.append('planIds', payload.planIds.join(','));
+        }
+        if (payload.selectedPlans && Array.isArray(payload.selectedPlans)) {
+            params.append('selectedPlans', JSON.stringify(payload.selectedPlans));
+        }
+        
+        // Remove the query string from the base URL if it exists to avoid conflicts
+        const baseUrl = n8nWebhookUrl.split('?')[0];
+        const fullUrl = `${baseUrl}?${params.toString()}`;
+
+        console.log(`[webhook.ts] Sending GET request to: ${fullUrl}`);
+
+        const response = await fetch(fullUrl, {
+            method: 'GET',
         });
 
         if (response.ok) {
