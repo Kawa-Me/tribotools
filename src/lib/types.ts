@@ -66,6 +66,7 @@ export interface UserSubscription {
   planId: string | null;
   expiresAt: Timestamp | null;
   startedAt: Timestamp | null;
+  lastTransactionId?: string;
 }
 
 export interface UserData {

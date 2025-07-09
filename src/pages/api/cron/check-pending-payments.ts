@@ -19,9 +19,9 @@ async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore): Promis
 
 // Function to process a successful payment, can be reused
 async function processSuccessfulPayment(db: admin.firestore.Firestore, paymentRef: admin.firestore.DocumentReference, paymentData: Payment) {
-    const { userId, planIds } = paymentData;
-    if (!userId || !Array.isArray(planIds) || planIds.length === 0) {
-      console.error(`[CRON] Invalid data in Firestore doc ${paymentRef.id}: userId or planIds missing.`);
+    const { userId, planIds, pushinpayTransactionId } = paymentData;
+    if (!userId || !Array.isArray(planIds) || planIds.length === 0 || !pushinpayTransactionId) {
+      console.error(`[CRON] Invalid data in Firestore doc ${paymentRef.id}: critical data missing.`);
       return;
     }
 
@@ -29,40 +29,41 @@ async function processSuccessfulPayment(db: admin.firestore.Firestore, paymentRe
     const selectedPlans = allPlans.filter(p => planIds.includes(p.id));
 
     const userRef = db.collection('users').doc(userId);
-    const userDoc = await userRef.get();
-    if (!userDoc.exists) {
-        console.error(`[CRON] User with UID ${userId} not found in Firestore.`);
-        return;
-    }
 
-    const userData = userDoc.data()!;
-    const existingSubscriptions = userData.subscriptions || {};
-    const batch = db.batch();
+    await db.runTransaction(async (transaction) => {
+        const userDoc = await transaction.get(userRef);
+        if (!userDoc.exists) {
+            console.error(`[CRON] User with UID ${userId} not found in Firestore. Cannot grant subscription.`);
+            throw new Error(`User ${userId} not found.`);
+        }
 
-    for (const plan of selectedPlans) {
-        const now = new Date();
-        const currentSub = existingSubscriptions[plan.productId];
-        const startDate = (currentSub && currentSub.status === 'active' && currentSub.expiresAt.toDate() > now)
-            ? currentSub.expiresAt.toDate()
-            : now;
-        const expiresAt = new Date(startDate.getTime());
-        expiresAt.setDate(expiresAt.getDate() + plan.days);
+        const userData = userDoc.data()!;
+        const existingSubscriptions = userData.subscriptions || {};
 
-        existingSubscriptions[plan.productId] = {
-          status: 'active',
-          planId: plan.id,
-          startedAt: Timestamp.fromDate(now),
-          expiresAt: Timestamp.fromDate(expiresAt),
-          lastTransactionId: paymentData.pushinpayTransactionId,
-        };
-    }
+        for (const plan of selectedPlans) {
+            const now = new Date();
+            const currentSub = existingSubscriptions[plan.productId];
+            const startDate = (currentSub && currentSub.status === 'active' && currentSub.expiresAt.toDate() > now)
+                ? currentSub.expiresAt.toDate()
+                : now;
+            const expiresAt = new Date(startDate.getTime());
+            expiresAt.setDate(expiresAt.getDate() + plan.days);
 
-    batch.update(userRef, { subscriptions: existingSubscriptions });
-    batch.update(paymentRef, {
-        status: 'completed',
-        processedAt: admin.firestore.FieldValue.serverTimestamp(),
+            existingSubscriptions[plan.productId] = {
+              status: 'active',
+              planId: plan.id,
+              startedAt: Timestamp.fromDate(now),
+              expiresAt: Timestamp.fromDate(expiresAt),
+              lastTransactionId: pushinpayTransactionId,
+            };
+        }
+
+        transaction.update(userRef, { subscriptions: existingSubscriptions });
+        transaction.update(paymentRef, {
+            status: 'completed',
+            processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
     });
-    await batch.commit();
 
     console.log(`[CRON] Successfully updated subscriptions for user ${userId} for payment ${paymentRef.id}`);
 }

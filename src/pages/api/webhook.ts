@@ -118,107 +118,127 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     const paymentDoc = querySnapshot.docs[0];
     const paymentRef = paymentDoc.ref;
-    const paymentData = paymentDoc.data()!;
-    const { userId, planIds, userName, userEmail, userPhone } = paymentData;
+    const { userId, planIds, userName, userEmail, userPhone } = paymentDoc.data()!;
     
-    // --- CATCH-ALL LOGIC ---
-    // Instead of checking for specific failure statuses, we treat 'paid' as the only success case.
-    // Any other status will be treated as a failure/reversal.
+    // Fetch all plans once before entering the transaction
+    const allPlans = await getPlansFromFirestoreAdmin(db);
 
     if (status === 'paid') {
-      console.log(`[webhook.ts] Entering 'paid' logic for ${normalizedGatewayId}.`);
-      if (paymentData.status === 'completed') {
-        console.log(`[webhook.ts] Payment ${paymentRef.id} has already been processed as 'completed'. Ignoring.`);
-        return res.status(200).json({ success: true, message: "Payment already processed." });
-      }
+      await db.runTransaction(async (transaction) => {
+        const freshPaymentDoc = await transaction.get(paymentRef);
+        if (!freshPaymentDoc.exists || freshPaymentDoc.data()?.status === 'completed') {
+            console.log(`[webhook.ts] Payment ${paymentRef.id} is already processed as 'completed'. Ignoring transaction.`);
+            return;
+        }
 
-      if (!userId || !Array.isArray(planIds) || planIds.length === 0) {
-        throw new Error(`Invalid data in Firestore doc ${paymentRef.id}: userId or planIds missing.`);
-      }
+        const paymentData = freshPaymentDoc.data()!;
+        const { userId, planIds } = paymentData;
+        if (!userId || !Array.isArray(planIds) || planIds.length === 0) {
+            throw new Error(`Invalid data in Firestore doc ${paymentRef.id}: userId or planIds missing.`);
+        }
 
-      const allPlans = await getPlansFromFirestoreAdmin(db);
-      const selectedPlans = allPlans.filter(p => planIds.includes(p.id));
+        const selectedPlans = allPlans.filter(p => planIds.includes(p.id));
+        if (selectedPlans.length !== planIds.length) {
+            throw new Error(`Invalid plans referenced in payment ${paymentRef.id}.`);
+        }
 
-      if (selectedPlans.length !== planIds.length) {
-        throw new Error(`Invalid plans referenced in payment ${paymentRef.id}.`);
-      }
+        const userRef = db.collection('users').doc(userId);
+        const userDoc = await transaction.get(userRef);
+        if (!userDoc.exists) throw new Error(`User with UID ${userId} not found in Firestore.`);
+        
+        const userData = userDoc.data()!;
+        const existingSubscriptions = userData.subscriptions || {};
 
-      const userRef = db.collection('users').doc(userId);
-      const userDoc = await userRef.get();
-      if (!userDoc.exists) throw new Error(`User with UID ${userId} not found in Firestore.`);
-      
-      const userData = userDoc.data()!;
-      const existingSubscriptions = userData.subscriptions || {};
-      const batch = db.batch();
+        for (const plan of selectedPlans) {
+            const now = new Date();
+            const currentSub = existingSubscriptions[plan.productId];
+            const startDate = (currentSub && currentSub.status === 'active' && currentSub.expiresAt.toDate() > now) 
+                ? currentSub.expiresAt.toDate() 
+                : now;
+            const expiresAt = new Date(startDate.getTime());
+            expiresAt.setDate(expiresAt.getDate() + plan.days);
 
-      for (const plan of selectedPlans) {
-        const now = new Date();
-        const currentSub = existingSubscriptions[plan.productId];
-        // If there's an active sub, extend it. Otherwise, start from now.
-        const startDate = (currentSub && currentSub.status === 'active' && currentSub.expiresAt.toDate() > now) 
-            ? currentSub.expiresAt.toDate() 
-            : now;
-        const expiresAt = new Date(startDate.getTime());
-        expiresAt.setDate(expiresAt.getDate() + plan.days);
-
-        existingSubscriptions[plan.productId] = {
-          status: 'active',
-          planId: plan.id,
-          startedAt: Timestamp.fromDate(now),
-          expiresAt: Timestamp.fromDate(expiresAt),
-          lastTransactionId: normalizedGatewayId, // Track which transaction granted this access
-        };
-      }
-      
-      batch.update(userRef, { subscriptions: existingSubscriptions });
-      batch.update(paymentRef, { 
-        status: 'completed',
-        processedAt: admin.firestore.FieldValue.serverTimestamp(),
-        pushinpayEndToEndId: params.get('end_to_end_id'),
+            existingSubscriptions[plan.productId] = {
+              status: 'active',
+              planId: plan.id,
+              startedAt: Timestamp.fromDate(now),
+              expiresAt: Timestamp.fromDate(expiresAt),
+              lastTransactionId: normalizedGatewayId,
+            };
+        }
+        
+        transaction.update(userRef, { subscriptions: existingSubscriptions });
+        transaction.update(paymentRef, { 
+            status: 'completed',
+            processedAt: admin.firestore.FieldValue.serverTimestamp(),
+            pushinpayEndToEndId: params.get('end_to_end_id'),
+        });
       });
-      await batch.commit();
 
       console.log(`[webhook.ts] Successfully updated subscriptions for user ${userId}`);
-      
       await notifyAutomationSystem({
-        type: 'payment_success',
-        userId, userEmail, userName, userPhone,
-        planIds, selectedPlans,
+        type: 'payment_success', userId, userEmail, userName, userPhone, planIds,
+        selectedPlans: allPlans.filter(p => planIds.includes(p.id)),
         transactionId: normalizedGatewayId,
       });
 
     } else {
         // --- DEFAULT FAILURE/REVERSAL LOGIC ---
-        console.log(`[webhook.ts] Entering failure/reversal logic for status '${status}' on transaction ${normalizedGatewayId}.`);
-        
-        // Explicitly ignore intermediate statuses to prevent premature actions.
         const ignoredStatuses = ['created', 'pending'];
         if (ignoredStatuses.includes(status)) {
             console.log(`[webhook.ts] Ignoring intermediate status '${status}'.`);
             return res.status(200).json({ success: true, message: `Ignoring intermediate status: ${status}` });
         }
 
-        // Only update if the payment is not already marked as 'failed'.
-        if (paymentData.status === 'failed') {
-            console.log(`[webhook.ts] Payment ${paymentRef.id} is already 'failed'. Ignoring.`);
-            return res.status(200).json({ success: true, message: "Payment already marked as failed." });
-        }
-        
-        const updatePayload: { [key: string]: any } = {
-            status: 'failed', 
-            failureReason: `Pagamento revertido via webhook (status: ${status})`,
-            processedAt: admin.firestore.FieldValue.serverTimestamp(),
-        };
+        await db.runTransaction(async (transaction) => {
+            const freshPaymentDoc = await transaction.get(paymentRef);
+            if (!freshPaymentDoc.exists || freshPaymentDoc.data()?.status === 'failed') {
+                console.log(`[webhook.ts] Payment ${paymentRef.id} is already 'failed'. Ignoring reversal transaction.`);
+                return;
+            }
 
-        await paymentRef.update(updatePayload);
+            const paymentData = freshPaymentDoc.data()!;
+            const { userId, planIds } = paymentData;
 
-        console.log(`[webhook.ts] Successfully marked payment ${paymentRef.id} as failed.`);
-        
+            const userRef = db.collection('users').doc(userId);
+            const userDoc = await transaction.get(userRef);
+            
+            if (userDoc.exists) {
+                const userData = userDoc.data()!;
+                const existingSubscriptions = userData.subscriptions || {};
+                let subscriptionsUpdated = false;
+
+                const productIdsToRevoke = new Set(
+                    allPlans.filter(p => planIds.includes(p.id)).map(p => p.productId)
+                );
+
+                for (const productId of productIdsToRevoke) {
+                    const sub = existingSubscriptions[productId];
+                    // CRUCIAL CHECK: Only revoke if this specific transaction granted the access.
+                    if (sub && sub.status === 'active' && sub.lastTransactionId === normalizedGatewayId) {
+                        existingSubscriptions[productId].status = 'expired';
+                        subscriptionsUpdated = true;
+                    }
+                }
+                
+                if (subscriptionsUpdated) {
+                    transaction.update(userRef, { subscriptions: existingSubscriptions });
+                }
+            } else {
+                console.error(`[webhook.ts] User ${userId} not found for reversal. Payment will be marked as failed, but subscription cannot be revoked.`);
+            }
+
+            transaction.update(paymentRef, {
+                status: 'failed',
+                failureReason: `Pagamento revertido via webhook (status: ${status})`,
+                processedAt: admin.firestore.FieldValue.serverTimestamp(),
+                pushinpayEndToEndId: params.get('end_to_end_id'),
+            });
+        });
+
+        console.log(`[webhook.ts] Successfully processed reversal for ${paymentRef.id}.`);
         await notifyAutomationSystem({
-            type: 'payment_reversed',
-            status: status,
-            userId, userEmail, userName, userPhone,
-            planIds,
+            type: 'payment_reversed', status, userId, userEmail, userName, userPhone, planIds,
             transactionId: normalizedGatewayId,
         });
     }
