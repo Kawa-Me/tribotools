@@ -75,24 +75,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const params = new URLSearchParams(rawBody.toString('utf-8'));
     
     const status = params.get('status');
-    if (status !== 'paid') {
-      console.log(`[webhook.ts] Webhook ignored: status is "${status}", not "paid".`);
-      return res.status(200).json({ message: 'Webhook ignored: event not relevant.' });
+    const pushinpayTransactionId = params.get('id');
+
+    if (!status || !pushinpayTransactionId) {
+        console.error('[webhook.ts] Webhook payload missing "status" or "id".', params.toString());
+        return res.status(400).json({ error: 'Webhook payload missing required fields.' });
     }
-    
+
     initializeAdminApp();
     const db = admin.firestore();
     
-    const pushinpayTransactionId = params.get('id');
-    if (!pushinpayTransactionId) {
-          console.error('[webhook.ts] CRITICAL: Webhook payload is missing transaction identifier.');
-          return res.status(400).json({ error: 'Webhook payload is missing transaction identifier.' });
-    }
+    const normalizedGatewayId = pushinpayTransactionId.toUpperCase();
+    console.log(`[webhook.ts] Received webhook for transaction ${normalizedGatewayId} with status: ${status}`);
     
-    const normalizedGatewayId = pushinpayTransactionId.toUpperCase(); // Normalize incoming ID to uppercase
-    console.log(`[webhook.ts] Querying by normalized pushinpayTransactionId: ${normalizedGatewayId}`);
-    
-    // This pause helps mitigate race conditions on Vercel's cold starts.
     await new Promise(resolve => setTimeout(resolve, 2000));
     
     const paymentsQuery = db.collection('payments')
@@ -102,81 +97,120 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const querySnapshot = await paymentsQuery.get();
 
     if (querySnapshot.empty) {
-        console.error(`[webhook.ts] Payment not found for pushinpayTransactionId: ${normalizedGatewayId} even after delay. This could be a race condition. Responding 404 to trigger a retry from PushinPay.`);
+        console.error(`[webhook.ts] Payment not found for pushinpayTransactionId: ${normalizedGatewayId}. Responding 404 to trigger a retry.`);
         return res.status(404).json({ error: 'Payment not found, please retry.' });
     }
     
     const paymentDoc = querySnapshot.docs[0];
     const paymentRef = paymentDoc.ref;
-    
     const paymentData = paymentDoc.data()!;
-    
-    if (paymentData.status === 'completed') {
-        console.log(`[webhook.ts] Payment ${paymentRef.id} has already been processed. Ignoring.`);
+    const { userId, planIds, userEmail, userName, userPhone } = paymentData;
+
+    // --- PAID WEBHOOK LOGIC ---
+    if (status === 'paid') {
+      if (paymentData.status === 'completed') {
+        console.log(`[webhook.ts] Payment ${paymentRef.id} has already been processed as 'completed'. Ignoring.`);
         return res.status(200).json({ success: true, message: "Payment already processed." });
+      }
+
+      if (!userId || !Array.isArray(planIds) || planIds.length === 0) {
+        throw new Error(`Invalid data in Firestore doc ${paymentRef.id}: userId or planIds missing.`);
+      }
+
+      const allPlans = await getPlansFromFirestoreAdmin(db);
+      const selectedPlans = allPlans.filter(p => planIds.includes(p.id));
+
+      if (selectedPlans.length !== planIds.length) {
+        throw new Error(`Invalid plans referenced in payment ${paymentRef.id}.`);
+      }
+
+      const userRef = db.collection('users').doc(userId);
+      const userDoc = await userRef.get();
+      if (!userDoc.exists) throw new Error(`User with UID ${userId} not found in Firestore.`);
+      
+      const userData = userDoc.data()!;
+      const existingSubscriptions = userData.subscriptions || {};
+      const batch = db.batch();
+
+      for (const plan of selectedPlans) {
+        const now = new Date();
+        const currentSub = existingSubscriptions[plan.productId];
+        const startDate = (currentSub && currentSub.status === 'active' && currentSub.expiresAt.toDate() > now) 
+            ? currentSub.expiresAt.toDate() 
+            : now;
+        const expiresAt = new Date(startDate.getTime());
+        expiresAt.setDate(expiresAt.getDate() + plan.days);
+
+        existingSubscriptions[plan.productId] = {
+          status: 'active',
+          planId: plan.id,
+          startedAt: Timestamp.fromDate(now),
+          expiresAt: Timestamp.fromDate(expiresAt),
+          lastTransactionId: normalizedGatewayId,
+        };
+      }
+      
+      batch.update(userRef, { subscriptions: existingSubscriptions });
+      batch.update(paymentRef, { 
+        status: 'completed',
+        processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        pushinpayEndToEndId: params.get('end_to_end_id'),
+      });
+      await batch.commit();
+
+      console.log(`[webhook.ts] Successfully updated subscriptions for user ${userId}`);
+      
+      await notifyAutomationSystem({
+        type: 'payment_success',
+        userId, userEmail, userName, userPhone,
+        planIds, selectedPlans,
+        transactionId: normalizedGatewayId,
+      });
+
+    // --- REFUNDED/CHARGEBACK WEBHOOK LOGIC ---
+    } else if (status === 'refunded' || status === 'chargeback') {
+        if (!userId || !Array.isArray(planIds) || planIds.length === 0) {
+            throw new Error(`Invalid data in Firestore doc ${paymentRef.id} for refund: userId or planIds missing.`);
+        }
+        
+        const userRef = db.collection('users').doc(userId);
+        const userDoc = await userRef.get();
+        if (!userDoc.exists) throw new Error(`User with UID ${userId} not found in Firestore for refund.`);
+
+        const userData = userDoc.data()!;
+        const existingSubscriptions = userData.subscriptions || {};
+        const batch = db.batch();
+        const allPlans = await getPlansFromFirestoreAdmin(db);
+        const selectedPlans = allPlans.filter(p => planIds.includes(p.id));
+
+        for (const plan of selectedPlans) {
+            // Check if the subscription to be canceled is the one from this transaction
+            if (existingSubscriptions[plan.productId]?.lastTransactionId === normalizedGatewayId) {
+                existingSubscriptions[plan.productId].status = 'expired';
+            }
+        }
+
+        batch.update(userRef, { subscriptions: existingSubscriptions });
+        batch.update(paymentRef, { 
+            status: 'failed', 
+            failureReason: `Reembolsado via webhook (${status})`,
+            processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await batch.commit();
+
+        console.log(`[webhook.ts] Successfully revoked subscription for user ${userId} due to ${status}.`);
+        
+        await notifyAutomationSystem({
+            type: 'payment_refunded',
+            status: status,
+            userId, userEmail, userName, userPhone,
+            planIds, selectedPlans,
+            transactionId: normalizedGatewayId,
+        });
+
+    } else {
+        console.log(`[webhook.ts] Webhook with unhandled status "${status}" received for transaction ${normalizedGatewayId}. Ignoring.`);
     }
-
-    const { userId, planIds } = paymentData;
-    if (!userId || !Array.isArray(planIds) || planIds.length === 0) {
-      console.error('[webhook.ts] Invalid or incomplete data in the Firestore payment document.', paymentData);
-      throw new Error('Invalid data in Firestore: userId or planIds are missing/invalid.');
-    }
-
-    const allPlans = await getPlansFromFirestoreAdmin(db);
-    const selectedPlans = allPlans.filter(p => planIds.includes(p.id));
-
-    if (selectedPlans.length !== planIds.length) {
-      throw new Error(`Invalid plans referenced in payment ${paymentRef.id}. IDs: ${planIds.join(', ')}`);
-    }
-
-    const userRef = db.collection('users').doc(userId);
-    const userDoc = await userRef.get();
-
-    if (!userDoc.exists) {
-      throw new Error(`User with UID ${userId} not found in Firestore.`);
-    }
-    const userData = userDoc.data()!;
-    const existingSubscriptions = userData.subscriptions || {};
-
-    const batch = db.batch();
-
-    for (const plan of selectedPlans) {
-      const now = new Date();
-      const currentSub = existingSubscriptions[plan.productId];
-      const startDate = (currentSub && currentSub.status === 'active' && currentSub.expiresAt.toDate() > now) 
-          ? currentSub.expiresAt.toDate() 
-          : now;
-      const expiresAt = new Date(startDate.getTime());
-      expiresAt.setDate(expiresAt.getDate() + plan.days);
-
-      existingSubscriptions[plan.productId] = {
-        status: 'active',
-        planId: plan.id,
-        startedAt: Timestamp.fromDate(now),
-        expiresAt: Timestamp.fromDate(expiresAt),
-        lastTransactionId: normalizedGatewayId,
-      };
-    }
-    
-    batch.update(userRef, { subscriptions: existingSubscriptions });
-    batch.update(paymentRef, { 
-      status: 'completed',
-      processedAt: admin.firestore.FieldValue.serverTimestamp(),
-      pushinpayEndToEndId: params.get('end_to_end_id'),
-    });
-    await batch.commit();
-
-    console.log(`[webhook.ts] Successfully updated subscriptions for user ${userId}`);
-    
-    await notifyAutomationSystem({
-      userId,
-      userEmail: paymentData.userEmail,
-      userName: paymentData.userName,
-      userPhone: paymentData.userPhone,
-      planIds,
-      selectedPlans,
-      transactionId: normalizedGatewayId,
-    });
 
     return res.status(200).json({ success: true });
 
