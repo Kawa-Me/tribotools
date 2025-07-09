@@ -167,15 +167,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         transactionId: normalizedGatewayId,
       });
 
-    // --- REFUNDED/CHARGEBACK WEBHOOK LOGIC ---
-    } else if (status === 'refunded' || status === 'chargeback') {
+    // --- REFUNDED/CHARGEBACK/CANCELLED WEBHOOK LOGIC ---
+    } else if (status === 'refunded' || status === 'chargeback' || status === 'cancelled') {
         if (!userId || !Array.isArray(planIds) || planIds.length === 0) {
-            throw new Error(`Invalid data in Firestore doc ${paymentRef.id} for refund: userId or planIds missing.`);
+            throw new Error(`Invalid data in Firestore doc ${paymentRef.id} for ${status}: userId or planIds missing.`);
         }
         
         const userRef = db.collection('users').doc(userId);
         const userDoc = await userRef.get();
-        if (!userDoc.exists) throw new Error(`User with UID ${userId} not found in Firestore for refund.`);
+        if (!userDoc.exists) throw new Error(`User with UID ${userId} not found in Firestore for ${status}.`);
 
         const userData = userDoc.data()!;
         const existingSubscriptions = userData.subscriptions || {};
@@ -193,7 +193,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         batch.update(userRef, { subscriptions: existingSubscriptions });
         batch.update(paymentRef, { 
             status: 'failed', 
-            failureReason: `Reembolsado via webhook (${status})`,
+            failureReason: `Pagamento revertido via webhook (${status})`,
             processedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         await batch.commit();
@@ -201,7 +201,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log(`[webhook.ts] Successfully revoked subscription for user ${userId} due to ${status}.`);
         
         await notifyAutomationSystem({
-            type: 'payment_refunded',
+            type: 'payment_reversed',
             status: status,
             userId, userEmail, userName, userPhone,
             planIds, selectedPlans,
