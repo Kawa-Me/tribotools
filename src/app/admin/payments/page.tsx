@@ -14,15 +14,19 @@ import { auth } from '@/lib/firebase';
 
 export default function AdminPaymentsPage() {
   const { payments, loading, error } = usePayments();
-  const [isCleaning, setIsCleaning] = useState(false);
+  const [isCleaningFailed, setIsCleaningFailed] = useState(false);
+  const [isCleaningPending, setIsCleaningPending] = useState(false);
   const { toast } = useToast();
 
   const paidPayments = payments.filter(p => p.status === 'completed');
   const pendingPayments = payments.filter(p => p.status === 'pending');
   const failedPayments = payments.filter(p => p.status === 'failed');
 
-  const handleCleanup = async () => {
-    if (!window.confirm("Tem certeza que deseja excluir todos os pagamentos com status 'falhou' com mais de 7 dias? Esta ação não pode ser desfeita.")) {
+  const handleCleanup = async (type: 'failed' | 'pending') => {
+    const endpoint = type === 'failed' ? '/api/admin/cleanup-payments' : '/api/admin/cleanup-pending-payments';
+    const confirmMessage = `Tem certeza que deseja excluir todos os pagamentos com status '${type === 'failed' ? 'falhou' : 'pendente'}' com mais de 7 dias? Esta ação não pode ser desfeita.`;
+    
+    if (!window.confirm(confirmMessage)) {
       return;
     }
     
@@ -35,10 +39,12 @@ export default function AdminPaymentsPage() {
         return;
     }
     
-    setIsCleaning(true);
+    if (type === 'failed') setIsCleaningFailed(true);
+    if (type === 'pending') setIsCleaningPending(true);
+
     try {
         const token = await auth.currentUser.getIdToken(true);
-        const response = await fetch('/api/admin/cleanup-payments', {
+        const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -53,18 +59,19 @@ export default function AdminPaymentsPage() {
 
         toast({
             title: 'Limpeza Concluída',
-            description: `${result.deletedCount} pagamentos falhados foram excluídos.`,
+            description: `${result.deletedCount} pagamentos do tipo '${type}' foram excluídos.`,
         });
 
     } catch (error: any) {
-        console.error("Cleanup error:", error);
+        console.error(`Cleanup error for ${type} payments:`, error);
         toast({
             variant: 'destructive',
-            title: 'Erro na Limpeza',
+            title: `Erro na Limpeza`,
             description: error.message || 'Não foi possível completar a operação. Verifique os logs do servidor.',
         });
     } finally {
-        setIsCleaning(false);
+        if (type === 'failed') setIsCleaningFailed(false);
+        if (type === 'pending') setIsCleaningPending(false);
     }
   };
 
@@ -74,13 +81,19 @@ export default function AdminPaymentsPage() {
         <div>
           <h1 className="text-3xl font-bold font-headline">Histórico de Pagamentos</h1>
           <p className="text-muted-foreground mt-1">
-            Visualize todos os pagamentos gerados na plataforma, seus status e detalhes.
+            Visualize todos os pagamentos gerados na plataforma e limpe registros antigos.
           </p>
         </div>
-        <Button onClick={handleCleanup} disabled={isCleaning} variant="outline" className="w-full sm:w-auto">
-            {isCleaning ? <Loader className="mr-2" /> : <Trash2 className="mr-2" />}
-            {isCleaning ? 'Limpando...' : 'Limpar Pag. Falhados'}
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <Button onClick={() => handleCleanup('pending')} disabled={isCleaningPending} variant="outline" className="w-full sm:w-auto">
+                {isCleaningPending ? <Loader className="mr-2" /> : <Trash2 className="mr-2" />}
+                {isCleaningPending ? 'Limpando...' : 'Limpar Pendentes'}
+            </Button>
+            <Button onClick={() => handleCleanup('failed')} disabled={isCleaningFailed} variant="outline" className="w-full sm:w-auto">
+                {isCleaningFailed ? <Loader className="mr-2" /> : <Trash2 className="mr-2" />}
+                {isCleaningFailed ? 'Limpando...' : 'Limpar Falhados'}
+            </Button>
+        </div>
       </div>
       
       {loading && (
