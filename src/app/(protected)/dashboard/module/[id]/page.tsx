@@ -6,59 +6,18 @@ import { notFound } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Lock, PlayCircle, FileText } from 'lucide-react';
-import { useEffect, useState, use } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import type { Module } from '@/lib/types';
+import { use } from 'react';
+import { useModules } from '@/hooks/use-modules';
 import { Skeleton } from '@/components/ui/skeleton';
-import * as lucideIcons from 'lucide-react';
 import { CheckoutModal } from '@/components/checkout-modal';
 import Link from 'next/link';
-
-const iconComponents: { [key: string]: React.ComponentType<any> } = {
-    LayoutDashboard: lucideIcons.LayoutDashboard,
-    BookOpen: lucideIcons.BookOpen,
-    Users: lucideIcons.Users,
-    Settings: lucideIcons.Settings,
-    ShieldCheck: lucideIcons.ShieldCheck,
-    KeyRound: lucideIcons.KeyRound,
-    SearchCode: lucideIcons.SearchCode,
-    BrainCircuit: lucideIcons.BrainCircuit,
-    Paintbrush: lucideIcons.Paintbrush,
-    TrendingUp: lucideIcons.TrendingUp,
-    MessageSquare: lucideIcons.MessageSquare,
-  };
 
 export default function ModulePage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
   const { user } = useAuth();
-  const [module, setModule] = useState<Module | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { modules, loading } = useModules();
 
-  useEffect(() => {
-    if (params.id) {
-        if (!db) {
-            setLoading(false);
-            return;
-        }
-        const fetchModule = async () => {
-            const docRef = doc(db, 'modules', params.id);
-            const docSnap = await getDoc(docRef);
-
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                const iconName = data.icon as keyof typeof iconComponents;
-                const icon = iconComponents[iconName] || lucideIcons.HelpCircle;
-                setModule({ id: docSnap.id, ...data, icon } as Module);
-            } else {
-                notFound();
-            }
-            setLoading(false);
-        };
-
-        fetchModule();
-    }
-  }, [params.id]);
+  const module = modules.find(m => m.id === params.id);
 
   if (loading) {
       return (
@@ -74,9 +33,6 @@ export default function ModulePage({ params: paramsPromise }: { params: Promise<
   }
 
   if (!module) {
-    if (!db) {
-        return <p className="text-destructive">Erro: Serviço de banco de dados não configurado.</p>
-    }
     return notFound();
   }
 
@@ -103,7 +59,7 @@ export default function ModulePage({ params: paramsPromise }: { params: Promise<
                 )}
                 <div className="flex-grow">
                   <h3 className="font-semibold">{lesson.title}</h3>
-                  <p className="text-sm text-muted-foreground">{lesson.type === 'video' ? 'Vídeo' : 'Texto'}</p>
+                  <p className="text-sm text-muted-foreground">{lesson.type === 'video' ? 'Vídeo' : 'Acesso a Ferramenta'}</p>
                 </div>
                 <Button asChild>
                   <Link href={`/dashboard/module/${params.id}/lesson/${lesson.id}`}>Acessar</Link>

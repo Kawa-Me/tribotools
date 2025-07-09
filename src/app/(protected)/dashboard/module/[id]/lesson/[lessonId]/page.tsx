@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useState, use } from 'react';
+import { use } from 'react';
 import { notFound, useRouter } from 'next/navigation';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import type { Module, Lesson } from '@/lib/types';
+import type { Lesson } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
+import { useModules } from '@/hooks/use-modules';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, Video, FileText, ClipboardCopy, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -15,45 +14,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 export default function LessonPage({ params: paramsPromise }: { params: Promise<{ id: string; lessonId: string }> }) {
   const params = use(paramsPromise);
   const router = useRouter();
-  const [lesson, setLesson] = useState<Lesson | null>(null);
-  const [moduleTitle, setModuleTitle] = useState('');
-  const [loading, setLoading] = useState(true);
-  const { toast } = useToast(); // Centralized toast hook
+  const { modules, loading } = useModules();
+  const { toast } = useToast();
 
-  // Centralized copy handler for all copyable fields
+  const module = modules.find(m => m.id === params.id);
+  const lesson = module?.lessons.find(l => l.id === params.lessonId);
+
   const handleCopy = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast({ title: "Copiado!", description: `${label} foi copiado para a área de transferência.` });
   };
-
-  useEffect(() => {
-    if (params.id && params.lessonId) {
-      if (!db) {
-        setLoading(false);
-        return;
-      }
-      const fetchLesson = async () => {
-        const docRef = doc(db, 'modules', params.id);
-        const docSnap = await getDoc(docRef);
-
-        if (docSnap.exists()) {
-          const moduleData = docSnap.data() as Omit<Module, 'id' | 'icon'>;
-          setModuleTitle(moduleData.title);
-          const currentLesson = moduleData.lessons.find(l => l.id === params.lessonId);
-          if (currentLesson) {
-            setLesson(currentLesson);
-          } else {
-            notFound();
-          }
-        } else {
-          notFound();
-        }
-        setLoading(false);
-      };
-
-      fetchLesson();
-    }
-  }, [params.id, params.lessonId]);
 
   if (loading) {
     return (
@@ -68,12 +38,11 @@ export default function LessonPage({ params: paramsPromise }: { params: Promise<
     );
   }
 
-  if (!lesson) {
-    if (!db) {
-        return <p className="text-destructive">Erro: Serviço de banco de dados não configurado.</p>
-    }
+  if (!lesson || !module) {
     return notFound();
   }
+
+  const moduleTitle = module.title;
 
   return (
     <div className="space-y-6">
@@ -172,7 +141,7 @@ export default function LessonPage({ params: paramsPromise }: { params: Promise<
                 <Card className="bg-card/60 backdrop-blur-sm border-border">
                     <CardContent className="p-6">
                         <h3 className="font-headline text-lg mb-4 text-primary">Notas Adicionais</h3>
-                        <article className="prose dark:prose-invert max-w-none dark:prose-p:text-foreground/90 dark:prose-a:text-accent dark:prose-strong:text-foreground">
+                        <article className="prose dark:prose-invert max-w-none prose-p:text-foreground/90 prose-a:text-accent prose-strong:text-foreground">
                             <ReactMarkdown>{lesson.content}</ReactMarkdown>
                         </article>
                     </CardContent>
