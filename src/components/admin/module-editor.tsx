@@ -470,40 +470,40 @@ export function ModuleEditor() {
                     <Textarea id={`description-${mod.id}`} value={mod.description} onChange={(e) => handleModuleChange(mod.id, 'description', e.target.value)} placeholder="Descrição do Módulo" />
                 </div>
                 
-                <h4 className="font-semibold mt-4">Lições</h4>
-                <div className="space-y-3">
-                    {mod.lessons.map((lesson, lessonIndex) => (
-                        <div key={lesson.id} className="p-3 border rounded bg-background space-y-3">
-                             <div className="flex justify-between items-center">
-                                <div className="flex items-center gap-2">
-                                    <div className="flex flex-col">
-                                        <div
-                                            role="button"
-                                            aria-label="Mover lição para cima"
-                                            className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-6 w-6', lessonIndex === 0 && 'pointer-events-none opacity-50')}
-                                            onClick={() => handleMoveLesson(mod.id, lessonIndex, 'up')}>
-                                            <ArrowUp className="h-4 w-4" />
-                                        </div>
-                                        <div
-                                            role="button"
-                                            aria-label="Mover lição para baixo"
-                                            className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-6 w-6', lessonIndex === mod.lessons.length - 1 && 'pointer-events-none opacity-50')}
-                                            onClick={() => handleMoveLesson(mod.id, lessonIndex, 'down')}>
-                                            <ArrowDown className="h-4 w-4" />
-                                        </div>
-                                    </div>
-                                    <span className="text-sm font-medium">Lição {lessonIndex + 1}</span>
-                                </div>
-                                <div
-                                    role="button"
-                                    aria-label={`Deletar lição ${lesson.title}`}
-                                    onClick={() => handleDeleteLesson(mod.id, lesson.id)}
-                                    className={cn('p-2 rounded-md hover:bg-destructive/20 text-destructive hover:text-destructive/80')}
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </div>
-                             </div>
-                            <Input value={lesson.title} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'title', e.target.value)} placeholder="Título da lição" />
+                <h4 className="font-semibold mt-4 pt-4 border-t">Lições</h4>
+                <Accordion type="single" collapsible className="w-full space-y-2">
+                  {mod.lessons.map((lesson, lessonIndex) => (
+                    <AccordionItem value={lesson.id} key={lesson.id} className="border-b-0 border bg-background/50 rounded-md">
+                      <AccordionTrigger className="px-4 py-2 hover:no-underline [&[data-state=open]]:border-b">
+                        <div className="flex justify-between items-center w-full">
+                          <div className="flex items-center gap-2">
+                            <div className="flex flex-col">
+                              <button
+                                aria-label="Mover lição para cima"
+                                className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-6 w-6', lessonIndex === 0 && 'pointer-events-none opacity-50')}
+                                onClick={(e) => { e.stopPropagation(); handleMoveLesson(mod.id, lessonIndex, 'up'); }}>
+                                <ArrowUp className="h-4 w-4" />
+                              </button>
+                              <button
+                                aria-label="Mover lição para baixo"
+                                className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-6 w-6', lessonIndex === mod.lessons.length - 1 && 'pointer-events-none opacity-50')}
+                                onClick={(e) => { e.stopPropagation(); handleMoveLesson(mod.id, lessonIndex, 'down'); }}>
+                                <ArrowDown className="h-4 w-4" />
+                              </button>
+                            </div>
+                            <span className="font-medium">{lesson.title}</span>
+                          </div>
+                          <button
+                            aria-label={`Deletar lição ${lesson.title}`}
+                            onClick={(e) => { e.stopPropagation(); handleDeleteLesson(mod.id, lesson.id); }}
+                            className={cn('p-2 rounded-md hover:bg-destructive/20 text-destructive hover:text-destructive/80')}>
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <div className="p-4 space-y-4">
+                           <Input value={lesson.title} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'title', e.target.value)} placeholder="Título da lição" />
                             <Input value={lesson.imageUrl || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'imageUrl', e.target.value)} placeholder="URL da Imagem da Capa" />
                             
                             <div className="flex items-center space-x-2 pt-2 border-t mt-4">
@@ -612,8 +612,10 @@ export function ModuleEditor() {
                                 </div>
                             )}
                         </div>
-                    ))}
-                </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
                 <div className="flex justify-start mt-4">
                     <Button variant="outline" onClick={() => handleAddNewLesson(mod.id)}>Adicionar Lição</Button>
                 </div>
