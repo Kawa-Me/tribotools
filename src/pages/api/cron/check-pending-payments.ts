@@ -164,20 +164,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const transactionDetails = await response.json();
       const newStatus = transactionDetails.status?.toLowerCase();
+      const expirationDateStr = transactionDetails.pix_details?.expiration_date;
 
-      if (newStatus && newStatus !== 'pending' && newStatus !== 'created') {
-        updatedCount++;
-        if (newStatus === 'paid') {
-          console.log(`[CRON] Transaction ${pushinpayTransactionId} is now 'paid'. Processing...`);
-          await processSuccessfulPayment(db, doc.ref, paymentData);
-        } else {
-          console.log(`[CRON] Transaction ${pushinpayTransactionId} has failed with status '${newStatus}'. Updating...`);
-          await doc.ref.update({
-            status: 'failed',
-            failureReason: `Status updated to '${newStatus}' by cron job.`,
-            processedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-        }
+      let isExpired = false;
+      if (expirationDateStr) {
+          // The date format is 'YYYY-MM-DD HH:mm:ss.sss' and seems to be in UTC.
+          // We parse it by replacing the space with a 'T' and adding 'Z' to treat it as UTC.
+          const expirationDate = new Date(expirationDateStr.replace(' ', 'T') + 'Z');
+          if (!isNaN(expirationDate.getTime()) && new Date() > expirationDate) {
+              isExpired = true;
+          }
+      }
+
+      // Logic: If the status is final (paid/failed) OR if it's expired, we act.
+      if ((newStatus && newStatus !== 'pending' && newStatus !== 'created') || isExpired) {
+          updatedCount++;
+          if (newStatus === 'paid') {
+            console.log(`[CRON] Transaction ${pushinpayTransactionId} is now 'paid'. Processing...`);
+            await processSuccessfulPayment(db, doc.ref, paymentData);
+          } else {
+            // This block now handles explicit failures from the API AND expirations.
+            const failureReason = isExpired
+              ? `Pagamento expirado. Verificado via cron job.`
+              : `Status atualizado para '${newStatus}' pelo cron job.`;
+            
+            console.log(`[CRON] Transaction ${pushinpayTransactionId} has failed with reason: ${failureReason}. Updating...`);
+            await doc.ref.update({
+              status: 'failed',
+              failureReason: failureReason,
+              processedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          }
       }
     }
 
