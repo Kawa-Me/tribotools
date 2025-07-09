@@ -183,16 +183,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         transactionId: normalizedGatewayId,
       });
 
-    // --- REFUNDED/CHARGEBACK/CANCELLED WEBHOOK LOGIC ---
-    } else if (status === 'refunded' || status === 'chargeback' || status === 'cancelled' || status === 'cancelado') {
-        console.log(`[webhook.ts] Entering '${status}' logic for ${normalizedGatewayId}.`);
+    } else {
+        // --- CANCELLATION / REVERSAL WEBHOOK LOGIC (Catch-all for non-"paid" statuses) ---
+        console.log(`[webhook.ts] Entering reversal logic for status '${status}' on transaction ${normalizedGatewayId}.`);
+        
+        // List of statuses to ignore (e.g., intermediate states).
+        const ignoredStatuses = ['created', 'pending'];
+        if (ignoredStatuses.includes(status)) {
+            console.log(`[webhook.ts] Ignoring intermediate status '${status}'.`);
+            return res.status(200).json({ success: true, message: `Ignoring intermediate status: ${status}` });
+        }
+
         if (!userId || !Array.isArray(planIds) || planIds.length === 0) {
-            throw new Error(`Invalid data in Firestore doc ${paymentRef.id} for ${status}: userId or planIds missing.`);
+            throw new Error(`Invalid data in Firestore doc ${paymentRef.id} for reversal: userId or planIds missing.`);
         }
         
         const userRef = db.collection('users').doc(userId);
         const userDoc = await userRef.get();
-        if (!userDoc.exists) throw new Error(`User with UID ${userId} not found in Firestore for ${status}.`);
+        if (!userDoc.exists) throw new Error(`User with UID ${userId} not found in Firestore for reversal.`);
 
         const userData = userDoc.data()!;
         const existingSubscriptions = userData.subscriptions || {};
@@ -202,24 +210,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         for (const plan of selectedPlans) {
             console.log(`[webhook.ts] Checking product ${plan.productId} for cancellation...`);
-            // Check if the subscription to be canceled is the one from this transaction
+            // IMPORTANT: Only revoke access if this specific transaction was the one that granted it.
+            // This prevents a delayed webhook from an old, canceled payment from revoking a new, valid subscription.
             if (existingSubscriptions[plan.productId]?.lastTransactionId === normalizedGatewayId) {
-                console.log(`[webhook.ts] Match found! Cancelling subscription for product ${plan.productId}.`);
+                console.log(`[webhook.ts] Match found! Revoking subscription for product ${plan.productId}.`);
                 existingSubscriptions[plan.productId].status = 'expired';
             } else {
-                console.log(`[webhook.ts] No match for product ${plan.productId}. Current sub transaction ID: ${existingSubscriptions[plan.productId]?.lastTransactionId}. Webhook transaction ID: ${normalizedGatewayId}`);
+                console.log(`[webhook.ts] No match for product ${plan.productId}. Current sub transaction ID: ${existingSubscriptions[plan.productId]?.lastTransactionId}. Webhook transaction ID: ${normalizedGatewayId}. Skipping revocation for this product.`);
             }
         }
 
         batch.update(userRef, { subscriptions: existingSubscriptions });
         batch.update(paymentRef, { 
             status: 'failed', 
-            failureReason: `Pagamento revertido via webhook (${status})`,
+            failureReason: `Pagamento revertido via webhook (status: ${status})`,
             processedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         await batch.commit();
 
-        console.log(`[webhook.ts] Successfully processed subscription revocation for user ${userId} due to ${status}.`);
+        console.log(`[webhook.ts] Successfully processed subscription revocation for user ${userId} due to status: ${status}.`);
         
         await notifyAutomationSystem({
             type: 'payment_reversed',
@@ -228,9 +237,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             planIds, selectedPlans,
             transactionId: normalizedGatewayId,
         });
-
-    } else {
-        console.log(`[webhook.ts] Webhook with unhandled status "${status}" received for transaction ${normalizedGatewayId}. Ignoring.`);
     }
 
     return res.status(200).json({ success: true });
