@@ -110,11 +110,20 @@ export function UserTable({ users }: UserTableProps) {
                     const effectiveStatus = sub?.status === 'active' && isExpired ? 'expired' : sub?.status;
                     
                     return (
-                      <TableCell key={p.id} className="text-center">
+                      <TableCell key={p.id} className="text-center text-xs">
                         {effectiveStatus === 'active' && sub.expiresAt ? (
-                            <span className="text-sm font-medium text-primary">
-                                {format(sub.expiresAt.toDate(), 'dd/MM/yyyy', { locale: ptBR })}
-                            </span>
+                            <div className="space-y-1">
+                                {sub.startedAt && (
+                                    <div className="flex items-center justify-center gap-1.5">
+                                        <span className="font-semibold text-muted-foreground">De:</span>
+                                        <span>{format(sub.startedAt.toDate(), 'dd/MM/yy HH:mm', { locale: ptBR })}</span>
+                                    </div>
+                                )}
+                                <div className="flex items-center justify-center gap-1.5">
+                                    <span className="font-semibold text-primary/80">Até:</span>
+                                    <span className="font-bold text-primary">{format(sub.expiresAt.toDate(), 'dd/MM/yy HH:mm', { locale: ptBR })}</span>
+                                </div>
+                            </div>
                         ) : effectiveStatus === 'expired' ? (
                             <Badge variant="destructive">Expirado</Badge>
                         ) : (
@@ -252,6 +261,17 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave, products }: EditUs
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+                
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor={`startedAt-${product.id}`} className="text-right text-xs">Início em</Label>
+                  <Input
+                    id={`startedAt-${product.id}`}
+                    type="text"
+                    className="col-span-3 bg-muted/50"
+                    disabled
+                    value={sub.startedAt ? format(sub.startedAt.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 'Não definido'}
+                  />
                 </div>
 
                 <div className="grid grid-cols-4 items-center gap-4">
