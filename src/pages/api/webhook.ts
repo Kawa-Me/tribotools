@@ -33,33 +33,43 @@ async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore): Promis
 
 // Helper to notify your automation system (n8n).
 async function notifyAutomationSystem(payload: any) {
-    const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
-    if (!n8nWebhookUrl) {
-        console.warn('[webhook.ts] N8N_WEBHOOK_URL is not configured. Skipping notification.');
-        return;
-    }
+    const productionWebhookUrl = process.env.N8N_WEBHOOK_URL;
+    const testWebhookUrl = process.env.N8N_TEST_WEBHOOK_URL;
 
-    console.log('[webhook.ts] Attempting to send notification to n8n via POST...');
-    console.log('[webhook.ts] n8n Payload:', JSON.stringify(payload, null, 2));
-    
-    try {
-        const response = await fetch(n8nWebhookUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload),
-        });
+    // A helper function to send the webhook to avoid code duplication
+    const sendWebhook = async (url: string, type: 'Production' | 'Test') => {
+        console.log(`[webhook.ts] Attempting to send ${type} notification to n8n...`);
+        console.log(`[webhook.ts] n8n ${type} Payload:`, JSON.stringify(payload, null, 2));
 
-        if (response.ok) {
-            console.log(`[webhook.ts] Successfully sent notification to n8n. Status: ${response.status}`);
-        } else {
-            const responseBody = await response.text();
-            console.error(`[webhook.ts] Failed to send notification to n8n. Status: ${response.status}`);
-            console.error('[webhook.ts] n8n Response Body:', responseBody);
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            if (response.ok) {
+                console.log(`[webhook.ts] Successfully sent ${type} notification. Status: ${response.status}`);
+            } else {
+                const responseBody = await response.text();
+                console.error(`[webhook.ts] Failed to send ${type} notification. Status: ${response.status}`);
+                console.error(`[webhook.ts] n8n ${type} Response Body:`, responseBody);
+            }
+        } catch (error) {
+            console.error(`[webhook.ts] CRITICAL: Exception caught while sending ${type} notification:`, error);
         }
-    } catch (error) {
-        console.error('[webhook.ts] CRITICAL: Exception caught while sending notification to n8n:', error);
+    };
+
+    // Send production webhook if configured
+    if (productionWebhookUrl) {
+        await sendWebhook(productionWebhookUrl, 'Production');
+    } else {
+        console.warn('[webhook.ts] N8N_WEBHOOK_URL is not configured. Skipping production notification.');
+    }
+    
+    // Send test webhook if configured
+    if (testWebhookUrl) {
+        await sendWebhook(testWebhookUrl, 'Test');
     }
 }
 
@@ -104,7 +114,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const paymentDoc = querySnapshot.docs[0];
     const paymentRef = paymentDoc.ref;
     const paymentData = paymentDoc.data()!;
-    const { userId, planIds, userEmail, userName, userPhone } = paymentData;
+    const { userId, planIds, userName, userEmail, userPhone } = paymentData;
 
     // --- PAID WEBHOOK LOGIC ---
     if (status === 'paid') {
