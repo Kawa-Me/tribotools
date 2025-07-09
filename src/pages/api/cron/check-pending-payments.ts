@@ -71,18 +71,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
+  // --- Configuration Check ---
+  const apiToken = process.env.PUSHINPAY_API_TOKEN;
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (!apiToken || !cronSecret) {
+      console.error("[CRON] Server configuration error: PUSHINPAY_API_TOKEN or CRON_SECRET is not set.");
+      // Return 503 so external cron services know to retry if it's a temporary config issue.
+      return res.status(503).json({ error: 'Service Unavailable: Server is not configured correctly.' });
+  }
+  
   const app = initializeAdminApp();
   const auth = admin.auth(app);
   const db = admin.firestore(app);
   
+  // --- Authentication Check ---
   const authorization = req.headers.authorization;
   if (!authorization?.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized: No token provided.' });
   }
   const token = authorization.split('Bearer ')[1];
-  const cronSecret = process.env.CRON_SECRET;
-
-  // Authentication check: either CRON_SECRET or a valid admin Firebase token
+  
+  // The request is authenticated if the token matches the CRON_SECRET, OR if it's a valid Firebase admin token.
   if (token !== cronSecret) {
     try {
         const decodedToken = await auth.verifyIdToken(token);
@@ -96,6 +106,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
+  // --- Main Logic ---
   try {
     const pendingPaymentsSnapshot = await db.collection('payments')
       .where('status', '==', 'pending')
@@ -103,11 +114,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (pendingPaymentsSnapshot.empty) {
       return res.status(200).json({ message: 'No pending payments to check.', checked: 0, updated: 0 });
-    }
-
-    const apiToken = process.env.PUSHINPAY_API_TOKEN;
-    if (!apiToken) {
-      throw new Error("PUSHINPAY_API_TOKEN is not configured on the server.");
     }
 
     let checkedCount = 0;
@@ -129,7 +135,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (!response.ok) {
         console.error(`[CRON] Failed to fetch status for transaction ${pushinpayTransactionId}. Status: ${response.status}`);
-        // If the transaction is not found (404), it might be too old or invalid. Mark as failed.
         if (response.status === 404) {
              await doc.ref.update({
                 status: 'failed',
@@ -150,7 +155,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           console.log(`[CRON] Transaction ${pushinpayTransactionId} is now 'paid'. Processing...`);
           await processSuccessfulPayment(db, doc.ref, paymentData);
         } else {
-          // Any other status (cancelled, refunded, failed, etc.) is considered a failure.
           console.log(`[CRON] Transaction ${pushinpayTransactionId} has failed with status '${newStatus}'. Updating...`);
           await doc.ref.update({
             status: 'failed',
