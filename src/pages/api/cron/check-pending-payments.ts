@@ -71,15 +71,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
+  const app = initializeAdminApp();
+  const auth = admin.auth(app);
+  const db = admin.firestore(app);
+  
+  const authorization = req.headers.authorization;
+  if (!authorization?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: No token provided.' });
+  }
+  const token = authorization.split('Bearer ')[1];
   const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret || req.headers.authorization !== `Bearer ${cronSecret}`) {
-    return res.status(401).json({ error: 'Unauthorized' });
+
+  // Authentication check: either CRON_SECRET or a valid admin Firebase token
+  if (token !== cronSecret) {
+    try {
+        const decodedToken = await auth.verifyIdToken(token);
+        const adminUserDoc = await db.collection('users').doc(decodedToken.uid).get();
+        if (!adminUserDoc.exists || adminUserDoc.data()?.role !== 'admin') {
+            return res.status(403).json({ error: 'Forbidden: User is not an admin.' });
+        }
+    } catch (error) {
+        console.error('[CRON] Auth token verification failed:', error);
+        return res.status(401).json({ error: 'Unauthorized: Invalid token.' });
+    }
   }
 
   try {
-    const app = initializeAdminApp();
-    const db = admin.firestore(app);
-
     const pendingPaymentsSnapshot = await db.collection('payments')
       .where('status', '==', 'pending')
       .get();

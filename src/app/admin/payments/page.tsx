@@ -8,18 +8,62 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Loader } from '@/components/loader';
-import { Trash2 } from 'lucide-react';
+import { Trash2, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/lib/firebase';
 
 export default function AdminPaymentsPage() {
   const { payments, loading, error } = usePayments();
   const [isCleaning, setIsCleaning] = useState<'failed' | 'pending' | null>(null);
+  const [isChecking, setIsChecking] = useState(false);
   const { toast } = useToast();
 
   const paidPayments = payments.filter(p => p.status === 'completed');
   const pendingPayments = payments.filter(p => p.status === 'pending');
   const failedPayments = payments.filter(p => p.status === 'failed');
+
+  const handleManualCheck = async () => {
+    if (!auth?.currentUser) {
+        toast({
+            variant: 'destructive',
+            title: 'Erro de Autenticação',
+            description: 'Não foi possível verificar o usuário. Por favor, faça login novamente.',
+        });
+        return;
+    }
+    
+    setIsChecking(true);
+    try {
+        const token = await auth.currentUser.getIdToken(true);
+        const response = await fetch('/api/cron/check-pending-payments', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || `Erro do servidor: ${response.statusText}`);
+        }
+
+        toast({
+            title: 'Verificação Concluída',
+            description: `${result.checked} pagamentos verificados, ${result.updated} atualizados.`,
+        });
+
+    } catch (error: any) {
+        console.error('Manual check error:', error);
+        toast({
+            variant: 'destructive',
+            title: `Erro na Verificação Manual`,
+            description: error.message || 'Não foi possível completar a operação. Verifique os logs.',
+        });
+    } finally {
+        setIsChecking(false);
+    }
+  };
 
   const handleCleanup = async (type: 'failed' | 'pending') => {
     const endpoint = type === 'failed' ? '/api/admin/cleanup-payments' : '/api/admin/cleanup-pending-payments';
@@ -78,10 +122,14 @@ export default function AdminPaymentsPage() {
         <div>
           <h1 className="text-3xl font-bold font-headline">Histórico de Pagamentos</h1>
           <p className="text-muted-foreground mt-1">
-            Visualize todos os pagamentos gerados na plataforma e limpe registros antigos.
+            Visualize todos os pagamentos, verifique e limpe registros antigos.
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <Button onClick={handleManualCheck} disabled={isChecking} variant="default" className="w-full sm:w-auto">
+                {isChecking ? <Loader className="mr-2" /> : <RefreshCw className="mr-2" />}
+                {isChecking ? 'Verificando...' : 'Verificar Pendentes'}
+            </Button>
             <Button onClick={() => handleCleanup('pending')} disabled={!!isCleaning} variant="outline" className="w-full sm:w-auto">
                 {isCleaning === 'pending' ? <Loader className="mr-2" /> : <Trash2 className="mr-2" />}
                 {isCleaning === 'pending' ? 'Limpando...' : 'Limpar Pendentes'}
