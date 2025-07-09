@@ -94,7 +94,7 @@ export default function ModulePage({ params: paramsPromise }: { params: Promise<
       ) : (
         <div className="space-y-4">
           {module.lessons.map((lesson) => (
-            <Card key={lesson.id} className="bg-card/60 backdrop-blur-sm border-white/10">
+            <Card key={lesson.id} className="bg-card/60 backdrop-blur-sm border-border">
               <CardContent className="p-4 flex items-center gap-4">
                 {lesson.type === 'video' ? (
                   <PlayCircle className="h-8 w-8 text-primary flex-shrink-0" />

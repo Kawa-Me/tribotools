@@ -90,7 +90,7 @@ export default function LessonPage({ params: paramsPromise }: { params: Promise<
       </header>
       
       {lesson.type === 'video' ? (
-        <Card className="bg-card/60 backdrop-blur-sm border-white/10">
+        <Card className="bg-card/60 backdrop-blur-sm border-border">
             <CardContent className="p-6">
                 <div className="aspect-video">
                 <iframe
@@ -106,7 +106,7 @@ export default function LessonPage({ params: paramsPromise }: { params: Promise<
         </Card>
       ) : (
         <div className="space-y-6">
-            <Card className="bg-card/60 backdrop-blur-sm border-white/10">
+            <Card className="bg-card/60 backdrop-blur-sm border-border">
                 <CardContent className="p-6 space-y-4">
                     {lesson.accessUrl && (
                         <Button asChild size="lg" className="w-full">
@@ -146,7 +146,7 @@ export default function LessonPage({ params: paramsPromise }: { params: Promise<
             </Card>
 
             {lesson.cookies && lesson.cookies.length > 0 && (
-              <Card className="bg-card/60 backdrop-blur-sm border-white/10">
+              <Card className="bg-card/60 backdrop-blur-sm border-border">
                 <CardHeader className="p-6 pb-2">
                     <CardTitle className="font-headline text-lg text-primary">Cookies de Acesso</CardTitle>
                     <CardDescription>Copie o cookie e cole em sua extensão.</CardDescription>
@@ -169,10 +169,10 @@ export default function LessonPage({ params: paramsPromise }: { params: Promise<
             )}
 
             {lesson.content && (
-                <Card className="bg-card/60 backdrop-blur-sm border-white/10">
+                <Card className="bg-card/60 backdrop-blur-sm border-border">
                     <CardContent className="p-6">
                         <h3 className="font-headline text-lg mb-4 text-primary">Notas Adicionais</h3>
-                        <article className="prose prose-invert max-w-none prose-p:text-foreground/90 prose-a:text-accent prose-strong:text-foreground">
+                        <article className="prose dark:prose-invert max-w-none dark:prose-p:text-foreground/90 dark:prose-a:text-accent dark:prose-strong:text-foreground">
                             <ReactMarkdown>{lesson.content}</ReactMarkdown>
                         </article>
                     </CardContent>

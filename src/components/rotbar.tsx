@@ -10,7 +10,7 @@ export function Rotbar() {
         href="https://wa.me/5545984325338"
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center gap-2 px-4 py-2 bg-black text-foreground rounded-xl shadow-lg hover:bg-neutral-800 transition border border-primary"
+        className="flex items-center gap-2 px-4 py-2 bg-card text-card-foreground rounded-xl shadow-lg hover:bg-muted transition border border-primary"
       >
         <FaWhatsapp size={18} className="text-primary" />
         Suporte
@@ -21,7 +21,7 @@ export function Rotbar() {
         href="https://chat.whatsapp.com/LK6HtNWM4NODbH1gZKgypo"
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center gap-2 px-4 py-2 bg-black text-secondary-foreground rounded-xl shadow-lg hover:bg-neutral-800 transition border border-input"
+        className="flex items-center gap-2 px-4 py-2 bg-card text-card-foreground rounded-xl shadow-lg hover:bg-muted transition border border-input"
       >
         <FaWhatsapp size={18} />
         Grupo

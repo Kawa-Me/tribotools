@@ -13,7 +13,7 @@ export function SubscriptionCard() {
 
     if (user?.isAnonymous) {
         return (
-            <Card className="bg-card/80 backdrop-blur-sm border-white/10">
+            <Card className="bg-card/80 backdrop-blur-sm border-border">
                 <CardHeader className="p-4">
                     <CardTitle className="text-base">Nossos Planos</CardTitle>
                     <CardDescription className="text-xs">
@@ -32,7 +32,7 @@ export function SubscriptionCard() {
     const userSubscriptions = user?.subscriptions ? Object.entries(user.subscriptions) : [];
     
     return (
-        <Card className="bg-card/80 backdrop-blur-sm border-white/10">
+        <Card className="bg-card/80 backdrop-blur-sm border-border">
             <CardHeader className="p-4">
                 <CardTitle className="text-base">Minhas Assinaturas</CardTitle>
                 {user?.role === 'admin' && <CardDescription className="text-xs">Plano: Administrador</CardDescription>}
