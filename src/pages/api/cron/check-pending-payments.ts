@@ -105,44 +105,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Fetch ALL pending payments once to avoid composite index requirement
-    const allPendingPaymentsSnapshot = await db.collection('payments')
-      .where('status', '==', 'pending')
-      .get();
-    
-    if (allPendingPaymentsSnapshot.empty) {
-      return res.status(200).json({ message: 'No pending payments found.', checked: 0, updated: 0, cleaned: 0 });
-    }
-    
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const oldDocsToDelete: admin.firestore.QueryDocumentSnapshot[] = [];
+    const docsToDelete: admin.firestore.QueryDocumentSnapshot[] = [];
+    
+    // --- Step 1: Automated Cleanup of old payments ---
+    const allPendingSnapshot = await db.collection('payments').where('status', '==', 'pending').get();
+    const allFailedSnapshot = await db.collection('payments').where('status', '==', 'failed').get();
+    
     const recentDocsToCheck: admin.firestore.QueryDocumentSnapshot[] = [];
 
-    // In-memory filtering to separate old from recent payments
-    allPendingPaymentsSnapshot.forEach(doc => {
+    // Filter pending payments for cleanup or checking
+    allPendingSnapshot.forEach(doc => {
       const createdAt = doc.data().createdAt as admin.firestore.Timestamp | undefined;
       if (createdAt && createdAt.toDate() < sevenDaysAgo) {
-        oldDocsToDelete.push(doc);
+        docsToDelete.push(doc);
       } else {
         recentDocsToCheck.push(doc);
       }
     });
 
-    let deletedCount = 0;
-    // --- Step 1: Cleanup old abandoned pending payments ---
-    if (oldDocsToDelete.length > 0) {
+    // Filter failed payments for cleanup
+    allFailedSnapshot.forEach(doc => {
+      const createdAt = doc.data().createdAt as admin.firestore.Timestamp | undefined;
+      if (createdAt && createdAt.toDate() < sevenDaysAgo) {
+        docsToDelete.push(doc);
+      }
+    });
+    
+    let cleanedCount = 0;
+    if (docsToDelete.length > 0) {
       const batch = db.batch();
-      oldDocsToDelete.forEach(doc => {
-        batch.delete(doc.ref);
-      });
+      docsToDelete.forEach(doc => batch.delete(doc.ref));
       await batch.commit();
-      deletedCount = oldDocsToDelete.length;
-      console.log(`[CRON] Cleaned up ${deletedCount} abandoned pending payments older than 7 days.`);
+      cleanedCount = docsToDelete.length;
+      console.log(`[CRON] Cleaned up ${cleanedCount} abandoned pending/failed payments older than 7 days.`);
     }
 
     // --- Step 2: Check status of recent pending payments ---
     if (recentDocsToCheck.length === 0) {
-      return res.status(200).json({ message: 'No recent pending payments to check.', checked: 0, updated: 0, cleaned: deletedCount });
+      return res.status(200).json({ message: 'No recent pending payments to check.', checked: 0, updated: 0, cleaned: cleanedCount });
     }
 
     let checkedCount = 0;
@@ -181,22 +182,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       let isExpired = false;
       if (expirationDateStr) {
-          // The date format is 'YYYY-MM-DD HH:mm:ss.sss' and seems to be in UTC.
-          // We parse it by replacing the space with a 'T' and adding 'Z' to treat it as UTC.
           const expirationDate = new Date(expirationDateStr.replace(' ', 'T') + 'Z');
           if (!isNaN(expirationDate.getTime()) && new Date() > expirationDate) {
               isExpired = true;
           }
       }
 
-      // Logic: If the status is final (paid/failed) OR if it's expired, we act.
       if ((newStatus && newStatus !== 'pending' && newStatus !== 'created') || isExpired) {
           updatedCount++;
           if (newStatus === 'paid') {
             console.log(`[CRON] Transaction ${pushinpayTransactionId} is now 'paid'. Processing...`);
             await processSuccessfulPayment(db, doc.ref, paymentData);
           } else {
-            // This block now handles explicit failures from the API AND expirations.
             const failureReason = isExpired
               ? `Pagamento expirado. Verificado via cron job.`
               : `Status atualizado para '${newStatus}' pelo cron job.`;
@@ -211,7 +208,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    res.status(200).json({ message: 'Cron job completed successfully.', checked: checkedCount, updated: updatedCount, cleaned: deletedCount });
+    res.status(200).json({ message: 'Cron job completed successfully.', checked: checkedCount, updated: updatedCount, cleaned: cleanedCount });
 
   } catch (error: any) {
     console.error('---!!! ERROR in check-pending-payments CRON !!!---', error);
