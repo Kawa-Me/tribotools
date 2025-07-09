@@ -82,9 +82,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const rawBody = await getRawBody(req);
-    const params = new URLSearchParams(rawBody.toString('utf-8'));
+    const rawBodyString = rawBody.toString('utf-8');
+    console.log('[webhook.ts] --- Received Webhook ---');
+    console.log('[webhook.ts] Raw Body:', rawBodyString);
     
-    const status = params.get('status');
+    const params = new URLSearchParams(rawBodyString);
+    
+    const status = params.get('status')?.toLowerCase(); // Make it case-insensitive
     const pushinpayTransactionId = params.get('id');
 
     if (!status || !pushinpayTransactionId) {
@@ -98,6 +102,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const normalizedGatewayId = pushinpayTransactionId.toUpperCase();
     console.log(`[webhook.ts] Received webhook for transaction ${normalizedGatewayId} with status: ${status}`);
     
+    // Give Firestore a moment to ensure data consistency, especially if the write was very recent.
     await new Promise(resolve => setTimeout(resolve, 2000));
     
     const paymentsQuery = db.collection('payments')
@@ -118,6 +123,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // --- PAID WEBHOOK LOGIC ---
     if (status === 'paid') {
+      console.log(`[webhook.ts] Entering 'paid' logic for ${normalizedGatewayId}.`);
       if (paymentData.status === 'completed') {
         console.log(`[webhook.ts] Payment ${paymentRef.id} has already been processed as 'completed'. Ignoring.`);
         return res.status(200).json({ success: true, message: "Payment already processed." });
@@ -179,6 +185,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // --- REFUNDED/CHARGEBACK/CANCELLED WEBHOOK LOGIC ---
     } else if (status === 'refunded' || status === 'chargeback' || status === 'cancelled') {
+        console.log(`[webhook.ts] Entering '${status}' logic for ${normalizedGatewayId}.`);
         if (!userId || !Array.isArray(planIds) || planIds.length === 0) {
             throw new Error(`Invalid data in Firestore doc ${paymentRef.id} for ${status}: userId or planIds missing.`);
         }
@@ -194,9 +201,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const selectedPlans = allPlans.filter(p => planIds.includes(p.id));
 
         for (const plan of selectedPlans) {
+            console.log(`[webhook.ts] Checking product ${plan.productId} for cancellation...`);
             // Check if the subscription to be canceled is the one from this transaction
             if (existingSubscriptions[plan.productId]?.lastTransactionId === normalizedGatewayId) {
+                console.log(`[webhook.ts] Match found! Cancelling subscription for product ${plan.productId}.`);
                 existingSubscriptions[plan.productId].status = 'expired';
+            } else {
+                console.log(`[webhook.ts] No match for product ${plan.productId}. Current sub transaction ID: ${existingSubscriptions[plan.productId]?.lastTransactionId}. Webhook transaction ID: ${normalizedGatewayId}`);
             }
         }
 
@@ -208,7 +219,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
         await batch.commit();
 
-        console.log(`[webhook.ts] Successfully revoked subscription for user ${userId} due to ${status}.`);
+        console.log(`[webhook.ts] Successfully processed subscription revocation for user ${userId} due to ${status}.`);
         
         await notifyAutomationSystem({
             type: 'payment_reversed',
