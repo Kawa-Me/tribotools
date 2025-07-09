@@ -105,38 +105,50 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    let deletedCount = 0;
-
-    // --- Step 1: Cleanup old abandoned pending payments ---
+    // Fetch ALL pending payments once to avoid composite index requirement
+    const allPendingPaymentsSnapshot = await db.collection('payments')
+      .where('status', '==', 'pending')
+      .get();
+    
+    if (allPendingPaymentsSnapshot.empty) {
+      return res.status(200).json({ message: 'No pending payments found.', checked: 0, updated: 0, cleaned: 0 });
+    }
+    
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const oldPendingPaymentsSnapshot = await db.collection('payments')
-        .where('status', '==', 'pending')
-        .where('createdAt', '<', sevenDaysAgo)
-        .get();
+    const oldDocsToDelete: admin.firestore.QueryDocumentSnapshot[] = [];
+    const recentDocsToCheck: admin.firestore.QueryDocumentSnapshot[] = [];
 
-    if (!oldPendingPaymentsSnapshot.empty) {
-        const batch = db.batch();
-        oldPendingPaymentsSnapshot.docs.forEach(doc => {
-            batch.delete(doc.ref);
-        });
-        await batch.commit();
-        deletedCount = oldPendingPaymentsSnapshot.size;
-        console.log(`[CRON] Cleaned up ${deletedCount} abandoned pending payments older than 7 days.`);
+    // In-memory filtering to separate old from recent payments
+    allPendingPaymentsSnapshot.forEach(doc => {
+      const createdAt = doc.data().createdAt as admin.firestore.Timestamp | undefined;
+      if (createdAt && createdAt.toDate() < sevenDaysAgo) {
+        oldDocsToDelete.push(doc);
+      } else {
+        recentDocsToCheck.push(doc);
+      }
+    });
+
+    let deletedCount = 0;
+    // --- Step 1: Cleanup old abandoned pending payments ---
+    if (oldDocsToDelete.length > 0) {
+      const batch = db.batch();
+      oldDocsToDelete.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+      deletedCount = oldDocsToDelete.length;
+      console.log(`[CRON] Cleaned up ${deletedCount} abandoned pending payments older than 7 days.`);
     }
 
     // --- Step 2: Check status of recent pending payments ---
-    const recentPendingPaymentsSnapshot = await db.collection('payments')
-      .where('status', '==', 'pending')
-      .get();
-
-    if (recentPendingPaymentsSnapshot.empty) {
+    if (recentDocsToCheck.length === 0) {
       return res.status(200).json({ message: 'No recent pending payments to check.', checked: 0, updated: 0, cleaned: deletedCount });
     }
 
     let checkedCount = 0;
     let updatedCount = 0;
 
-    for (const doc of recentPendingPaymentsSnapshot.docs) {
+    for (const doc of recentDocsToCheck) {
       checkedCount++;
       const paymentData = doc.data() as Payment;
       const pushinpayTransactionId = paymentData.pushinpayTransactionId;
