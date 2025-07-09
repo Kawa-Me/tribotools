@@ -170,8 +170,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     await notifyAutomationSystem({
       userId,
-      userEmail: userData?.email,
-      userName: userData?.name || params.get('payer_name'),
+      userEmail: paymentData.userEmail,
+      userName: paymentData.userName,
+      userPhone: paymentData.userPhone,
       planIds,
       selectedPlans,
       transactionId: normalizedGatewayId,
