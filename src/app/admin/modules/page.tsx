@@ -6,7 +6,7 @@ export default function AdminModulesPage() {
       <div>
         <h1 className="text-3xl font-bold font-headline">Gerenciar Módulos</h1>
         <p className="text-muted-foreground">
-          Adicione, edite ou remova módulos e suas respectivas lições.
+          Adicione, edite ou remova módulos e suas respectivas aulas.
         </p>
       </div>
       <ModuleEditor />

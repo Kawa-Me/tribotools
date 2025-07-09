@@ -31,7 +31,7 @@ export default function AdminDashboardPage() {
           </CardHeader>
           <CardContent>
             <p className="text-xs text-muted-foreground">
-              Crie, edite ou remova módulos e lições.
+              Crie, edite ou remova módulos e aulas.
             </p>
             <Link href="/admin/modules" className="mt-2 inline-block">
                 <span className="text-primary hover:underline">Gerenciar módulos</span>
