@@ -184,7 +184,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
 
     // --- REFUNDED/CHARGEBACK/CANCELLED WEBHOOK LOGIC ---
-    } else if (status === 'refunded' || status === 'chargeback' || status === 'cancelled') {
+    } else if (status === 'refunded' || status === 'chargeback' || status === 'cancelled' || status === 'cancelado') {
         console.log(`[webhook.ts] Entering '${status}' logic for ${normalizedGatewayId}.`);
         if (!userId || !Array.isArray(planIds) || planIds.length === 0) {
             throw new Error(`Invalid data in Firestore doc ${paymentRef.id} for ${status}: userId or planIds missing.`);
