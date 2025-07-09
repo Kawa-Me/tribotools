@@ -38,15 +38,26 @@ async function notifyAutomationSystem(payload: any) {
         console.warn('[webhook.ts] N8N_WEBHOOK_URL is not configured. Skipping notification.');
         return;
     }
+
+    console.log('[webhook.ts] Attempting to send notification to n8n...');
+    console.log('[webhook.ts] n8n Payload:', JSON.stringify(payload, null, 2)); // Log the exact payload
+
     try {
-        await fetch(n8nWebhookUrl, {
+        const response = await fetch(n8nWebhookUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
         });
-        console.log('[webhook.ts] Successfully sent notification to automation system.');
+
+        if (response.ok) {
+            console.log(`[webhook.ts] Successfully sent notification to n8n. Status: ${response.status}`);
+        } else {
+            const responseBody = await response.text();
+            console.error(`[webhook.ts] Failed to send notification to n8n. Status: ${response.status}`);
+            console.error('[webhook.ts] n8n Response Body:', responseBody);
+        }
     } catch (error) {
-        console.error('[webhook.ts] Failed to send notification to automation system:', error);
+        console.error('[webhook.ts] CRITICAL: Exception caught while sending notification to n8n:', error);
     }
 }
 
