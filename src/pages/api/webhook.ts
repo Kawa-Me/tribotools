@@ -3,15 +3,15 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import * as admin from 'firebase-admin';
 import type { Plan, Product } from '@/lib/types';
 import { Timestamp } from 'firebase-admin/firestore';
+import { initializeAdminApp } from '@/lib/firebase-admin';
 
-// Desabilita o body parser padrão do Next.js para esta rota.
 export const config = {
   api: {
     bodyParser: false,
   },
 };
 
-// Helper para ler o corpo da requisição manualmente.
+// Helper to read the body of the request manually.
 async function getRawBody(req: NextApiRequest): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -21,27 +21,7 @@ async function getRawBody(req: NextApiRequest): Promise<Buffer> {
   });
 }
 
-// Helper para inicializar o Firebase Admin SDK apenas uma vez.
-const initializeAdminApp = () => {
-  if (admin.apps.length > 0) {
-    return admin.app();
-  }
-  const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (!serviceAccountString) {
-    throw new Error('CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set.');
-  }
-  try {
-    const serviceAccount = JSON.parse(serviceAccountString);
-    return admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-  } catch (e: any) {
-    console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY.');
-    throw new Error(`Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY: ${e.message}`);
-  }
-};
-
-// Helper para buscar planos do Firestore com o Admin SDK
+// Helper to fetch plans from Firestore with the Admin SDK
 async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore): Promise<(Plan & { productId: string, productName: string })[]> {
   const productsSnapshot = await db.collection('products').get();
   if (productsSnapshot.empty) return [];
@@ -51,7 +31,7 @@ async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore): Promis
   );
 }
 
-// Helper para notificar seu sistema de automação (n8n).
+// Helper to notify your automation system (n8n).
 async function notifyAutomationSystem(payload: any) {
     const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
     if (!n8nWebhookUrl) {
@@ -158,7 +138,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       existingSubscriptions[plan.productId] = {
         status: 'active',
-        plan: plan.id,
+        planId: plan.id,
         startedAt: Timestamp.fromDate(now),
         expiresAt: Timestamp.fromDate(expiresAt),
         lastTransactionId: normalizedGatewayId,

@@ -14,8 +14,7 @@ import { auth } from '@/lib/firebase';
 
 export default function AdminPaymentsPage() {
   const { payments, loading, error } = usePayments();
-  const [isCleaningFailed, setIsCleaningFailed] = useState(false);
-  const [isCleaningPending, setIsCleaningPending] = useState(false);
+  const [isCleaning, setIsCleaning] = useState<'failed' | 'pending' | null>(null);
   const { toast } = useToast();
 
   const paidPayments = payments.filter(p => p.status === 'completed');
@@ -39,8 +38,7 @@ export default function AdminPaymentsPage() {
         return;
     }
     
-    if (type === 'failed') setIsCleaningFailed(true);
-    if (type === 'pending') setIsCleaningPending(true);
+    setIsCleaning(type);
 
     try {
         const token = await auth.currentUser.getIdToken(true);
@@ -70,8 +68,7 @@ export default function AdminPaymentsPage() {
             description: error.message || 'Não foi possível completar a operação. Verifique os logs do servidor.',
         });
     } finally {
-        if (type === 'failed') setIsCleaningFailed(false);
-        if (type === 'pending') setIsCleaningPending(false);
+        setIsCleaning(null);
     }
   };
 
@@ -85,13 +82,13 @@ export default function AdminPaymentsPage() {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <Button onClick={() => handleCleanup('pending')} disabled={isCleaningPending} variant="outline" className="w-full sm:w-auto">
-                {isCleaningPending ? <Loader className="mr-2" /> : <Trash2 className="mr-2" />}
-                {isCleaningPending ? 'Limpando...' : 'Limpar Pendentes'}
+            <Button onClick={() => handleCleanup('pending')} disabled={!!isCleaning} variant="outline" className="w-full sm:w-auto">
+                {isCleaning === 'pending' ? <Loader className="mr-2" /> : <Trash2 className="mr-2" />}
+                {isCleaning === 'pending' ? 'Limpando...' : 'Limpar Pendentes'}
             </Button>
-            <Button onClick={() => handleCleanup('failed')} disabled={isCleaningFailed} variant="outline" className="w-full sm:w-auto">
-                {isCleaningFailed ? <Loader className="mr-2" /> : <Trash2 className="mr-2" />}
-                {isCleaningFailed ? 'Limpando...' : 'Limpar Falhados'}
+            <Button onClick={() => handleCleanup('failed')} disabled={!!isCleaning} variant="outline" className="w-full sm:w-auto">
+                {isCleaning === 'failed' ? <Loader className="mr-2" /> : <Trash2 className="mr-2" />}
+                {isCleaning === 'failed' ? 'Limpando...' : 'Limpar Falhados'}
             </Button>
         </div>
       </div>

@@ -1,25 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import * as admin from 'firebase-admin';
-
-// Helper to initialize Firebase Admin SDK only once
-const initializeAdminApp = () => {
-  if (admin.apps.length > 0) {
-    return admin.app();
-  }
-  const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (!serviceAccountString) {
-    throw new Error('CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set.');
-  }
-  try {
-    const serviceAccount = JSON.parse(serviceAccountString);
-    return admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-  } catch (e: any) {
-    console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY.');
-    throw new Error(`Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY: ${e.message}`);
-  }
-};
+import { initializeAdminApp } from '@/lib/firebase-admin';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {

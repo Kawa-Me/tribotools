@@ -4,28 +4,7 @@
 import { z } from 'zod';
 import * as admin from 'firebase-admin';
 import type { Product, Plan, Coupon } from '@/lib/types';
-
-// Helper to initialize Firebase Admin SDK only once
-const initializeAdminApp = () => {
-  if (admin.apps.length > 0) {
-    return admin.app();
-  }
-
-  const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (!serviceAccountString) {
-    throw new Error('CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set.');
-  }
-
-  try {
-    const serviceAccount = JSON.parse(serviceAccountString);
-    return admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-  } catch (e: any) {
-    console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY. Make sure it is a valid JSON string.');
-    throw new Error(`Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY: ${e.message}`);
-  }
-};
+import { initializeAdminApp } from '@/lib/firebase-admin';
 
 // Helper to get Plans using the Admin SDK
 async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore): Promise<Plan[]> {

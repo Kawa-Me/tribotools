@@ -63,7 +63,7 @@ export interface Coupon {
 
 export interface UserSubscription {
   status: 'active' | 'expired' | 'none';
-  plan: string | null;
+  planId: string | null;
   expiresAt: Timestamp | null;
   startedAt: Timestamp | null;
 }

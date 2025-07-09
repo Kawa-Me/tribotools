@@ -181,13 +181,13 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave, products }: EditUs
     value: any
   ) => {
     setSubscriptions(prev => {
-      const currentProductSub = prev[productId] || { status: 'none', plan: null, expiresAt: null, startedAt: null };
+      const currentProductSub = prev[productId] || { status: 'none', planId: null, expiresAt: null, startedAt: null };
       
       let updatedSub = { ...currentProductSub, [field]: value };
       
       if (field === 'status') {
           if (value === 'none') {
-            updatedSub = { status: 'none', plan: null, expiresAt: null, startedAt: null };
+            updatedSub = { status: 'none', planId: null, expiresAt: null, startedAt: null };
           } else if (value === 'active' && !currentProductSub.startedAt) {
               updatedSub.startedAt = serverTimestamp() as Timestamp;
           }
@@ -221,7 +221,7 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave, products }: EditUs
         </DialogHeader>
         <div className="max-h-[60vh] overflow-y-auto space-y-6 py-4 pr-3">
           {products.map(product => {
-            const sub = subscriptions[product.id] || { status: 'none', plan: null, expiresAt: null, startedAt: null };
+            const sub = subscriptions[product.id] || { status: 'none', planId: null, expiresAt: null, startedAt: null };
             const availablePlans = product.plans;
 
             return (
@@ -249,8 +249,8 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave, products }: EditUs
                   <Label htmlFor={`plan-${product.id}`} className="text-right text-xs">Plano</Label>
                   <Select
                     disabled={sub.status === 'none'}
-                    value={sub.plan || ''}
-                    onValueChange={(value) => handleSubscriptionChange(product.id, 'plan', value)}
+                    value={sub.planId || ''}
+                    onValueChange={(value) => handleSubscriptionChange(product.id, 'planId', value)}
                   >
                     <SelectTrigger className="col-span-3">
                       <SelectValue placeholder="Selecione um plano" />
