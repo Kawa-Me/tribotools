@@ -1,3 +1,4 @@
+
 'use server';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
@@ -71,13 +72,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  // --- Configuration Check ---
   const apiToken = process.env.PUSHINPAY_API_TOKEN;
   const cronSecret = process.env.CRON_SECRET;
 
   if (!apiToken || !cronSecret) {
       console.error("[CRON] Server configuration error: PUSHINPAY_API_TOKEN or CRON_SECRET is not set.");
-      // Return 503 so external cron services know to retry if it's a temporary config issue.
       return res.status(503).json({ error: 'Service Unavailable: Server is not configured correctly.' });
   }
   
@@ -85,14 +84,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const auth = admin.auth(app);
   const db = admin.firestore(app);
   
-  // --- Authentication Check ---
   const authorization = req.headers.authorization;
   if (!authorization?.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized: No token provided.' });
   }
   const token = authorization.split('Bearer ')[1];
   
-  // The request is authenticated if the token matches the CRON_SECRET, OR if it's a valid Firebase admin token.
   if (token !== cronSecret) {
     try {
         const decodedToken = await auth.verifyIdToken(token);
@@ -106,20 +103,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  // --- Main Logic ---
   try {
-    const pendingPaymentsSnapshot = await db.collection('payments')
+    let deletedCount = 0;
+
+    // --- Step 1: Cleanup old abandoned pending payments ---
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const oldPendingPaymentsSnapshot = await db.collection('payments')
+        .where('status', '==', 'pending')
+        .where('createdAt', '<', sevenDaysAgo)
+        .get();
+
+    if (!oldPendingPaymentsSnapshot.empty) {
+        const batch = db.batch();
+        oldPendingPaymentsSnapshot.docs.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
+        deletedCount = oldPendingPaymentsSnapshot.size;
+        console.log(`[CRON] Cleaned up ${deletedCount} abandoned pending payments older than 7 days.`);
+    }
+
+    // --- Step 2: Check status of recent pending payments ---
+    const recentPendingPaymentsSnapshot = await db.collection('payments')
       .where('status', '==', 'pending')
       .get();
 
-    if (pendingPaymentsSnapshot.empty) {
-      return res.status(200).json({ message: 'No pending payments to check.', checked: 0, updated: 0 });
+    if (recentPendingPaymentsSnapshot.empty) {
+      return res.status(200).json({ message: 'No recent pending payments to check.', checked: 0, updated: 0, cleaned: deletedCount });
     }
 
     let checkedCount = 0;
     let updatedCount = 0;
 
-    for (const doc of pendingPaymentsSnapshot.docs) {
+    for (const doc of recentPendingPaymentsSnapshot.docs) {
       checkedCount++;
       const paymentData = doc.data() as Payment;
       const pushinpayTransactionId = paymentData.pushinpayTransactionId;
@@ -165,7 +181,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    res.status(200).json({ message: 'Cron job completed successfully.', checked: checkedCount, updated: updatedCount });
+    res.status(200).json({ message: 'Cron job completed successfully.', checked: checkedCount, updated: updatedCount, cleaned: deletedCount });
 
   } catch (error: any) {
     console.error('---!!! ERROR in check-pending-payments CRON !!!---', error);
