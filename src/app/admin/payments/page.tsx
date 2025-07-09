@@ -1,24 +1,86 @@
 'use client';
 
+import { useState } from 'react';
 import { usePayments } from '@/hooks/use-payments';
 import { PaymentHistoryTable } from '@/components/admin/payment-history-table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import { Loader } from '@/components/loader';
+import { Trash2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { auth } from '@/lib/firebase';
 
 export default function AdminPaymentsPage() {
   const { payments, loading, error } = usePayments();
+  const [isCleaning, setIsCleaning] = useState(false);
+  const { toast } = useToast();
 
   const paidPayments = payments.filter(p => p.status === 'completed');
-  const pendingPayments = payments.filter(p => p.status === 'pending' || p.status === 'failed');
+  const pendingPayments = payments.filter(p => p.status === 'pending');
+  const failedPayments = payments.filter(p => p.status === 'failed');
+
+  const handleCleanup = async () => {
+    if (!window.confirm("Tem certeza que deseja excluir todos os pagamentos com status 'falhou' com mais de 7 dias? Esta ação não pode ser desfeita.")) {
+      return;
+    }
+    
+    if (!auth?.currentUser) {
+        toast({
+            variant: 'destructive',
+            title: 'Erro de Autenticação',
+            description: 'Não foi possível verificar o usuário. Por favor, faça login novamente.',
+        });
+        return;
+    }
+    
+    setIsCleaning(true);
+    try {
+        const token = await auth.currentUser.getIdToken(true);
+        const response = await fetch('/api/admin/cleanup-payments', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || `Erro do servidor: ${response.statusText}`);
+        }
+
+        toast({
+            title: 'Limpeza Concluída',
+            description: `${result.deletedCount} pagamentos falhados foram excluídos.`,
+        });
+
+    } catch (error: any) {
+        console.error("Cleanup error:", error);
+        toast({
+            variant: 'destructive',
+            title: 'Erro na Limpeza',
+            description: error.message || 'Não foi possível completar a operação. Verifique os logs do servidor.',
+        });
+    } finally {
+        setIsCleaning(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold font-headline">Histórico de Pagamentos</h1>
-        <p className="text-muted-foreground">
-          Visualize todos os pagamentos gerados na plataforma, seus status e detalhes.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
+        <div>
+          <h1 className="text-3xl font-bold font-headline">Histórico de Pagamentos</h1>
+          <p className="text-muted-foreground mt-1">
+            Visualize todos os pagamentos gerados na plataforma, seus status e detalhes.
+          </p>
+        </div>
+        <Button onClick={handleCleanup} disabled={isCleaning} variant="outline" className="w-full sm:w-auto">
+            {isCleaning ? <Loader className="mr-2" /> : <Trash2 className="mr-2" />}
+            {isCleaning ? 'Limpando...' : 'Limpar Pag. Falhados'}
+        </Button>
       </div>
       
       {loading && (
@@ -42,15 +104,19 @@ export default function AdminPaymentsPage() {
 
       {!loading && !error && (
         <Tabs defaultValue="paid" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 md:w-[400px]">
+            <TabsList className="grid w-full grid-cols-3 md:w-[600px]">
                 <TabsTrigger value="paid">Pagos ({paidPayments.length})</TabsTrigger>
-                <TabsTrigger value="pending">Pendentes & Falhados ({pendingPayments.length})</TabsTrigger>
+                <TabsTrigger value="pending">Pendentes ({pendingPayments.length})</TabsTrigger>
+                <TabsTrigger value="failed">Falhados ({failedPayments.length})</TabsTrigger>
             </TabsList>
             <TabsContent value="paid" className="mt-4">
                 <PaymentHistoryTable payments={paidPayments} />
             </TabsContent>
             <TabsContent value="pending" className="mt-4">
                 <PaymentHistoryTable payments={pendingPayments} />
+            </TabsContent>
+             <TabsContent value="failed" className="mt-4">
+                <PaymentHistoryTable payments={failedPayments} />
             </TabsContent>
         </Tabs>
       )}
