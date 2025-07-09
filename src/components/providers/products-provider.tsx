@@ -4,7 +4,6 @@ import { createContext, useEffect, useState, useMemo, ReactNode } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Product } from '@/lib/types';
-import { useAuth } from '@/lib/hooks';
 
 interface ProductsContextType {
     products: Product[];
@@ -19,14 +18,8 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [dbConfigured, setDbConfigured] = useState(true);
-  const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
-    if (authLoading) return;
-    if (!user) {
-      setLoading(false);
-      return;
-    }
     if (!db) {
       setLoading(false);
       setDbConfigured(false);
@@ -46,7 +39,7 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, [user, authLoading]);
+  }, []);
 
   const allPlans = useMemo(() => {
     return products.flatMap(p => 
