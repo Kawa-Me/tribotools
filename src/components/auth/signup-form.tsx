@@ -60,7 +60,7 @@ export function SignupForm() {
         const upgradedUser = auth.currentUser;
         await sendEmailVerification(upgradedUser);
 
-        const isAdmin = upgradedUser.email === 'kawameller@gmail.com';
+        const isAdmin = upgradedUser.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
         await setDoc(doc(db, 'users', upgradedUser.uid), {
           uid: upgradedUser.uid,
@@ -82,7 +82,7 @@ export function SignupForm() {
         const user = userCredential.user;
         await sendEmailVerification(user);
 
-        const isAdmin = values.email === 'kawameller@gmail.com';
+        const isAdmin = values.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
         await setDoc(doc(db, 'users', user.uid), {
           uid: user.uid,

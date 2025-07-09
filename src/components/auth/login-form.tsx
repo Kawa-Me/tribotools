@@ -50,7 +50,7 @@ export function LoginForm() {
       const user = userCredential.user;
 
       // Failsafe: Ensure the primary admin email always has the 'admin' role.
-      const isAdmin = user.email === 'kawameller@gmail.com';
+      const isAdmin = user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
       if (isAdmin) {
         try {
