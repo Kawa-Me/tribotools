@@ -86,9 +86,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('[webhook.ts] --- Received Webhook ---');
     console.log('[webhook.ts] Raw Body:', rawBodyString);
     
+    // PushinPay sends form-urlencoded data, not JSON.
     const params = new URLSearchParams(rawBodyString);
-    
-    const status = params.get('status')?.toLowerCase(); // Make it case-insensitive
+    const status = params.get('status')?.toLowerCase();
     const pushinpayTransactionId = params.get('id');
 
     if (!status || !pushinpayTransactionId) {
@@ -102,7 +102,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const normalizedGatewayId = pushinpayTransactionId.toUpperCase();
     console.log(`[webhook.ts] Received webhook for transaction ${normalizedGatewayId} with status: ${status}`);
     
-    // Give Firestore a moment to ensure data consistency, especially if the write was very recent.
+    // Give Firestore a moment to ensure data consistency
     await new Promise(resolve => setTimeout(resolve, 2000));
     
     const paymentsQuery = db.collection('payments')
@@ -120,8 +120,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const paymentRef = paymentDoc.ref;
     const paymentData = paymentDoc.data()!;
     const { userId, planIds, userName, userEmail, userPhone } = paymentData;
+    
+    // --- CATCH-ALL LOGIC ---
+    // Instead of checking for specific failure statuses, we treat 'paid' as the only success case.
+    // Any other status will be treated as a failure/reversal.
 
-    // --- PAID WEBHOOK LOGIC ---
     if (status === 'paid') {
       console.log(`[webhook.ts] Entering 'paid' logic for ${normalizedGatewayId}.`);
       if (paymentData.status === 'completed') {
@@ -151,6 +154,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       for (const plan of selectedPlans) {
         const now = new Date();
         const currentSub = existingSubscriptions[plan.productId];
+        // If there's an active sub, extend it. Otherwise, start from now.
         const startDate = (currentSub && currentSub.status === 'active' && currentSub.expiresAt.toDate() > now) 
             ? currentSub.expiresAt.toDate() 
             : now;
@@ -162,7 +166,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           planId: plan.id,
           startedAt: Timestamp.fromDate(now),
           expiresAt: Timestamp.fromDate(expiresAt),
-          lastTransactionId: normalizedGatewayId,
+          lastTransactionId: normalizedGatewayId, // Track which transaction granted this access
         };
       }
       
@@ -184,57 +188,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
 
     } else {
-        // --- CANCELLATION / REVERSAL WEBHOOK LOGIC (Catch-all for non-"paid" statuses) ---
-        console.log(`[webhook.ts] Entering reversal logic for status '${status}' on transaction ${normalizedGatewayId}.`);
+        // --- DEFAULT FAILURE/REVERSAL LOGIC ---
+        console.log(`[webhook.ts] Entering failure/reversal logic for status '${status}' on transaction ${normalizedGatewayId}.`);
         
-        // List of statuses to ignore (e.g., intermediate states).
+        // Explicitly ignore intermediate statuses to prevent premature actions.
         const ignoredStatuses = ['created', 'pending'];
         if (ignoredStatuses.includes(status)) {
             console.log(`[webhook.ts] Ignoring intermediate status '${status}'.`);
             return res.status(200).json({ success: true, message: `Ignoring intermediate status: ${status}` });
         }
 
-        if (!userId || !Array.isArray(planIds) || planIds.length === 0) {
-            throw new Error(`Invalid data in Firestore doc ${paymentRef.id} for reversal: userId or planIds missing.`);
+        // Only update if the payment is not already marked as 'failed'.
+        if (paymentData.status === 'failed') {
+            console.log(`[webhook.ts] Payment ${paymentRef.id} is already 'failed'. Ignoring.`);
+            return res.status(200).json({ success: true, message: "Payment already marked as failed." });
         }
         
-        const userRef = db.collection('users').doc(userId);
-        const userDoc = await userRef.get();
-        if (!userDoc.exists) throw new Error(`User with UID ${userId} not found in Firestore for reversal.`);
-
-        const userData = userDoc.data()!;
-        const existingSubscriptions = userData.subscriptions || {};
-        const batch = db.batch();
-        const allPlans = await getPlansFromFirestoreAdmin(db);
-        const selectedPlans = allPlans.filter(p => planIds.includes(p.id));
-
-        for (const plan of selectedPlans) {
-            console.log(`[webhook.ts] Checking product ${plan.productId} for cancellation...`);
-            // IMPORTANT: Only revoke access if this specific transaction was the one that granted it.
-            // This prevents a delayed webhook from an old, canceled payment from revoking a new, valid subscription.
-            if (existingSubscriptions[plan.productId]?.lastTransactionId === normalizedGatewayId) {
-                console.log(`[webhook.ts] Match found! Revoking subscription for product ${plan.productId}.`);
-                existingSubscriptions[plan.productId].status = 'expired';
-            } else {
-                console.log(`[webhook.ts] No match for product ${plan.productId}. Current sub transaction ID: ${existingSubscriptions[plan.productId]?.lastTransactionId}. Webhook transaction ID: ${normalizedGatewayId}. Skipping revocation for this product.`);
-            }
-        }
-
-        batch.update(userRef, { subscriptions: existingSubscriptions });
-        batch.update(paymentRef, { 
+        const updatePayload: { [key: string]: any } = {
             status: 'failed', 
             failureReason: `Pagamento revertido via webhook (status: ${status})`,
             processedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        await batch.commit();
+        };
 
-        console.log(`[webhook.ts] Successfully processed subscription revocation for user ${userId} due to status: ${status}.`);
+        await paymentRef.update(updatePayload);
+
+        console.log(`[webhook.ts] Successfully marked payment ${paymentRef.id} as failed.`);
         
         await notifyAutomationSystem({
             type: 'payment_reversed',
             status: status,
             userId, userEmail, userName, userPhone,
-            planIds, selectedPlans,
+            planIds,
             transactionId: normalizedGatewayId,
         });
     }
