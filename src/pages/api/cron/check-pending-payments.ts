@@ -106,6 +106,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const oneDayAgo = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000);
     const docsToDelete: admin.firestore.QueryDocumentSnapshot[] = [];
     
     // --- Step 1: Automated Cleanup of old payments ---
@@ -117,6 +118,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Filter pending payments for cleanup or checking
     allPendingSnapshot.forEach(doc => {
       const createdAt = doc.data().createdAt as admin.firestore.Timestamp | undefined;
+      // Keep pending payments for 7 days
       if (createdAt && createdAt.toDate() < sevenDaysAgo) {
         docsToDelete.push(doc);
       } else {
@@ -127,7 +129,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Filter failed payments for cleanup
     allFailedSnapshot.forEach(doc => {
       const createdAt = doc.data().createdAt as admin.firestore.Timestamp | undefined;
-      if (createdAt && createdAt.toDate() < sevenDaysAgo) {
+      // Clean up failed payments after 1 day
+      if (createdAt && createdAt.toDate() < oneDayAgo) {
         docsToDelete.push(doc);
       }
     });
@@ -138,7 +141,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       docsToDelete.forEach(doc => batch.delete(doc.ref));
       await batch.commit();
       cleanedCount = docsToDelete.length;
-      console.log(`[CRON] Cleaned up ${cleanedCount} abandoned pending/failed payments older than 7 days.`);
+      console.log(`[CRON] Cleaned up ${cleanedCount} abandoned pending/failed payments.`);
     }
 
     // --- Step 2: Check status of recent pending payments ---
@@ -168,7 +171,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (response.status === 404) {
              await doc.ref.update({
                 status: 'failed',
-                failureReason: `Transaction not found on PushinPay (404).`,
+                failureReason: `Transaction not found on PushinPay (404). Verified via cron job.`,
                 processedAt: admin.firestore.FieldValue.serverTimestamp(),
             });
             updatedCount++;
