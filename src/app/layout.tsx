@@ -5,6 +5,7 @@ import { AuthProvider } from '@/components/providers/auth-provider';
 import { Toaster } from '@/components/ui/toaster';
 import { ProductsProvider } from '@/components/providers/products-provider';
 import { ModulesProvider } from '@/components/providers/modules-provider';
+import { ThemeProvider } from '@/components/providers/theme-provider';
 
 const shareTechMono = Share_Tech_Mono({
   subsets: ['latin'],
@@ -38,16 +39,23 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${shareTechMono.variable} dark`}>
+    <html lang="en" className={`${shareTechMono.variable}`} suppressHydrationWarning>
       <body className="font-body antialiased">
-        <AuthProvider>
-          <ProductsProvider>
-            <ModulesProvider>
-              {children}
-              <Toaster />
-            </ModulesProvider>
-          </ProductsProvider>
-        </AuthProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <AuthProvider>
+            <ProductsProvider>
+              <ModulesProvider>
+                {children}
+                <Toaster />
+              </ModulesProvider>
+            </ProductsProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

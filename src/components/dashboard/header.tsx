@@ -10,13 +10,14 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
 import { Menu } from 'lucide-react';
 import { SubscriptionCard } from '@/components/dashboard/subscription-card';
+import { ThemeToggle } from '../theme-toggle';
 
 export function Header() {
     const pathname = usePathname();
     const { modules, dbConfigured } = useModules();
   
     return (
-      <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-neutral-800 bg-background/95 px-4 shadow-md backdrop-blur-sm lg:h-[60px] lg:px-6">
+      <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-border bg-background/95 px-4 shadow-md backdrop-blur-sm lg:h-[60px] lg:px-6">
         <Sheet>
           <SheetTrigger asChild>
             <Button variant="outline" size="icon" className="shrink-0 md:hidden">
@@ -64,6 +65,7 @@ export function Header() {
         <div className="w-full flex-1">
           {/* Can add search bar here if needed */}
         </div>
+        <ThemeToggle />
         <UserNav />
       </header>
     );
