@@ -2,11 +2,12 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { collection, onSnapshot, query, where, doc, writeBatch, getDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, doc, writeBatch, getDocs, serverTimestamp, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Payment, Affiliate } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/hooks';
+import * as admin from 'firebase-admin';
 
 import {
   Table,
@@ -32,7 +33,7 @@ import { Skeleton } from '../ui/skeleton';
 import { Badge } from '../ui/badge';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { RotateCcw, Search } from 'lucide-react';
+import { RotateCcw, Search, Loader2 } from 'lucide-react';
 
 interface CommissionData extends Payment {
   affiliateEmail?: string;
@@ -118,30 +119,27 @@ export function CommissionManager() {
         const batch = writeBatch(db);
         const paymentRef = doc(db, 'payments', payment.id);
 
-        // Find affiliate to reverse funds
-        const affiliateRefQuery = query(collection(db, 'affiliates'), where('ref_code', '==', payment.affiliateId), limit(1));
-        const affiliateSnapshot = await getDocs(affiliateRefQuery);
+        const affiliatesQuery = query(collection(db, "affiliates"), where("ref_code", "==", payment.affiliateId), limit(1));
+        const affiliateSnapshot = await getDocs(affiliatesQuery);
         
         if (affiliateSnapshot.empty) {
             throw new Error(`Afiliado com ref_code ${payment.affiliateId} não encontrado.`);
         }
-        const affiliateRef = affiliateSnapshot.docs[0].ref;
-        const affiliateData = affiliateSnapshot.docs[0].data() as Affiliate;
+        const affiliateDoc = affiliateSnapshot.docs[0];
+        const affiliateRef = affiliateDoc.ref;
+        const affiliateData = affiliateDoc.data() as Affiliate;
 
         const commissionAmount = payment.commission || 0;
         
-        // Reverse funds
-        // This assumes commission is always in pending_balance. A more complex system might need to check available_balance.
         if (commissionAmount > 0 && affiliateData.pending_balance >= commissionAmount) {
              batch.update(affiliateRef, {
-                pending_balance: admin.firestore.FieldValue.increment(-commissionAmount),
-                total_earned: admin.firestore.FieldValue.increment(-commissionAmount),
+                pending_balance: affiliateData.pending_balance - commissionAmount,
+                total_earned: affiliateData.total_earned - commissionAmount,
             });
         } else {
-            console.warn(`Cannot reverse R$${commissionAmount} from pending balance of R$${affiliateData.pending_balance} for affiliate ${payment.affiliateId}. The balance might be insufficient.`);
+            console.warn(`Cannot reverse R$${commissionAmount} from pending balance of R$${affiliateData.pending_balance} for affiliate ${payment.affiliateId}. The balance might be insufficient or already moved.`);
         }
 
-        // Update payment status
         batch.update(paymentRef, {
             commissionStatus: 'cancelled',
             processedAt: serverTimestamp(),
@@ -149,19 +147,26 @@ export function CommissionManager() {
         
         await batch.commit();
 
-        // TODO: Trigger n8n webhook to notify affiliate
-        // const n8nWebhookUrl = process.env.NEXT_PUBLIC_N8N_COMMISSION_CANCELLED_WEBHOOK;
-        // if (n8nWebhookUrl) {
-        //   await fetch(n8nWebhookUrl, {
-        //       method: 'POST',
-        //       headers: { 'Content-Type': 'application/json' },
-        //       body: JSON.stringify({
-        //           affiliateEmail: affiliates.get(payment.affiliateId!)?.email,
-        //           buyerEmail: payment.userEmail,
-        //           commissionAmount,
-        //       }),
-        //   });
-        // }
+        const n8nWebhookUrl = 'https://n8nwebhook.juliaramos.store/webhook/d66f26f4-1c4b-4716-8475-ea17494dbddd';
+        
+        try {
+            await fetch(n8nWebhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    affiliateEmail: affiliateData.email,
+                    affiliateName: affiliateData.name,
+                    buyerEmail: payment.userEmail,
+                    commissionAmount: commissionAmount,
+                    transactionId: payment.pushinpayTransactionId,
+                    cancellationDate: new Date().toISOString(),
+                }),
+            });
+        } catch(e) {
+            console.error("Failed to send cancellation notification to n8n:", e);
+            // We don't re-throw here because the primary operation (reversing the balance) was successful.
+            // We just log the error.
+        }
 
         toast({ title: 'Sucesso!', description: 'Comissão cancelada e saldo do afiliado revertido.' });
     } catch (error) {
@@ -230,7 +235,7 @@ export function CommissionManager() {
                 </TableCell>
                 <TableCell className="text-xs">
                   <div className="font-mono">{c.pushinpayTransactionId}</div>
-                  <div className="text-muted-foreground">{format(c.createdAt.toDate(), "dd/MM/yy HH:mm", { locale: ptBR })}</div>
+                  <div className="text-muted-foreground">{c.createdAt ? format(c.createdAt.toDate(), "dd/MM/yy HH:mm", { locale: ptBR }) : 'N/A'}</div>
                 </TableCell>
                 <TableCell className="font-semibold">R$ {c.commission?.toFixed(2) || '0.00'}</TableCell>
                 <TableCell>
