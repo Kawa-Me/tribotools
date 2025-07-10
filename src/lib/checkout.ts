@@ -7,7 +7,7 @@ import type { Product, Plan, Coupon } from '@/lib/types';
 import { initializeAdminApp } from '@/lib/firebase-admin';
 
 // Helper to get Plans using the Admin SDK
-async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore): Promise<Plan[]> {
+async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore): Promise<(Plan & {productId: string, productName: string})[]> {
   try {
     const productsSnapshot = await db.collection('products').get();
     if (productsSnapshot.empty) return [];
@@ -70,13 +70,13 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
       const couponDoc = await couponRef.get();
       
       if (couponDoc.exists) {
-        const coupon = couponDoc.data() as Coupon;
+        const coupon = { id: couponDoc.id, ...couponDoc.data() } as Coupon;
         const now = admin.firestore.Timestamp.now();
 
         if (coupon.isActive && now >= coupon.startDate && now <= coupon.endDate) {
           appliedCoupon = coupon;
-          const applicablePlans = selectedPlans.filter(plan => 
-            coupon.applicableProductIds.length === 0 || coupon.applicableProductIds.includes(plan.productId)
+           const applicablePlans = selectedPlans.filter(plan => 
+            !coupon.applicableProductIds || coupon.applicableProductIds.length === 0 || coupon.applicableProductIds.includes(plan.productId)
           );
           const eligiblePrice = applicablePlans.reduce((sum, plan) => sum + plan.price, 0);
           discountAmount = eligiblePrice * (coupon.discountPercentage / 100);
@@ -119,10 +119,10 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     
     // STEP 2: Now, create the local payment record in a SINGLE write operation.
     const paymentRef = db.collection('payments').doc();
-    const localTransactionId = paymentRef.id;
+    const gatewayTransactionId = data.id.toUpperCase();
 
     await paymentRef.set({
-      id: localTransactionId,
+      id: paymentRef.id, // Store its own ID for reference
       userId: uid,
       userEmail: email,
       userName: name,
@@ -134,14 +134,15 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
       totalPrice: finalPrice,
       status: 'pending',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      pushinpayTransactionId: data.id.toUpperCase(), // Store as uppercase
+      pushinpayTransactionId: gatewayTransactionId,
     });
-    console.log(`[checkout.ts] Created pending payment record ${localTransactionId} for PushinPay ID ${data.id.toUpperCase()}`);
+    console.log(`[checkout.ts] Created pending payment record ${paymentRef.id} for PushinPay ID ${gatewayTransactionId}`);
 
     const imageUrl = `data:image/png;base64,${data.qr_code_base64}`;
     return {
       qrcode_text: data.qr_code,
       qrcode_image_url: imageUrl,
+      paymentId: gatewayTransactionId, // Return the gateway ID to the client
     };
 
   } catch (error) {

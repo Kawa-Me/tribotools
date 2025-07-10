@@ -32,8 +32,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { ClipboardCopy, Loader2 } from 'lucide-react';
-import { Skeleton } from './ui/skeleton';
+import { ClipboardCopy, Loader2, PartyPopper } from 'lucide-react';
 
 const FormSchema = z.object({
   plans: z.array(z.string()).min(1, {
@@ -54,6 +53,7 @@ const FormSchema = z.object({
 interface PixData {
   qrcode_text: string;
   qrcode_image_url: string;
+  paymentId: string;
 }
 
 export function CheckoutModal({ children }: { children: React.ReactNode }) {
@@ -63,6 +63,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [pixData, setPixData] = useState<PixData | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<'generating' | 'pending' | 'completed'>('generating');
 
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
@@ -87,7 +88,20 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
         form.setValue('document', user.document || '');
         form.setValue('phone', user.phone || '');
     }
-  }, [user, form]);
+  }, [user, form, open]);
+
+  // Real-time payment confirmation check
+  useEffect(() => {
+    if (paymentStatus === 'pending' && pixData?.paymentId && user?.subscriptions) {
+        const hasBeenGranted = Object.values(user.subscriptions).some(
+            sub => sub.lastTransactionId === pixData.paymentId
+        );
+
+        if (hasBeenGranted) {
+            setPaymentStatus('completed');
+        }
+    }
+  }, [user?.subscriptions, pixData, paymentStatus]);
 
   const selectedPlanIds = form.watch('plans') || [];
   const selectedPlans = allPlans.filter(p => selectedPlanIds.includes(p.id));
@@ -96,7 +110,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (appliedCoupon) {
       const applicablePlans = selectedPlans.filter(plan => 
-        appliedCoupon.applicableProductIds.length === 0 || appliedCoupon.applicableProductIds.includes(plan.productId)
+        !appliedCoupon.applicableProductIds || appliedCoupon.applicableProductIds.length === 0 || appliedCoupon.applicableProductIds.includes(plan.productId)
       );
       const eligiblePrice = applicablePlans.reduce((sum, plan) => sum + plan.price, 0);
       const discount = eligiblePrice * (appliedCoupon.discountPercentage / 100);
@@ -104,7 +118,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
     } else {
       setDiscountAmount(0);
     }
-  }, [appliedCoupon, selectedPlans, allPlans]);
+  }, [appliedCoupon, selectedPlans]);
 
   const totalPrice = basePrice - discountAmount;
 
@@ -130,7 +144,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
             return;
         }
 
-        const coupon = docSnap.data() as Coupon;
+        const coupon = { id: docSnap.id, ...docSnap.data() } as Coupon;
         const now = Timestamp.now();
 
         if (!coupon.isActive) {
@@ -149,7 +163,6 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
             return;
         }
 
-        // Validate if coupon is applicable to any item in the cart
         const selectedPlanIdsInForm = form.getValues('plans') || [];
         if (coupon.applicableProductIds && coupon.applicableProductIds.length > 0 && selectedPlanIdsInForm.length > 0) {
             const isCouponApplicableToAnyCartItem = allPlans
@@ -208,6 +221,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
     }
 
     setLoading(true);
+    setPaymentStatus('generating');
     setPixData(null);
 
     try {
@@ -228,10 +242,9 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
             description: result.error,
             duration: 9000,
         });
-        setLoading(false);
-      } else if (result.qrcode_text && result.qrcode_image_url) {
+      } else if (result.qrcode_text && result.qrcode_image_url && result.paymentId) {
         setPixData(result as PixData);
-        setLoading(false);
+        setPaymentStatus('pending');
       } else {
         toast({ 
             variant: 'destructive', 
@@ -239,19 +252,20 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
             description: 'Resposta inválida do servidor. Tente novamente.',
             duration: 9000,
         });
-        setLoading(false);
       }
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Ocorreu um erro desconhecido no navegador.';
       toast({ variant: 'destructive', title: 'Erro Crítico', description: errorMessage, duration: 9000 });
-      setLoading(false);
+    } finally {
+        setLoading(false);
     }
   };
 
   const resetState = () => {
     setLoading(false);
     setPixData(null);
+    setPaymentStatus('generating');
     setCouponCode('');
     setAppliedCoupon(null);
     setDiscountAmount(0);
@@ -286,15 +300,32 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
   const renderContent = () => {
      if (loading || productsLoading) {
       return (
-        <div className="flex justify-center items-center h-48">
+        <div className="flex flex-col justify-center items-center h-48 gap-4">
           <Loader className="h-10 w-10 text-primary" />
+          <p className="text-sm text-muted-foreground">{paymentStatus === 'generating' ? 'Gerando pagamento...' : 'Carregando planos...'}</p>
         </div>
       );
     }
 
+    if (paymentStatus === 'completed') {
+        return (
+            <div className="flex flex-col items-center gap-4 text-center">
+                <PartyPopper className="h-16 w-16 text-primary" />
+                <h3 className="text-xl font-bold font-headline">Pagamento Aprovado!</h3>
+                <p className="text-muted-foreground">
+                    Seu acesso foi liberado. Você já pode aproveitar todos os benefícios.
+                </p>
+                <Button onClick={() => setOpen(false)} className="w-full mt-4">
+                    Fechar
+                </Button>
+            </div>
+        );
+    }
+    
     if (pixData) {
       return (
         <div className="flex flex-col items-center gap-4">
+          <p className="text-sm text-center text-muted-foreground -mt-2">Aguardando pagamento...</p>
           <div className="rounded-md border-2 border-primary bg-white p-2">
             <QRCodeSVG
               value={pixData.qrcode_text}
