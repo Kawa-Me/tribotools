@@ -30,6 +30,7 @@ const CreatePixPaymentSchema = z.object({
   document: z.string().min(11),
   phone: z.string().min(10),
   couponCode: z.string().optional().nullable(),
+  affiliateId: z.string().optional().nullable(),
 });
 
 type CreatePixPaymentInput = z.infer<typeof CreatePixPaymentSchema>;
@@ -42,7 +43,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
       return { error: 'Dados de formulário inválidos.', details: validation.error.format() };
     }
     
-    const { uid, plans: selectedPlanIds, name, email, document, phone, couponCode } = validation.data;
+    const { uid, plans: selectedPlanIds, name, email, document, phone, couponCode, affiliateId } = validation.data;
 
     const apiToken = process.env.PUSHINPAY_API_TOKEN;
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
@@ -135,6 +136,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
       status: 'pending',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       pushinpayTransactionId: gatewayTransactionId,
+      affiliateId: affiliateId || null, // Add the affiliate ID here
     });
     console.log(`[checkout.ts] Created pending payment record ${paymentRef.id} for PushinPay ID ${gatewayTransactionId}`);
 
