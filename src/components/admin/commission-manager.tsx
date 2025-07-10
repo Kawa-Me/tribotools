@@ -154,18 +154,26 @@ export function CommissionManager() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    affiliateEmail: affiliateData.email,
-                    affiliateName: affiliateData.name,
-                    buyerEmail: payment.userEmail,
-                    commissionAmount: commissionAmount,
-                    transactionId: payment.pushinpayTransactionId,
-                    cancellationDate: new Date().toISOString(),
+                    affiliate: {
+                      ref_code: affiliateData.ref_code,
+                      name: affiliateData.name,
+                      email: affiliateData.email,
+                    },
+                    buyer: {
+                      name: payment.userName,
+                      email: payment.userEmail,
+                      phone: payment.userPhone,
+                    },
+                    transaction: {
+                      localPaymentId: payment.id,
+                      gatewayTransactionId: payment.pushinpayTransactionId,
+                      commissionAmount: commissionAmount,
+                      cancellationDate: new Date().toISOString(),
+                    }
                 }),
             });
         } catch(e) {
             console.error("Failed to send cancellation notification to n8n:", e);
-            // We don't re-throw here because the primary operation (reversing the balance) was successful.
-            // We just log the error.
         }
 
         toast({ title: 'Sucesso!', description: 'Comissão cancelada e saldo do afiliado revertido.' });
