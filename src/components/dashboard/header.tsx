@@ -27,18 +27,18 @@ export function Header() {
               <span className="sr-only">Toggle navigation menu</span>
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="flex flex-col bg-background">
-            <SheetHeader>
+          <SheetContent side="left" className="flex flex-col bg-background p-0">
+            <SheetHeader className="p-6 pb-0">
               <SheetTitle className="sr-only">Menu</SheetTitle>
               <SheetDescription className="sr-only">Navegue pelo painel do usuário.</SheetDescription>
             </SheetHeader>
-            <nav className="grid gap-2 text-lg font-medium">
-              <Link
-                href="/dashboard"
-                className="flex h-24 items-center justify-center gap-2 border-b text-lg font-semibold mb-4 lg:h-32"
-              >
-                <Logo />
-              </Link>
+            <Link
+              href="/dashboard"
+              className="flex h-24 items-center justify-center gap-2 border-b text-lg font-semibold lg:h-32"
+            >
+              <Logo />
+            </Link>
+            <nav className="flex-1 grid gap-2 text-lg font-medium p-4 overflow-y-auto">
                {!dbConfigured && (
                   <p className="p-4 text-sm text-destructive">
                       Erro: DB não configurado.
@@ -71,7 +71,7 @@ export function Header() {
                   </Link>
               )}
             </nav>
-            <div className="mt-auto">
+            <div className="mt-auto p-4 border-t">
                 <SubscriptionCard />
             </div>
           </SheetContent>
