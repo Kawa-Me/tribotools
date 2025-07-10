@@ -13,8 +13,6 @@ import { useToast } from '@/hooks/use-toast';
 import { FaWhatsapp } from 'react-icons/fa';
 import { Loader } from '@/components/loader';
 
-const MINIMUM_WITHDRAWAL_AMOUNT = 50;
-
 export default function AffiliateDashboardPage() {
   const { user } = useAuth();
   const [affiliate, setAffiliate] = useState<Affiliate | null>(null);
@@ -57,11 +55,11 @@ export default function AffiliateDashboardPage() {
   };
 
   const handleWithdrawalRequest = async () => {
-    if (!affiliate || !db || affiliate.available_balance < MINIMUM_WITHDRAWAL_AMOUNT) {
+    if (!affiliate || !db || affiliate.available_balance <= 0) {
         toast({
             variant: 'destructive',
             title: 'Saldo Insuficiente',
-            description: `Você precisa ter pelo menos R$ ${MINIMUM_WITHDRAWAL_AMOUNT.toFixed(2)} disponíveis para sacar.`,
+            description: `Você não possui saldo disponível para sacar.`,
         });
         return;
     }
@@ -229,18 +227,13 @@ export default function AffiliateDashboardPage() {
                     </div>
                     <Button 
                         onClick={handleWithdrawalRequest} 
-                        disabled={isRequestingWithdrawal || affiliate.available_balance < MINIMUM_WITHDRAWAL_AMOUNT}
+                        disabled={isRequestingWithdrawal || affiliate.available_balance <= 0}
                         className="w-full"
                         size="lg"
                     >
                         {isRequestingWithdrawal ? <Loader className="mr-2" /> : null}
                         Solicitar Saque
                     </Button>
-                    {affiliate.available_balance < MINIMUM_WITHDRAWAL_AMOUNT && (
-                        <p className="text-xs text-center text-destructive">
-                           O valor mínimo para saque é de R$ {MINIMUM_WITHDRAWAL_AMOUNT.toFixed(2)}.
-                        </p>
-                    )}
                 </CardContent>
             </Card>
         </div>
