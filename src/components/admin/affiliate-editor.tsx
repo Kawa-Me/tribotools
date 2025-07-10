@@ -12,7 +12,6 @@ import {
   Timestamp,
   getDoc,
   updateDoc,
-  FieldValue,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Affiliate, UserData } from '@/lib/types';
@@ -336,6 +335,7 @@ interface AffiliateFormDialogProps {
 function AffiliateFormDialog({ isOpen, onOpenChange, onSave, affiliate, isSaving, allUsers }: AffiliateFormDialogProps) {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
+    const [phone, setPhone] = useState('');
     const [refCode, setRefCode] = useState('');
     const [pixKey, setPixKey] = useState('');
     const [pixType, setPixType] = useState<Affiliate['pix_type']>('cpf');
@@ -346,6 +346,7 @@ function AffiliateFormDialog({ isOpen, onOpenChange, onSave, affiliate, isSaving
       if (affiliate) {
         setName(affiliate.name);
         setEmail(affiliate.email);
+        setPhone(affiliate.phone || '');
         setRefCode(affiliate.ref_code);
         setPixKey(affiliate.pix_key);
         setPixType(affiliate.pix_type);
@@ -354,6 +355,7 @@ function AffiliateFormDialog({ isOpen, onOpenChange, onSave, affiliate, isSaving
       } else {
         setName('');
         setEmail('');
+        setPhone('');
         setRefCode('');
         setPixKey('');
         setPixType('cpf');
@@ -364,7 +366,7 @@ function AffiliateFormDialog({ isOpen, onOpenChange, onSave, affiliate, isSaving
   
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
-      onSave({ name, email, ref_code: refCode, pix_key: pixKey, pix_type: pixType, commission_percent: commissionPercent, userId });
+      onSave({ name, email, phone, ref_code: refCode, pix_key: pixKey, pix_type: pixType, commission_percent: commissionPercent, userId });
     };
   
     return (
@@ -387,22 +389,28 @@ function AffiliateFormDialog({ isOpen, onOpenChange, onSave, affiliate, isSaving
                 <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
               </div>
             </div>
-             <div className="space-y-2">
-                <Label htmlFor="user-select">Vincular a Usuário (Login)</Label>
-                <Select
-                    value={userId || 'none'}
-                    onValueChange={(value) => setUserId(value === 'none' ? undefined : value)}
-                >
-                    <SelectTrigger id="user-select">
-                        <SelectValue placeholder="Selecione um usuário" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="none">Nenhum usuário vinculado</SelectItem>
-                        {allUsers.filter(u => u.email).map(user => (
-                            <SelectItem key={user.uid} value={user.uid}>{user.email}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="phone">Telefone de Contato</Label>
+                <Input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(99) 99999-9999" />
+              </div>
+               <div className="space-y-2">
+                  <Label htmlFor="user-select">Vincular a Usuário (Login)</Label>
+                  <Select
+                      value={userId || 'none'}
+                      onValueChange={(value) => setUserId(value === 'none' ? undefined : value)}
+                  >
+                      <SelectTrigger id="user-select">
+                          <SelectValue placeholder="Selecione um usuário" />
+                      </SelectTrigger>
+                      <SelectContent>
+                          <SelectItem value="none">Nenhum usuário vinculado</SelectItem>
+                          {allUsers.filter(u => u.email).map(user => (
+                              <SelectItem key={user.uid} value={user.uid}>{user.email}</SelectItem>
+                          ))}
+                      </SelectContent>
+                  </Select>
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="ref_code">Código de Referência (ID do Afiliado)</Label>

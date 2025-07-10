@@ -112,6 +112,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               ref_code: affiliateData.ref_code,
               name: affiliateData.name,
               email: affiliateData.email,
+              phone: affiliateData.phone || null,
             },
             buyer: {
               name: payment.userName,

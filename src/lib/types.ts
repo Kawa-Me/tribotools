@@ -67,6 +67,7 @@ export interface Affiliate {
   ref_code: string;
   name: string;
   email: string;
+  phone?: string;
   pix_key: string;
   pix_type: 'cpf' | 'email' | 'telefone' | 'chave_aleatoria';
   commission_percent: number;
