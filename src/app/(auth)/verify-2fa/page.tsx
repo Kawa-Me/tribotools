@@ -21,6 +21,7 @@ declare global {
   interface Window {
     recaptchaVerifier?: RecaptchaVerifier;
     confirmationResult?: ConfirmationResult;
+    grecaptcha?: any;
   }
 }
 
@@ -35,7 +36,6 @@ export default function Verify2FAPage() {
   const recaptchaContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Redirect non-admins or unauthenticated users away from this page
     if (!authLoading) {
       if (!user || user.role !== 'admin' || user.isAnonymous) {
         toast({
@@ -51,25 +51,31 @@ export default function Verify2FAPage() {
   useEffect(() => {
     if (!auth || !recaptchaContainerRef.current) return;
     
-    // Setup reCAPTCHA
-    // Using a visible reCAPTCHA for easier debugging during setup.
     if (!window.recaptchaVerifier) {
       window.recaptchaVerifier = new RecaptchaVerifier(auth, recaptchaContainerRef.current, {
-        size: 'normal', // Changed to 'normal' to be visible
+        size: 'normal',
         callback: (response: any) => {
-          // reCAPTCHA solved, allow signInWithPhoneNumber.
           console.log('reCAPTCHA solved, ready to send SMS.');
           toast({ title: "reCAPTCHA Verificado", description: "Pode enviar o código SMS."});
         },
         'expired-callback': () => {
-          // Response expired. Ask user to solve reCAPTCHA again.
           toast({ variant: 'destructive', title: "reCAPTCHA Expirou", description: "Por favor, verifique novamente."});
         }
       });
-      window.recaptchaVerifier.render(); // Explicitly render the reCAPTCHA widget
+      window.recaptchaVerifier.render();
     }
 
   }, [user, authLoading, toast]);
+
+  const resetRecaptcha = () => {
+    if (window.recaptchaVerifier) {
+      // In complex scenarios, it might be necessary to clear and re-render.
+      // For now, we rely on the render call itself to handle reset.
+      window.recaptchaVerifier.render().catch(err => {
+          console.error("recaptcha render/reset error:", err);
+      });
+    }
+  }
 
   const handleSendCode = async () => {
     if (!user?.phone || !window.recaptchaVerifier) {
@@ -102,14 +108,7 @@ export default function Verify2FAPage() {
         title: 'Erro ao Enviar Código',
         description: `Não foi possível enviar o SMS. Verifique o console para detalhes. (${error.code})`,
       });
-       // This can happen if the reCAPTCHA is not verified. Resetting it.
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.render().then((widgetId) => {
-            if(window.grecaptcha) {
-                window.grecaptcha.reset(widgetId);
-            }
-        });
-      }
+      resetRecaptcha();
     } finally {
       setLoading(false);
     }
