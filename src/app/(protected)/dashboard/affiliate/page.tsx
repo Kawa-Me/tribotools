@@ -7,9 +7,11 @@ import { db } from '@/lib/firebase';
 import type { Affiliate } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { DollarSign, Banknote, Hourglass, CheckCircle, Handshake, Copy } from 'lucide-react';
+import { DollarSign, Banknote, Hourglass, CheckCircle, Handshake, Copy, Rocket, Crown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import Link from 'next/link';
+import { FaWhatsapp } from 'react-icons/fa';
 
 export default function AffiliateDashboardPage() {
   const { user } = useAuth();
@@ -18,7 +20,7 @@ export default function AffiliateDashboardPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    if (!user || user.role !== 'affiliate' || !db) {
+    if (!user || user.isAnonymous || !db) {
       setLoading(false);
       return;
     }
@@ -30,7 +32,7 @@ export default function AffiliateDashboardPage() {
         const affiliateData = { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() } as Affiliate;
         setAffiliate(affiliateData);
       } else {
-        setAffiliate(null); // No affiliate profile found for this user
+        setAffiliate(null);
       }
       setLoading(false);
     }, (error) => {
@@ -68,13 +70,25 @@ export default function AffiliateDashboardPage() {
 
   if (!affiliate) {
     return (
-      <Card>
+      <Card className="text-center bg-card/60 border-primary/20 shadow-lg shadow-primary/10">
         <CardHeader>
-          <CardTitle>Perfil de Afiliado não Encontrado</CardTitle>
-          <CardDescription>
-            Não encontramos um perfil de afiliado vinculado à sua conta. Se você acredita que isso é um erro, entre em contato com o suporte.
-          </CardDescription>
+            <div className="mx-auto bg-primary/10 p-4 rounded-full w-fit mb-4">
+                <Crown className="h-12 w-12 text-primary" />
+            </div>
+            <CardTitle className="font-headline text-3xl text-primary">Torne-se um Afiliado</CardTitle>
+            <CardDescription className="text-lg max-w-lg mx-auto">
+                Ganhe comissões incríveis divulgando nossas ferramentas. Junte-se ao nosso time de parceiros de elite!
+            </CardDescription>
         </CardHeader>
+        <CardContent className="space-y-4">
+            <p className="text-muted-foreground">Para solicitar sua afiliação, entre em contato com nosso suporte exclusivo e nossa equipe irá analisar seu perfil.</p>
+            <Button asChild size="lg">
+                <a href="https://wa.me/5545984325338" target="_blank" rel="noopener noreferrer">
+                    <FaWhatsapp className="mr-2" />
+                    Solicitar Afiliação no Suporte
+                </a>
+            </Button>
+        </CardContent>
       </Card>
     );
   }

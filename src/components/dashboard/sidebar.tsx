@@ -36,7 +36,7 @@ export function Sidebar() {
                   href={`/dashboard/module/${mod.id}`}
                   className={cn(
                     'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
-                    pathname === `/dashboard/module/${mod.id}` && 'bg-muted text-primary'
+                    pathname.startsWith(`/dashboard/module/${mod.id}`) && 'bg-muted text-primary'
                   )}
                 >
                   <mod.icon className="h-4 w-4" />
@@ -44,7 +44,7 @@ export function Sidebar() {
                 </Link>
               ))}
 
-              {user?.role === 'affiliate' && (
+              {!user?.isAnonymous && (
                  <Link
                     href="/dashboard/affiliate"
                     className={cn(

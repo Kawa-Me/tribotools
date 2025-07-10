@@ -50,7 +50,7 @@ export function Header() {
                   href={`/dashboard/module/${mod.id}`}
                   className={cn(
                     'flex items-center gap-4 rounded-xl px-3 py-2 text-muted-foreground hover:text-foreground',
-                     pathname === `/dashboard/module/${mod.id}` && 'bg-muted text-foreground'
+                     pathname.startsWith(`/dashboard/module/${mod.id}`) && 'bg-muted text-foreground'
                   )}
                 >
                   <mod.icon className="h-5 w-5" />
@@ -58,7 +58,7 @@ export function Header() {
                 </Link>
               ))}
 
-              {user?.role === 'affiliate' && (
+              {!user?.isAnonymous && (
                  <Link
                     href="/dashboard/affiliate"
                     className={cn(
