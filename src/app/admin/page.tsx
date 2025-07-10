@@ -1,5 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, BookOpen, Package, TicketPercent, CreditCard, Webhook, Handshake } from "lucide-react";
+import { Users, BookOpen, Package, TicketPercent, CreditCard, Webhook, Handshake, WalletCards } from "lucide-react";
 import Link from "next/link";
 
 export default function AdminDashboardPage() {
@@ -77,6 +77,20 @@ export default function AdminDashboardPage() {
             </p>
             <Link href="/admin/affiliates" className="mt-2 inline-block">
                 <span className="text-primary hover:underline">Gerenciar afiliados</span>
+            </Link>
+          </CardContent>
+        </Card>
+         <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Comissões</CardTitle>
+            <WalletCards className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground">
+              Gerencie e reverta comissões de vendas de afiliados.
+            </p>
+            <Link href="/admin/commissions" className="mt-2 inline-block">
+                <span className="text-primary hover:underline">Gerenciar comissões</span>
             </Link>
           </CardContent>
         </Card>

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/logo';
-import { Users, BookOpen, Shield, Package, TicketPercent, CreditCard, Webhook, Handshake } from 'lucide-react';
+import { Users, BookOpen, Shield, Package, TicketPercent, CreditCard, Webhook, Handshake, WalletCards } from 'lucide-react';
 
 const adminNavItems = [
   { href: '/admin', label: 'Dashboard', icon: Shield },
@@ -13,6 +13,7 @@ const adminNavItems = [
   { href: '/admin/plans', label: 'Planos', icon: Package },
   { href: '/admin/coupons', label: 'Cupons', icon: TicketPercent },
   { href: '/admin/affiliates', label: 'Afiliados', icon: Handshake },
+  { href: '/admin/commissions', label: 'Comissões', icon: WalletCards },
   { href: '/admin/payments', label: 'Pagamentos', icon: CreditCard },
   { href: '/admin/webhooks', label: 'Webhooks', icon: Webhook },
 ];

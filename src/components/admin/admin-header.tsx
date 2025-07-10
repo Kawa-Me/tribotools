@@ -7,7 +7,7 @@ import { Logo } from '@/components/logo';
 import { UserNav } from '@/components/dashboard/user-nav';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
-import { Menu, Users, BookOpen, Shield, Package, TicketPercent, CreditCard, Webhook, Handshake } from 'lucide-react';
+import { Menu, Users, BookOpen, Shield, Package, TicketPercent, CreditCard, Webhook, Handshake, WalletCards } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 const adminNavItems = [
@@ -17,6 +17,7 @@ const adminNavItems = [
   { href: '/admin/plans', label: 'Planos', icon: Package },
   { href: '/admin/coupons', label: 'Cupons', icon: TicketPercent },
   { href: '/admin/affiliates', label: 'Afiliados', icon: Handshake },
+  { href: '/admin/commissions', label: 'Comissões', icon: WalletCards },
   { href: '/admin/payments', label: 'Pagamentos', icon: CreditCard },
   { href: '/admin/webhooks', label: 'Webhooks', icon: Webhook },
 ];
