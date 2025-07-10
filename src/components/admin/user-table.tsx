@@ -56,10 +56,19 @@ export function UserTable({ users }: UserTableProps) {
         return;
     }
 
+    // Replace client-side placeholder Timestamps with server-side ones before saving
+    const subscriptionsToSave = { ...newSubscriptions };
+    for (const key in subscriptionsToSave) {
+        if (subscriptionsToSave[key]?.startedAt === null) {
+            (subscriptionsToSave[key] as any).startedAt = serverTimestamp();
+        }
+    }
+
+
     try {
       const userDocRef = doc(db, 'users', selectedUser.uid);
       await updateDoc(userDocRef, {
-        subscriptions: newSubscriptions,
+        subscriptions: subscriptionsToSave,
       });
       toast({
         title: 'Sucesso!',
@@ -111,7 +120,7 @@ export function UserTable({ users }: UserTableProps) {
                     
                     return (
                       <TableCell key={p.id} className="text-center text-xs">
-                        {effectiveStatus === 'active' && sub.expiresAt ? (
+                        {effectiveStatus === 'active' && sub.expiresAt && sub.startedAt ? (
                             <div className="space-y-1">
                                 {sub.startedAt && (
                                     <div className="flex items-center justify-center gap-1.5">
@@ -173,14 +182,15 @@ interface EditUserDialogProps {
 }
 
 function EditUserDialog({ user, isOpen, onOpenChange, onSave, products }: EditUserDialogProps) {
-  const [subscriptions, setSubscriptions] = useState(user.subscriptions || {});
+  // Deep copy to avoid mutating the original user object
+  const [subscriptions, setSubscriptions] = useState(JSON.parse(JSON.stringify(user.subscriptions || {})));
 
   const handleSubscriptionChange = (
     productId: string,
     field: keyof UserSubscription,
     value: any
   ) => {
-    setSubscriptions(prev => {
+    setSubscriptions((prev: any) => {
       const currentProductSub = prev[productId] || { status: 'none', planId: null, expiresAt: null, startedAt: null };
       
       let updatedSub = { ...currentProductSub, [field]: value };
@@ -189,7 +199,9 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave, products }: EditUs
           if (value === 'none') {
             updatedSub = { status: 'none', planId: null, expiresAt: null, startedAt: null };
           } else if (value === 'active' && !currentProductSub.startedAt) {
-              updatedSub.startedAt = serverTimestamp() as Timestamp;
+              // Use null as a client-side placeholder for serverTimestamp()
+              // The real serverTimestamp will be set just before saving.
+              updatedSub.startedAt = null; 
           }
       }
 
@@ -207,7 +219,18 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave, products }: EditUs
   };
 
   const handleSubmit = () => {
-    onSave(subscriptions);
+    // Convert client-side Timestamps back to a format that can be saved
+    const subscriptionsToSave = JSON.parse(JSON.stringify(subscriptions));
+    Object.keys(subscriptionsToSave).forEach(key => {
+        const sub = subscriptionsToSave[key];
+        if (sub.startedAt && sub.startedAt.seconds) {
+            sub.startedAt = new Timestamp(sub.startedAt.seconds, sub.startedAt.nanoseconds);
+        }
+        if (sub.expiresAt && sub.expiresAt.seconds) {
+            sub.expiresAt = new Timestamp(sub.expiresAt.seconds, sub.expiresAt.nanoseconds);
+        }
+    });
+    onSave(subscriptionsToSave);
   };
 
   return (
@@ -224,6 +247,15 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave, products }: EditUs
             const sub = subscriptions[product.id] || { status: 'none', planId: null, expiresAt: null, startedAt: null };
             const availablePlans = product.plans;
 
+            // Convert server Timestamps to client-side friendly format
+            const clientSub = { ...sub };
+            if (clientSub.startedAt && typeof clientSub.startedAt.toDate === 'function') {
+                clientSub.startedAt = { seconds: clientSub.startedAt.seconds, nanoseconds: clientSub.startedAt.nanoseconds };
+            }
+            if (clientSub.expiresAt && typeof clientSub.expiresAt.toDate === 'function') {
+                clientSub.expiresAt = { seconds: clientSub.expiresAt.seconds, nanoseconds: clientSub.expiresAt.nanoseconds };
+            }
+
             return (
               <div key={product.id} className="space-y-4 rounded-md border bg-muted/30 p-4">
                 <h4 className="font-semibold text-primary">{product.name}</h4>
@@ -231,7 +263,7 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave, products }: EditUs
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor={`status-${product.id}`} className="text-right text-xs">Status</Label>
                   <Select
-                    value={sub.status || 'none'}
+                    value={clientSub.status || 'none'}
                     onValueChange={(value: UserSubscription['status']) => handleSubscriptionChange(product.id, 'status', value)}
                   >
                     <SelectTrigger className="col-span-3">
@@ -248,8 +280,8 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave, products }: EditUs
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor={`plan-${product.id}`} className="text-right text-xs">Plano</Label>
                   <Select
-                    disabled={sub.status === 'none'}
-                    value={sub.planId || ''}
+                    disabled={clientSub.status === 'none'}
+                    value={clientSub.planId || ''}
                     onValueChange={(value) => handleSubscriptionChange(product.id, 'planId', value)}
                   >
                     <SelectTrigger className="col-span-3">
@@ -270,7 +302,7 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave, products }: EditUs
                     type="text"
                     className="col-span-3 bg-muted/50"
                     disabled
-                    value={sub.startedAt ? format(sub.startedAt.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 'Não definido'}
+                    value={clientSub.startedAt ? format(new Timestamp(clientSub.startedAt.seconds, clientSub.startedAt.nanoseconds).toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 'Será definido ao salvar'}
                   />
                 </div>
 
@@ -280,8 +312,8 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave, products }: EditUs
                     id={`expiresAt-${product.id}`}
                     type="datetime-local"
                     className="col-span-3"
-                    disabled={sub.status === 'none'}
-                    value={sub.expiresAt ? format(sub.expiresAt.toDate(), "yyyy-MM-dd'T'HH:mm") : ''}
+                    disabled={clientSub.status === 'none'}
+                    value={clientSub.expiresAt ? format(new Timestamp(clientSub.expiresAt.seconds, clientSub.expiresAt.nanoseconds).toDate(), "yyyy-MM-dd'T'HH:mm") : ''}
                     onChange={(e) => handleDateChange(product.id, e)}
                   />
                 </div>
