@@ -59,13 +59,28 @@ export function AffiliateEditor() {
       return;
     }
 
+    const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      const usersData: UserData[] = snapshot.docs.map(doc => ({
+        uid: doc.id,
+        ...doc.data()
+      } as UserData));
+      setUsers(usersData);
+    }, (error) => {
+      console.error("Error fetching users:", error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao carregar usuários.',
+        description: 'Verifique as regras de segurança do Firestore.'
+      });
+    });
+
     const unsubAffiliates = onSnapshot(collection(db, 'affiliates'), (snapshot) => {
       const affiliatesData: Affiliate[] = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       } as Affiliate));
       setAffiliates(affiliatesData);
-      if(users.length > 0) setLoading(false);
+      setLoading(false);
     }, (error) => {
       console.error("Error fetching affiliates:", error);
       toast({
@@ -76,14 +91,6 @@ export function AffiliateEditor() {
       setLoading(false);
     });
 
-    const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-      const usersData: UserData[] = snapshot.docs.map(doc => ({
-        uid: doc.id,
-        ...doc.data()
-      } as UserData));
-      setUsers(usersData);
-      if(affiliates.length > 0) setLoading(false);
-    });
 
     return () => {
         unsubAffiliates();
