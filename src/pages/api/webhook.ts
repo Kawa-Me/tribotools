@@ -1,4 +1,6 @@
 
+'use server';
+
 import type { NextApiRequest, NextApiResponse } from 'next';
 import * as admin from 'firebase-admin';
 import type { Plan, Product, Affiliate } from '@/lib/types';
@@ -137,7 +139,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             affiliateRef = affiliateDoc.ref;
             affiliateData = affiliateDoc.data() as Affiliate;
             const commissionPercent = affiliateData.commission_percent || 0;
-            commission = (totalPrice * commissionPercent) / 100;
+            // Calculate commission with truncation to 2 decimal places to avoid rounding errors.
+            const rawCommission = (totalPrice * commissionPercent) / 100;
+            commission = Math.floor(rawCommission * 100) / 100;
         } else {
             console.warn(`[webhook.ts] Affiliate with ref_code ${affiliateId} not found, but was on the payment. Commission will be 0.`);
         }
