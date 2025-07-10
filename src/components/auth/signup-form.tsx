@@ -11,7 +11,7 @@ import {
   linkWithCredential,
   EmailAuthProvider,
 } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, getDoc, query, where, collection, limit, getDocs } from 'firebase/firestore';
 
 import { auth, db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -68,7 +68,7 @@ export function SignupForm() {
           subscriptions: {},
           role: isAdmin ? 'admin' : 'user',
           createdAt: serverTimestamp(),
-        });
+        }, { merge: true });
 
         toast({ 
           title: 'Conta Criada!', 
@@ -83,14 +83,29 @@ export function SignupForm() {
         await sendEmailVerification(user);
 
         const isAdmin = values.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-
-        await setDoc(doc(db, 'users', user.uid), {
+        
+        const userDocRef = doc(db, 'users', user.uid);
+        const userData = {
           uid: user.uid,
           email: user.email,
           subscriptions: {},
           role: isAdmin ? 'admin' : 'user',
           createdAt: serverTimestamp(),
-        });
+        };
+
+        // Check if there's an affiliate profile waiting for this email
+        const affiliateQuery = query(collection(db, 'affiliates'), where('pix_key', '==', user.email), limit(1));
+        const affiliateSnapshot = await getDocs(affiliateQuery);
+
+        if (!affiliateSnapshot.empty) {
+            const affiliateDoc = affiliateSnapshot.docs[0];
+            userData.role = 'affiliate';
+            // Link the affiliate doc to this new user
+            await setDoc(affiliateDoc.ref, { userId: user.uid }, { merge: true });
+        }
+        
+        await setDoc(userDocRef, userData);
+
 
         toast({ 
           title: 'Verifique seu Email!', 

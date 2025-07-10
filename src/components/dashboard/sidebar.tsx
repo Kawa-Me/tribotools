@@ -3,12 +3,15 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useModules } from '@/hooks/use-modules';
+import { useAuth } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/logo';
 import { SubscriptionCard } from '@/components/dashboard/subscription-card';
+import { Handshake } from 'lucide-react';
 
 export function Sidebar() {
     const pathname = usePathname();
+    const { user } = useAuth();
     const { modules, dbConfigured } = useModules();
   
     return (
@@ -40,6 +43,19 @@ export function Sidebar() {
                   {mod.title}
                 </Link>
               ))}
+
+              {user?.role === 'affiliate' && (
+                 <Link
+                    href="/dashboard/affiliate"
+                    className={cn(
+                      'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
+                      pathname === '/dashboard/affiliate' && 'bg-muted text-primary'
+                    )}
+                  >
+                    <Handshake className="h-4 w-4" />
+                    Painel de Afiliado
+                  </Link>
+              )}
             </nav>
           </div>
         </div>

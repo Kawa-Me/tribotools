@@ -63,12 +63,14 @@ export interface Coupon {
 
 export interface Affiliate {
   id: string;
+  userId?: string; // Link to the user account in Firebase Auth
   name: string;
   ref_code: string;
   pix_key: string;
   commission_percent: number;
   total_earned: number;
   pending_balance: number;
+  available_balance: number; // Saldo disponível para saque
   paid_balance: number;
   created_at: Timestamp;
 }
@@ -90,7 +92,7 @@ export interface UserData {
   phone?: string;
   photoURL: string | null;
   subscriptions: { [key: string]: UserSubscription };
-  role?: 'admin' | 'user';
+  role?: 'admin' | 'user' | 'affiliate';
   emailVerified: boolean;
   isAnonymous: boolean;
   createdAt?: Timestamp;

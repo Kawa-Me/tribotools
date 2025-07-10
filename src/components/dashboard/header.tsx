@@ -3,17 +3,19 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useModules } from '@/hooks/use-modules';
+import { useAuth } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/logo';
 import { UserNav } from '@/components/dashboard/user-nav';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
-import { Menu } from 'lucide-react';
+import { Menu, Handshake } from 'lucide-react';
 import { SubscriptionCard } from '@/components/dashboard/subscription-card';
 import { ThemeToggle } from '../theme-toggle';
 
 export function Header() {
     const pathname = usePathname();
+    const { user } = useAuth();
     const { modules, dbConfigured } = useModules();
   
     return (
@@ -55,6 +57,19 @@ export function Header() {
                   {mod.title}
                 </Link>
               ))}
+
+              {user?.role === 'affiliate' && (
+                 <Link
+                    href="/dashboard/affiliate"
+                    className={cn(
+                      'flex items-center gap-4 rounded-xl px-3 py-2 text-muted-foreground hover:text-foreground',
+                      pathname === '/dashboard/affiliate' && 'bg-muted text-foreground'
+                    )}
+                  >
+                    <Handshake className="h-5 w-5" />
+                    Painel de Afiliado
+                  </Link>
+              )}
             </nav>
             <div className="mt-auto">
                 <SubscriptionCard />
