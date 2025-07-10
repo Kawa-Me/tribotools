@@ -5,6 +5,7 @@ import { z } from 'zod';
 import * as admin from 'firebase-admin';
 import type { Product, Plan, Coupon } from '@/lib/types';
 import { initializeAdminApp } from '@/lib/firebase-admin';
+import { cookies } from 'next/headers';
 
 // Helper to get Plans using the Admin SDK
 async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore): Promise<(Plan & {productId: string, productName: string})[]> {
@@ -30,10 +31,9 @@ const CreatePixPaymentSchema = z.object({
   document: z.string().min(11),
   phone: z.string().min(10),
   couponCode: z.string().optional().nullable(),
-  affiliateId: z.string().optional().nullable(),
 });
 
-type CreatePixPaymentInput = z.infer<typeof CreatePixPaymentSchema>;
+type CreatePixPaymentInput = Omit<z.infer<typeof CreatePixPaymentSchema>, 'affiliateId'>;
 
 export async function createPixPayment(input: CreatePixPaymentInput) {
   try {
@@ -43,7 +43,14 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
       return { error: 'Dados de formulário inválidos.', details: validation.error.format() };
     }
     
-    const { uid, plans: selectedPlanIds, name, email, document, phone, couponCode, affiliateId } = validation.data;
+    // Read affiliate cookie from the server-side request headers
+    const cookieStore = cookies();
+    const affiliateId = cookieStore.get('affiliate_ref')?.value || null;
+    if (affiliateId) {
+      console.log(`[checkout.ts] Affiliate cookie found: ${affiliateId}`);
+    }
+
+    const { uid, plans: selectedPlanIds, name, email, document, phone, couponCode } = validation.data;
 
     const apiToken = process.env.PUSHINPAY_API_TOKEN;
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;

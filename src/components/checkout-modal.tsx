@@ -82,17 +82,6 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
     },
   });
 
-  // Affiliate code tracking
-  useEffect(() => {
-    // Only run on client-side
-    const searchParams = new URLSearchParams(window.location.search);
-    const refCode = searchParams.get('ref');
-    if (refCode) {
-      localStorage.setItem('affiliate_ref', refCode);
-      console.log(`Affiliate code '${refCode}' saved.`);
-    }
-  }, []);
-  
   useEffect(() => {
     if (user) {
         form.setValue('name', user.name || '');
@@ -235,8 +224,6 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
     setPaymentStatus('generating');
     setPixData(null);
 
-    const affiliateId = localStorage.getItem('affiliate_ref');
-
     try {
       const result = await createPixPayment({
         uid: user.uid,
@@ -246,7 +233,6 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
         document: data.document,
         phone: data.phone,
         couponCode: appliedCoupon?.id || null,
-        affiliateId: affiliateId,
       });
 
       if (result.error) {
