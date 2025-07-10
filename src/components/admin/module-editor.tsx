@@ -24,8 +24,11 @@ import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/hooks';
 
+// State type that uses a string for the icon
+type EditableModule = Omit<Module, 'icon'> & { icon: string };
+
 export function ModuleEditor() {
-  const [modules, setModules] = useState<Module[]>([]);
+  const [modules, setModules] = useState<EditableModule[]>([]);
   const [loading, setLoading] = useState(true);
   const { products: availableProducts, loading: productsLoading } = useProducts();
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
@@ -71,12 +74,16 @@ export function ModuleEditor() {
         const modulesData: Module[] = snapshot.docs
           .map((doc) => ({ id: doc.id, ...doc.data() } as any))
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-
-        modulesData.forEach(mod => {
+        
+        const editableModules: EditableModule[] = modulesData.map(mod => {
             mod.lessons = (mod.lessons || []).sort((a: Lesson, b: Lesson) => (a.order ?? 0) - (b.order ?? 0));
+            return {
+                ...mod,
+                icon: mod.icon && typeof mod.icon !== 'string' ? (mod.icon as any).displayName || 'HelpCircle' : mod.icon || 'HelpCircle'
+            }
         });
 
-        setModules(modulesData);
+        setModules(editableModules);
         setLoading(false);
       }
     }, (error) => {
@@ -88,7 +95,7 @@ export function ModuleEditor() {
   }, [toast, user, authLoading]);
   
 
-  const handleModuleChange = (moduleId: string, field: keyof Omit<Module, 'id' | 'lessons'>, value: any) => {
+  const handleModuleChange = (moduleId: string, field: keyof Omit<EditableModule, 'id' | 'lessons'>, value: any) => {
     setModules((prevModules) =>
       prevModules.map((mod) =>
         mod.id === moduleId ? { ...mod, [field]: value } : mod
@@ -187,11 +194,9 @@ export function ModuleEditor() {
       const batch = writeBatch(db);
       modules.forEach(mod => {
           const moduleRef = doc(db, 'modules', mod.id);
-          const iconNameToSave = typeof mod.icon === 'string' ? mod.icon : (mod.icon as any).displayName || 'HelpCircle';
-
+          
           const dataToSave = {
               ...mod,
-              icon: iconNameToSave,
               lessons: mod.lessons.map(lesson => {
                 const cleanedLesson = { ...lesson };
 
@@ -225,11 +230,11 @@ export function ModuleEditor() {
   };
   
   const handleAddNewModule = () => {
-     const newModule: Module = {
+     const newModule: EditableModule = {
       id: doc(collection(db, 'modules')).id,
       title: 'Novo Módulo',
       description: 'Descrição do novo módulo.',
-      icon: 'LayoutDashboard' as any,
+      icon: 'LayoutDashboard',
       lessons: [],
       order: modules.length,
       permission: 'ferramentas'
@@ -444,7 +449,7 @@ export function ModuleEditor() {
                     </div>
                     <div className="space-y-2">
                          <Label htmlFor={`icon-${mod.id}`}>Ícone (Lucide React)</Label>
-                         <Input id={`icon-${mod.id}`} value={mod.icon as any} onChange={(e) => handleModuleChange(mod.id, 'icon', e.target.value)} placeholder="Nome do Ícone" />
+                         <Input id={`icon-${mod.id}`} value={mod.icon} onChange={(e) => handleModuleChange(mod.id, 'icon', e.target.value)} placeholder="Nome do Ícone" />
                     </div>
                     <div className="space-y-2">
                          <Label htmlFor={`permission-${mod.id}`}>Permissão</Label>
