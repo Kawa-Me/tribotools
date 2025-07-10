@@ -52,21 +52,24 @@ export default function Verify2FAPage() {
     if (!auth || !recaptchaContainerRef.current) return;
     
     // Setup reCAPTCHA
+    // Using a visible reCAPTCHA for easier debugging during setup.
     if (!window.recaptchaVerifier) {
       window.recaptchaVerifier = new RecaptchaVerifier(auth, recaptchaContainerRef.current, {
-        size: 'invisible',
+        size: 'normal', // Changed to 'normal' to be visible
         callback: (response: any) => {
           // reCAPTCHA solved, allow signInWithPhoneNumber.
-          console.log('reCAPTCHA solved');
+          console.log('reCAPTCHA solved, ready to send SMS.');
+          toast({ title: "reCAPTCHA Verificado", description: "Pode enviar o código SMS."});
         },
+        'expired-callback': () => {
+          // Response expired. Ask user to solve reCAPTCHA again.
+          toast({ variant: 'destructive', title: "reCAPTCHA Expirou", description: "Por favor, verifique novamente."});
+        }
       });
+      window.recaptchaVerifier.render(); // Explicitly render the reCAPTCHA widget
     }
 
-    return () => {
-        // Cleanup reCAPTCHA on component unmount
-        window.recaptchaVerifier?.clear();
-    };
-  }, []);
+  }, [user, authLoading, toast]);
 
   const handleSendCode = async () => {
     if (!user?.phone || !window.recaptchaVerifier) {
@@ -80,10 +83,11 @@ export default function Verify2FAPage() {
 
     setLoading(true);
     try {
+      const appVerifier = window.recaptchaVerifier;
       const confirmationResult = await signInWithPhoneNumber(
         auth,
         user.phone,
-        window.recaptchaVerifier
+        appVerifier
       );
       window.confirmationResult = confirmationResult;
       setVerificationId(confirmationResult);
@@ -93,11 +97,19 @@ export default function Verify2FAPage() {
       });
     } catch (error: any) {
       console.error('SMS send error:', error);
-      toast({
+       toast({
         variant: 'destructive',
         title: 'Erro ao Enviar Código',
-        description: `Não foi possível enviar o SMS. (${error.code})`,
+        description: `Não foi possível enviar o SMS. Verifique o console para detalhes. (${error.code})`,
       });
+       // This can happen if the reCAPTCHA is not verified. Resetting it.
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.render().then((widgetId) => {
+            if(window.grecaptcha) {
+                window.grecaptcha.reset(widgetId);
+            }
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -139,7 +151,6 @@ export default function Verify2FAPage() {
 
   return (
     <>
-      <div id="recaptcha-container" ref={recaptchaContainerRef}></div>
       <Card className="bg-card/80 backdrop-blur-sm">
         <CardHeader>
           <CardTitle className="font-headline text-2xl">Verificação de Dois Fatores</CardTitle>
@@ -149,10 +160,11 @@ export default function Verify2FAPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           {!verificationId ? (
-            <div className="text-center">
-              <p className="text-sm text-muted-foreground mb-4">
-                Enviaremos um código de uso único via SMS para o número de telefone associado a esta conta de administrador.
+            <div className="flex flex-col items-center justify-center gap-4">
+              <p className="text-sm text-muted-foreground text-center">
+                Primeiro, complete o desafio reCAPTCHA abaixo. Depois, clique para enviar o código SMS.
               </p>
+              <div id="recaptcha-container" ref={recaptchaContainerRef} className="my-4"></div>
               <Button onClick={handleSendCode} disabled={loading} className="w-full">
                 {loading && <Loader className="mr-2" />}
                 Enviar Código SMS
