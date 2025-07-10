@@ -34,9 +34,9 @@ async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore): Promis
 }
 
 // Helper to notify your automation system (n8n).
-async function notifyAutomationSystem(payload: any) {
-    const productionWebhookUrl = process.env.N8N_WEBHOOK_PURCHASE_APPROVED_URL;
-    const testWebhookUrl = process.env.N8N_TEST_WEBHOOK_PURCHASE_APPROVED_URL;
+async function notifyPurchaseApproved(payload: any) {
+    const productionWebhookUrl = process.env.N8N_PROD_PURCHASE_APPROVED_URL;
+    const testWebhookUrl = process.env.N8N_TEST_PURCHASE_APPROVED_URL;
 
     // A helper function to send the webhook to avoid code duplication
     const sendWebhook = async (url: string, type: 'Production' | 'Test') => {
@@ -62,14 +62,10 @@ async function notifyAutomationSystem(payload: any) {
         }
     };
 
-    // Send production webhook if configured
     if (productionWebhookUrl) {
         await sendWebhook(productionWebhookUrl, 'Production');
-    } else {
-        console.warn('[webhook.ts] N8N_WEBHOOK_PURCHASE_APPROVED_URL is not configured. Skipping production notification.');
     }
     
-    // Send test webhook if configured
     if (testWebhookUrl) {
         await sendWebhook(testWebhookUrl, 'Test');
     }
@@ -139,7 +135,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             affiliateRef = affiliateDoc.ref;
             affiliateData = affiliateDoc.data() as Affiliate;
             const commissionPercent = affiliateData.commission_percent || 0;
-            // Calculate commission with truncation to 2 decimal places to avoid rounding errors.
             const rawCommission = (totalPrice * commissionPercent) / 100;
             commission = Math.floor(rawCommission * 100) / 100;
         } else {
@@ -202,7 +197,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             updatePayload.commission = commission;
             updatePayload.commissionStatus = 'pending';
             
-            // Update affiliate's balances
             transaction.update(affiliateRef, {
                 pending_balance: admin.firestore.FieldValue.increment(commission),
                 total_earned: admin.firestore.FieldValue.increment(commission)
@@ -231,7 +225,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         } : null,
         commission
       };
-      await notifyAutomationSystem(notificationPayload);
+      await notifyPurchaseApproved(notificationPayload);
 
     } else {
         // --- DEFAULT FAILURE/REVERSAL LOGIC ---
@@ -289,7 +283,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             if (affiliateId) {
                 updatePayload.commissionStatus = 'cancelled';
                 
-                // If a commission was already credited, we need to reverse it.
                 if (paymentData.commissionStatus === 'pending' && commission > 0) {
                     const affiliatesQuery = db.collection('affiliates').where('ref_code', '==', affiliateId).limit(1);
                     const affiliateSnapshot = await affiliatesQuery.get();
@@ -308,8 +301,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
 
         console.log(`[webhook.ts] Successfully processed reversal for ${paymentRef.id}.`);
-        // We are NOT sending a notification for reversals via this webhook.
-        // Reversals are handled manually by the admin, which has its own notification flow.
     }
 
     return res.status(200).json({ success: true });

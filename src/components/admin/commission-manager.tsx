@@ -2,12 +2,11 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { collection, onSnapshot, query, where, doc, writeBatch, getDocs, serverTimestamp, limit } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { db, auth } from '@/lib/firebase';
 import type { Payment, Affiliate } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/hooks';
-import * as admin from 'firebase-admin';
 
 import {
   Table,
@@ -38,34 +37,6 @@ import { RotateCcw, Search, Loader2 } from 'lucide-react';
 interface CommissionData extends Payment {
   affiliateEmail?: string;
 }
-
-// Helper to notify your automation system (n8n) for commission cancellations.
-async function notifyCommissionCancellation(payload: any) {
-    const prodWebhookUrl = process.env.NEXT_PUBLIC_N8N_WEBHOOK_COMMISSION_CANCELLED_URL;
-    const testWebhookUrl = process.env.NEXT_PUBLIC_N8N_TEST_WEBHOOK_COMMISSION_CANCELLED_URL;
-
-    const sendWebhook = async (url: string, type: 'Production' | 'Test') => {
-        console.log(`[CommissionManager] Attempting to send ${type} cancellation notification...`);
-        console.log(`[CommissionManager] ${type} Payload:`, JSON.stringify(payload, null, 2));
-        try {
-            await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-        } catch(e) {
-            console.error(`[CommissionManager] Failed to send ${type} cancellation notification to n8n:`, e);
-        }
-    };
-
-    if (prodWebhookUrl) {
-        await sendWebhook(prodWebhookUrl, 'Production');
-    }
-    if (testWebhookUrl) {
-        await sendWebhook(testWebhookUrl, 'Test');
-    }
-}
-
 
 export function CommissionManager() {
   const [commissions, setCommissions] = useState<CommissionData[]>([]);
@@ -131,7 +102,7 @@ export function CommissionManager() {
   }, [searchTerm, commissions, affiliates]);
 
   const handleStatusChange = async () => {
-    if (!alertInfo || !db) return;
+    if (!alertInfo || !db || !auth.currentUser) return;
 
     const { payment, action } = alertInfo;
     
@@ -144,62 +115,25 @@ export function CommissionManager() {
     setIsProcessing(true);
 
     try {
-        const batch = writeBatch(db);
-        const paymentRef = doc(db, 'payments', payment.id);
-
-        const affiliatesQuery = query(collection(db, "affiliates"), where("ref_code", "==", payment.affiliateId), limit(1));
-        const affiliateSnapshot = await getDocs(affiliatesQuery);
-        
-        if (affiliateSnapshot.empty) {
-            throw new Error(`Afiliado com ref_code ${payment.affiliateId} não encontrado.`);
-        }
-        const affiliateDoc = affiliateSnapshot.docs[0];
-        const affiliateRef = affiliateDoc.ref;
-        const affiliateData = affiliateDoc.data() as Affiliate;
-
-        const commissionAmount = payment.commission || 0;
-        
-        if (commissionAmount > 0 && affiliateData.pending_balance >= commissionAmount) {
-             batch.update(affiliateRef, {
-                pending_balance: affiliateData.pending_balance - commissionAmount,
-                total_earned: affiliateData.total_earned - commissionAmount,
-            });
-        } else {
-            console.warn(`Cannot reverse R$${commissionAmount} from pending balance of R$${affiliateData.pending_balance} for affiliate ${payment.affiliateId}. The balance might be insufficient or already moved.`);
-        }
-
-        batch.update(paymentRef, {
-            commissionStatus: 'cancelled',
-            processedAt: serverTimestamp(),
+        const token = await auth.currentUser.getIdToken();
+        const response = await fetch('/api/admin/cancel-commission', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ paymentId: payment.id })
         });
-        
-        await batch.commit();
 
-        const n8nPayload = {
-            affiliate: {
-              ref_code: affiliateData.ref_code,
-              name: affiliateData.name,
-              email: affiliateData.email,
-            },
-            buyer: {
-              name: payment.userName,
-              email: payment.userEmail,
-              phone: payment.userPhone,
-            },
-            transaction: {
-              localPaymentId: payment.id,
-              gatewayTransactionId: payment.pushinpayTransactionId,
-              commissionAmount: commissionAmount,
-              cancellationDate: new Date().toISOString(),
-            }
-        };
-
-        await notifyCommissionCancellation(n8nPayload);
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Falha ao cancelar a comissão.');
+        }
 
         toast({ title: 'Sucesso!', description: 'Comissão cancelada e saldo do afiliado revertido.' });
     } catch (error) {
         console.error('Error cancelling commission:', error);
-        toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível cancelar a comissão.' });
+        toast({ variant: 'destructive', title: 'Erro', description: (error as Error).message });
     } finally {
         setIsProcessing(false);
         setAlertInfo(null);
