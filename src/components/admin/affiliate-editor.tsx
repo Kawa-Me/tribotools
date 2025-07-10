@@ -325,14 +325,14 @@ function AffiliateDialog({ isOpen, onOpenChange, onSave, affiliate, isSaving, al
              <div className="space-y-2">
                 <Label htmlFor="user-select">Vincular a Usuário (Login)</Label>
                 <Select
-                    value={userId || ''}
-                    onValueChange={(value) => setUserId(value || undefined)}
+                    value={userId || 'none'}
+                    onValueChange={(value) => setUserId(value === 'none' ? undefined : value)}
                 >
                     <SelectTrigger id="user-select">
                         <SelectValue placeholder="Selecione um usuário" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="">Nenhum usuário vinculado</SelectItem>
+                        <SelectItem value="none">Nenhum usuário vinculado</SelectItem>
                         {allUsers.filter(u => u.email).map(user => (
                             <SelectItem key={user.uid} value={user.uid}>{user.email}</SelectItem>
                         ))}
