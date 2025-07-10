@@ -10,6 +10,7 @@ import {
   serverTimestamp,
   writeBatch,
   Timestamp,
+  getDoc,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Affiliate, UserData } from '@/lib/types';
@@ -115,6 +116,21 @@ export function AffiliateEditor() {
     setIsSaving(true);
     
     try {
+        if (!editingAffiliate) {
+            // This is a new affiliate, check for duplicate ref_code
+            const newDocRef = doc(db, 'affiliates', formData.ref_code);
+            const docSnap = await getDoc(newDocRef);
+            if (docSnap.exists()) {
+                toast({
+                    variant: 'destructive',
+                    title: 'Erro de Duplicidade',
+                    description: 'O código de referência (ID) do afiliado já existe. Por favor, escolha outro.',
+                });
+                setIsSaving(false);
+                return;
+            }
+        }
+
         const batch = writeBatch(db);
         
         let docRef;
@@ -384,3 +400,5 @@ function AffiliateDialog({ isOpen, onOpenChange, onSave, affiliate, isSaving, al
       </Dialog>
     );
   }
+
+    
