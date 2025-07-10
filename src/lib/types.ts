@@ -63,16 +63,19 @@ export interface Coupon {
 
 export interface Affiliate {
   id: string;
-  userId?: string; // Link to the user account in Firebase Auth
-  name: string;
+  userId?: string;
   ref_code: string;
+  name: string;
+  email: string;
   pix_key: string;
+  pix_type: 'cpf' | 'email' | 'telefone' | 'chave_aleatoria';
   commission_percent: number;
-  total_earned: number;
   pending_balance: number;
-  available_balance: number; // Saldo disponível para saque
+  available_balance: number;
   paid_balance: number;
+  total_earned: number;
   created_at: Timestamp;
+  updated_at: Timestamp;
 }
 
 export interface UserSubscription {
@@ -122,5 +125,5 @@ export interface Payment {
   failureReason?: string;
   affiliateId?: string | null;
   commission?: number;
-  commissionStatus?: 'pending' | 'paid' | 'cancelled';
+  commissionStatus?: 'pending' | 'released' | 'paid' | 'cancelled';
 }

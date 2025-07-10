@@ -8,11 +8,8 @@ import {
   setDoc,
   deleteDoc,
   serverTimestamp,
-  getDoc,
-  query,
-  where,
-  getDocs,
-  writeBatch
+  writeBatch,
+  Timestamp,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Affiliate, UserData } from '@/lib/types';
@@ -38,10 +35,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '../ui/skeleton';
 import { PlusCircle, Trash2, Edit, Loader2, Link2, Link2Off } from 'lucide-react';
 import { Badge } from '../ui/badge';
-import Link from 'next/link';
 
 export function AffiliateEditor() {
   const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
@@ -91,7 +88,6 @@ export function AffiliateEditor() {
       setLoading(false);
     });
 
-
     return () => {
         unsubAffiliates();
         unsubUsers();
@@ -114,42 +110,43 @@ export function AffiliateEditor() {
     }
   };
 
-  const handleSave = async (formData: Omit<Affiliate, 'id' | 'created_at' | 'total_earned' | 'pending_balance' | 'paid_balance' | 'available_balance'> & { userId?: string }) => {
+  const handleSave = async (formData: Omit<Affiliate, 'id' | 'created_at' | 'updated_at' | 'total_earned' | 'pending_balance' | 'paid_balance' | 'available_balance'>) => {
     if (!db) return;
     setIsSaving(true);
     
     try {
-        let affiliateData: Partial<Affiliate>;
-        let docRef;
-
         const batch = writeBatch(db);
+        
+        let docRef;
+        let dataToSave: Partial<Affiliate>;
 
         if (editingAffiliate) {
-            // Updating existing affiliate
             docRef = doc(db, 'affiliates', editingAffiliate.id);
-            affiliateData = { ...formData };
+            dataToSave = { 
+                ...formData, 
+                updated_at: serverTimestamp() as Timestamp
+            };
+            batch.set(docRef, dataToSave, { merge: true });
         } else {
-            // Creating new affiliate
-            docRef = doc(collection(db, 'affiliates'));
-            affiliateData = {
+            const newDocId = formData.ref_code;
+            docRef = doc(db, 'affiliates', newDocId);
+            dataToSave = {
                 ...formData,
                 total_earned: 0,
                 pending_balance: 0,
                 available_balance: 0,
                 paid_balance: 0,
-                created_at: serverTimestamp() as any,
+                created_at: serverTimestamp() as Timestamp,
+                updated_at: serverTimestamp() as Timestamp,
             };
+            batch.set(docRef, dataToSave);
         }
-        
-        batch.set(docRef, affiliateData, { merge: true });
 
-        // Update user role if userId is provided
         if (formData.userId) {
             const userRef = doc(db, 'users', formData.userId);
             batch.update(userRef, { role: 'affiliate' });
         }
         
-        // If the linked user was changed, revert the old user's role
         if (editingAffiliate?.userId && editingAffiliate.userId !== formData.userId) {
             const oldUserRef = doc(db, 'users', editingAffiliate.userId);
             batch.update(oldUserRef, { role: 'user' });
@@ -191,10 +188,10 @@ export function AffiliateEditor() {
             <TableRow>
               <TableHead>Nome / Email</TableHead>
               <TableHead>Cód. de Referência</TableHead>
+              <TableHead>Chave Pix</TableHead>
               <TableHead>Comissão (%)</TableHead>
               <TableHead>Saldo Pendente</TableHead>
               <TableHead>Saldo Disponível</TableHead>
-              <TableHead>Saldo Pago</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -218,10 +215,15 @@ export function AffiliateEditor() {
                     </div>
                   </TableCell>
                   <TableCell className="font-mono text-xs">{affiliate.ref_code}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col text-xs">
+                        <span className="font-mono">{affiliate.pix_key}</span>
+                        <span className="text-muted-foreground uppercase">{affiliate.pix_type}</span>
+                    </div>
+                  </TableCell>
                   <TableCell>{affiliate.commission_percent}%</TableCell>
-                  <TableCell>R$ {affiliate.pending_balance.toFixed(2)}</TableCell>
-                  <TableCell>R$ {affiliate.available_balance.toFixed(2)}</TableCell>
-                  <TableCell>R$ {affiliate.paid_balance.toFixed(2)}</TableCell>
+                  <TableCell>R$ {affiliate.pending_balance?.toFixed(2) || '0.00'}</TableCell>
+                  <TableCell>R$ {affiliate.available_balance?.toFixed(2) || '0.00'}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(affiliate)}>
                       <Edit className="h-4 w-4" />
@@ -260,7 +262,7 @@ export function AffiliateEditor() {
 interface AffiliateDialogProps {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
-    onSave: (data: Omit<Affiliate, 'id' | 'created_at' | 'total_earned' | 'pending_balance' | 'paid_balance' | 'available_balance'> & { userId?: string }) => void;
+    onSave: (data: Omit<Affiliate, 'id' | 'created_at' | 'updated_at' | 'total_earned' | 'pending_balance' | 'paid_balance' | 'available_balance'>) => void;
     affiliate: Affiliate | null;
     isSaving: boolean;
     allUsers: UserData[];
@@ -268,22 +270,28 @@ interface AffiliateDialogProps {
 
 function AffiliateDialog({ isOpen, onOpenChange, onSave, affiliate, isSaving, allUsers }: AffiliateDialogProps) {
     const [name, setName] = useState('');
+    const [email, setEmail] = useState('');
     const [refCode, setRefCode] = useState('');
     const [pixKey, setPixKey] = useState('');
+    const [pixType, setPixType] = useState<Affiliate['pix_type']>('cpf');
     const [commissionPercent, setCommissionPercent] = useState(30);
     const [userId, setUserId] = useState<string | undefined>(undefined);
   
     useEffect(() => {
       if (affiliate) {
         setName(affiliate.name);
+        setEmail(affiliate.email);
         setRefCode(affiliate.ref_code);
         setPixKey(affiliate.pix_key);
+        setPixType(affiliate.pix_type);
         setCommissionPercent(affiliate.commission_percent);
         setUserId(affiliate.userId);
       } else {
         setName('');
+        setEmail('');
         setRefCode('');
         setPixKey('');
+        setPixType('cpf');
         setCommissionPercent(30);
         setUserId(undefined);
       }
@@ -291,7 +299,7 @@ function AffiliateDialog({ isOpen, onOpenChange, onSave, affiliate, isSaving, al
   
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
-      onSave({ name, ref_code: refCode, pix_key: pixKey, commission_percent: commissionPercent, userId });
+      onSave({ name, email, ref_code: refCode, pix_key: pixKey, pix_type: pixType, commission_percent: commissionPercent, userId });
     };
   
     return (
@@ -304,31 +312,59 @@ function AffiliateDialog({ isOpen, onOpenChange, onSave, affiliate, isSaving, al
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Nome do Afiliado</Label>
-              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nome Completo</Label>
+                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email de Contato</Label>
+                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              </div>
             </div>
              <div className="space-y-2">
                 <Label htmlFor="user-select">Vincular a Usuário (Login)</Label>
-                <select
-                    id="user-select"
+                <Select
                     value={userId || ''}
-                    onChange={(e) => setUserId(e.target.value || undefined)}
-                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    onValueChange={(value) => setUserId(value || undefined)}
                 >
-                    <option value="">Nenhum usuário vinculado</option>
-                    {allUsers.filter(u => u.email).map(user => (
-                        <option key={user.uid} value={user.uid}>{user.email}</option>
-                    ))}
-                </select>
+                    <SelectTrigger id="user-select">
+                        <SelectValue placeholder="Selecione um usuário" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="">Nenhum usuário vinculado</SelectItem>
+                        {allUsers.filter(u => u.email).map(user => (
+                            <SelectItem key={user.uid} value={user.uid}>{user.email}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="ref_code">Código de Referência (no link)</Label>
-              <Input id="ref_code" value={refCode} onChange={(e) => setRefCode(e.target.value)} required />
+              <Label htmlFor="ref_code">Código de Referência (ID do Afiliado)</Label>
+              <Input id="ref_code" value={refCode} onChange={(e) => setRefCode(e.target.value)} required disabled={!!affiliate} />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="pix_key">Chave Pix (para pagamentos)</Label>
-              <Input id="pix_key" value={pixKey} onChange={(e) => setPixKey(e.target.value)} required />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <Label htmlFor="pix_key">Chave Pix</Label>
+                    <Input id="pix_key" value={pixKey} onChange={(e) => setPixKey(e.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="pix_type">Tipo de Chave</Label>
+                     <Select
+                        value={pixType}
+                        onValueChange={(value: Affiliate['pix_type']) => setPixType(value)}
+                    >
+                        <SelectTrigger id="pix_type">
+                            <SelectValue placeholder="Selecione o tipo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="cpf">CPF</SelectItem>
+                            <SelectItem value="email">Email</SelectItem>
+                            <SelectItem value="telefone">Telefone</SelectItem>
+                            <SelectItem value="chave_aleatoria">Chave Aleatória</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="commission">Comissão (%)</Label>
