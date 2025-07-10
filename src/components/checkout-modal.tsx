@@ -325,7 +325,20 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
     if (pixData) {
       return (
         <div className="flex flex-col items-center gap-4">
-          <p className="text-sm text-center text-muted-foreground -mt-2">Aguardando pagamento...</p>
+          <div className="w-full rounded-lg border border-amber-500/50 bg-amber-950/50 p-4 text-center">
+              <p className="text-sm font-semibold text-amber-300">
+                  APÓS PAGAR, RECARREGUE A PÁGINA PARA SEU PLANO ATIVAR.
+              </p>
+              <p className="text-xs text-amber-400 mt-2">
+                  Se não ativar em 2 minutos, nos envie o comprovante no suporte.
+              </p>
+              <Button asChild variant="link" className="mt-2 text-white h-auto p-0 text-xs">
+                  <a href="https://wa.me/5545984325338" target="_blank" rel="noopener noreferrer">
+                      <FaWhatsapp className="mr-1" />
+                      Acessar Suporte
+                  </a>
+              </Button>
+          </div>
           <div className="rounded-md border-2 border-primary bg-white p-2">
             <QRCodeSVG
               value={pixData.qrcode_text}
@@ -344,21 +357,6 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
             <ClipboardCopy className="mr-2 h-4 w-4" />
             Copiar Código PIX
           </Button>
-          <p className="text-xs text-center text-muted-foreground">
-            Após o pagamento, o acesso será liberado automaticamente em alguns instantes.
-          </p>
-
-           <div className="mt-4 w-full rounded-lg border border-amber-500/50 bg-amber-950/50 p-4 text-center">
-              <p className="text-sm text-amber-300">
-                  CASO SUA COMPRA NÃO SEJA ATIVADA AUTOMATICAMENTE, BASTA NOS ENVIAR MENSAGEM NO WHATSAPP, COM O EMAIL DA SUA CONTA E O COMPROVANTE DO PAGAMENTO
-              </p>
-              <Button asChild variant="link" className="mt-3 text-white">
-                  <a href="https://wa.me/5545984325338" target="_blank" rel="noopener noreferrer">
-                      <FaWhatsapp className="mr-2" />
-                      Enviar Mensagem
-                  </a>
-              </Button>
-          </div>
         </div>
       );
     }
