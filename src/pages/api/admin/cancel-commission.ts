@@ -133,7 +133,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     // Send the notification after the transaction is complete
-    await notifyCommissionCancellation(n8pPayload);
+    await notifyCommissionCancellation(n8nPayload);
 
     res.status(200).json({ success: true, message: 'Commission cancelled successfully.' });
 
