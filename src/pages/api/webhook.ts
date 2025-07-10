@@ -1,7 +1,7 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import * as admin from 'firebase-admin';
-import type { Plan, Product } from '@/lib/types';
+import type { Plan, Product, Affiliate } from '@/lib/types';
 import { Timestamp } from 'firebase-admin/firestore';
 import { initializeAdminApp } from '@/lib/firebase-admin';
 
@@ -125,17 +125,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (status === 'paid') {
       let commission = 0;
-      let affiliateData: any = null;
+      let affiliateData: Affiliate | null = null;
+      let affiliateRef: admin.firestore.DocumentReference | null = null;
 
       if (affiliateId) {
-        const affiliateRef = db.collection('affiliates').doc(affiliateId);
-        const affiliateDoc = await affiliateRef.get();
-        if (affiliateDoc.exists) {
-            affiliateData = affiliateDoc.data()!;
+        const affiliatesQuery = db.collection('affiliates').where('ref_code', '==', affiliateId).limit(1);
+        const affiliateSnapshot = await affiliatesQuery.get();
+
+        if (!affiliateSnapshot.empty) {
+            const affiliateDoc = affiliateSnapshot.docs[0];
+            affiliateRef = affiliateDoc.ref;
+            affiliateData = affiliateDoc.data() as Affiliate;
             const commissionPercent = affiliateData.commission_percent || 0;
             commission = (totalPrice * commissionPercent) / 100;
         } else {
-            console.warn(`[webhook.ts] Affiliate with ID ${affiliateId} not found, but was on the payment. Commission will be 0.`);
+            console.warn(`[webhook.ts] Affiliate with ref_code ${affiliateId} not found, but was on the payment. Commission will be 0.`);
         }
       }
 
@@ -190,9 +194,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             pushinpayEndToEndId: params.get('end_to_end_id'),
         };
 
-        if (affiliateId) {
-          updatePayload.commission = commission;
-          updatePayload.commissionStatus = 'pending';
+        if (affiliateRef && commission > 0) {
+            updatePayload.commission = commission;
+            updatePayload.commissionStatus = 'pending';
+            
+            // Update affiliate's balances
+            transaction.update(affiliateRef, {
+                pending_balance: admin.firestore.FieldValue.increment(commission),
+                total_earned: admin.firestore.FieldValue.increment(commission)
+            });
+            console.log(`[webhook.ts] Credited R$${commission.toFixed(2)} to affiliate ${affiliateId}.`);
         }
 
         transaction.update(paymentRef, updatePayload);
@@ -234,7 +245,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             }
 
             const paymentData = freshPaymentDoc.data()!;
-            const { userId, planIds, affiliateId } = paymentData;
+            const { userId, planIds, affiliateId, commission } = paymentData;
 
             const userRef = db.collection('users').doc(userId);
             const userDoc = await transaction.get(userRef);
@@ -272,7 +283,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             };
 
             if (affiliateId) {
-              updatePayload.commissionStatus = 'cancelled';
+                updatePayload.commissionStatus = 'cancelled';
+                
+                // If a commission was already credited, we need to reverse it.
+                if (paymentData.commissionStatus === 'pending' && commission > 0) {
+                    const affiliatesQuery = db.collection('affiliates').where('ref_code', '==', affiliateId).limit(1);
+                    const affiliateSnapshot = await affiliatesQuery.get();
+                    if (!affiliateSnapshot.empty) {
+                        const affiliateRef = affiliateSnapshot.docs[0].ref;
+                        transaction.update(affiliateRef, {
+                            pending_balance: admin.firestore.FieldValue.increment(-commission),
+                            total_earned: admin.firestore.FieldValue.increment(-commission)
+                        });
+                        console.log(`[webhook.ts] Reversed commission of R$${commission.toFixed(2)} from affiliate ${affiliateId}.`);
+                    }
+                }
             }
 
             transaction.update(paymentRef, updatePayload);
