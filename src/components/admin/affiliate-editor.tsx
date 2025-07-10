@@ -11,6 +11,8 @@ import {
   writeBatch,
   Timestamp,
   getDoc,
+  updateDoc,
+  FieldValue,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Affiliate, UserData } from '@/lib/types';
@@ -38,14 +40,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '../ui/skeleton';
-import { PlusCircle, Trash2, Edit, Loader2, Link2, Link2Off } from 'lucide-react';
+import { PlusCircle, Trash2, Edit, Loader2, Link2, Link2Off, Coins } from 'lucide-react';
 import { Badge } from '../ui/badge';
 
 export function AffiliateEditor() {
   const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
+  const [isAdvanceBalanceDialogOpen, setIsAdvanceBalanceDialogOpen] = useState(false);
   const [editingAffiliate, setEditingAffiliate] = useState<Affiliate | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
@@ -95,9 +98,14 @@ export function AffiliateEditor() {
     }
   }, [user, authLoading, toast]);
 
-  const handleOpenDialog = (affiliate: Affiliate | null = null) => {
+  const handleOpenFormDialog = (affiliate: Affiliate | null = null) => {
     setEditingAffiliate(affiliate);
-    setIsDialogOpen(true);
+    setIsFormDialogOpen(true);
+  };
+  
+  const handleOpenAdvanceBalanceDialog = (affiliate: Affiliate) => {
+    setEditingAffiliate(affiliate);
+    setIsAdvanceBalanceDialogOpen(true);
   };
 
   const handleDelete = async (affiliateId: string) => {
@@ -122,9 +130,6 @@ export function AffiliateEditor() {
 
         const isNewAffiliate = !docSnap.exists();
 
-        // This is the CRITICAL check. If we are trying to create a NEW affiliate
-        // but an affiliate with that ID already exists, and we are NOT in edit mode,
-        // it means we are trying to create a duplicate.
         if (docSnap.exists() && !editingAffiliate) {
              toast({
                 variant: 'destructive',
@@ -140,7 +145,6 @@ export function AffiliateEditor() {
         let dataToSave: Partial<Affiliate>;
 
         if (isNewAffiliate) {
-            // It's a brand new affiliate, set everything including initial balances
             dataToSave = {
                 ...formData,
                 total_earned: 0,
@@ -152,8 +156,6 @@ export function AffiliateEditor() {
             };
             batch.set(docRef, dataToSave);
         } else {
-            // It's an existing affiliate. Only update the form data and timestamp.
-            // Balances are preserved by using { merge: true }.
             dataToSave = { 
                 ...formData, 
                 updated_at: serverTimestamp() as Timestamp
@@ -174,7 +176,7 @@ export function AffiliateEditor() {
         await batch.commit();
 
         toast({ title: "Sucesso!", description: `Afiliado ${formData.name} salvo.` });
-        setIsDialogOpen(false);
+        setIsFormDialogOpen(false);
         setEditingAffiliate(null);
     } catch (error: any) {
         console.error("Error saving affiliate:", error);
@@ -183,6 +185,37 @@ export function AffiliateEditor() {
         setIsSaving(false);
     }
   };
+
+    const handleAdvanceBalance = async (affiliate: Affiliate, amount: number) => {
+        if (!db) return;
+        setIsSaving(true);
+        if (amount <= 0 || amount > affiliate.pending_balance) {
+            toast({
+                variant: 'destructive',
+                title: 'Valor Inválido',
+                description: 'O valor a adiantar deve ser maior que zero e menor ou igual ao saldo pendente.',
+            });
+            setIsSaving(false);
+            return;
+        }
+
+        try {
+            const affiliateRef = doc(db, 'affiliates', affiliate.id);
+            await updateDoc(affiliateRef, {
+                pending_balance: (affiliate.pending_balance - amount),
+                available_balance: (affiliate.available_balance + amount),
+            });
+            toast({ title: 'Sucesso!', description: `R$ ${amount.toFixed(2)} adiantados para ${affiliate.name}.` });
+            setIsAdvanceBalanceDialogOpen(false);
+            setEditingAffiliate(null);
+        } catch (error: any) {
+            console.error('Error advancing balance:', error);
+            toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível adiantar o saldo.' });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
 
   const getUserForAffiliate = (affiliate: Affiliate): UserData | undefined => {
       return users.find(u => u.uid === affiliate.userId);
@@ -195,7 +228,7 @@ export function AffiliateEditor() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button onClick={() => handleOpenDialog()}>
+        <Button onClick={() => handleOpenFormDialog()}>
           <PlusCircle className="mr-2" />
           Adicionar Afiliado
         </Button>
@@ -244,7 +277,10 @@ export function AffiliateEditor() {
                   <TableCell>R$ {affiliate.pending_balance?.toFixed(2) || '0.00'}</TableCell>
                   <TableCell>R$ {affiliate.available_balance?.toFixed(2) || '0.00'}</TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(affiliate)}>
+                    <Button variant="ghost" size="icon" onClick={() => handleOpenAdvanceBalanceDialog(affiliate)} title="Adiantar Saldo">
+                      <Coins className="h-4 w-4 text-primary" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleOpenFormDialog(affiliate)}>
                       <Edit className="h-4 w-4" />
                     </Button>
                     <Button variant="ghost" size="icon" onClick={() => handleDelete(affiliate.id)}>
@@ -265,20 +301,30 @@ export function AffiliateEditor() {
         </Table>
       </div>
 
-      <AffiliateDialog
-        isOpen={isDialogOpen}
-        onOpenChange={setIsDialogOpen}
+      <AffiliateFormDialog
+        isOpen={isFormDialogOpen}
+        onOpenChange={setIsFormDialogOpen}
         onSave={handleSave}
         affiliate={editingAffiliate}
         isSaving={isSaving}
         allUsers={users}
       />
+      
+      {editingAffiliate && (
+        <AdvanceBalanceDialog
+            isOpen={isAdvanceBalanceDialogOpen}
+            onOpenChange={setIsAdvanceBalanceDialogOpen}
+            onConfirm={handleAdvanceBalance}
+            affiliate={editingAffiliate}
+            isSaving={isSaving}
+        />
+      )}
     </div>
   );
 }
 
 
-interface AffiliateDialogProps {
+interface AffiliateFormDialogProps {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (data: Omit<Affiliate, 'id' | 'created_at' | 'updated_at' | 'total_earned' | 'pending_balance' | 'paid_balance' | 'available_balance'>) => void;
@@ -287,7 +333,7 @@ interface AffiliateDialogProps {
     allUsers: UserData[];
 }
 
-function AffiliateDialog({ isOpen, onOpenChange, onSave, affiliate, isSaving, allUsers }: AffiliateDialogProps) {
+function AffiliateFormDialog({ isOpen, onOpenChange, onSave, affiliate, isSaving, allUsers }: AffiliateFormDialogProps) {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [refCode, setRefCode] = useState('');
@@ -402,4 +448,71 @@ function AffiliateDialog({ isOpen, onOpenChange, onSave, affiliate, isSaving, al
         </DialogContent>
       </Dialog>
     );
-  }
+}
+
+interface AdvanceBalanceDialogProps {
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    onConfirm: (affiliate: Affiliate, amount: number) => void;
+    affiliate: Affiliate;
+    isSaving: boolean;
+}
+
+function AdvanceBalanceDialog({ isOpen, onOpenChange, onConfirm, affiliate, isSaving }: AdvanceBalanceDialogProps) {
+    const [amount, setAmount] = useState<number | string>('');
+
+    useEffect(() => {
+        if (!isOpen) {
+            setAmount('');
+        }
+    }, [isOpen]);
+
+    const handleConfirm = (e: React.FormEvent) => {
+        e.preventDefault();
+        onConfirm(affiliate, Number(amount));
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Adiantar Saldo para {affiliate.name}</DialogTitle>
+                    <DialogDescription>
+                        Mova fundos do saldo pendente para o saldo disponível para saque.
+                    </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleConfirm} className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label>Saldo Pendente Atual</Label>
+                        <Input
+                            value={`R$ ${affiliate.pending_balance.toFixed(2)}`}
+                            disabled
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="amount-to-advance">Valor a Adiantar (R$)</Label>
+                        <Input
+                            id="amount-to-advance"
+                            type="number"
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                            placeholder="Ex: 50.00"
+                            required
+                            max={affiliate.pending_balance}
+                            step="0.01"
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
+                            Cancelar
+                        </Button>
+                        <Button type="submit" disabled={isSaving || !amount || Number(amount) <= 0}>
+                            {isSaving ? <Loader2 className="mr-2 animate-spin" /> : null}
+                            Confirmar Adiantamento
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}

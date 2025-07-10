@@ -78,6 +78,17 @@ export interface Affiliate {
   updated_at: Timestamp;
 }
 
+export interface WithdrawRequest {
+    id: string;
+    ref_code: string;
+    amount: number;
+    status: 'requested' | 'paid' | 'rejected';
+    requested_at: Timestamp;
+    paid_at: Timestamp | null;
+    pix_key: string;
+    pix_type: Affiliate['pix_type'];
+}
+
 export interface UserSubscription {
   status: 'active' | 'expired' | 'none';
   planId: string | null;
