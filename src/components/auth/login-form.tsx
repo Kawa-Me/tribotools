@@ -47,22 +47,12 @@ export function LoginForm() {
     setLoading(true);
     try {
       const userCredential = await signInWithEmailAndPassword(auth, values.email, values.password);
-      const user = userCredential.user;
-
-      const userDocRef = doc(db, 'users', user.uid);
-      const userDoc = await getDoc(userDocRef);
       
-      const isAdmin = userDoc.exists() && userDoc.data()?.role === 'admin';
+      // O redirecionamento principal é tratado pelo layout do dashboard e do admin.
+      // O layout verificará se o email está verificado e se o usuário é admin.
+      router.push('/dashboard'); 
 
-      if (isAdmin) {
-        // Admin user, redirect to 2FA verification page
-        router.push('/verify-2fa');
-      } else {
-        // Regular user, redirect to dashboard
-        router.push('/dashboard');
-      }
-
-      toast({ title: 'Sucesso!', description: 'Login realizado com sucesso. Verificando acesso...' });
+      toast({ title: 'Sucesso!', description: 'Login realizado. Redirecionando...' });
     } catch (error: any) {
       console.error("Login error:", error);
       let description = 'Ocorreu um erro. Tente novamente mais tarde.';

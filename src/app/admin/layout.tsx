@@ -15,12 +15,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     if (loading) return;
 
-    if (!user || user.role !== 'admin') {
+    // Se o usuário não existe, não é admin, ou não tem o email verificado, redireciona para fora.
+    if (!user || user.role !== 'admin' || !user.emailVerified) {
       router.replace('/dashboard');
     }
   }, [user, loading, router]);
 
-  if (loading || !user || user.role !== 'admin') {
+  // Enquanto carrega ou se o usuário não for um admin verificado, mostra um loader.
+  if (loading || !user || user.role !== 'admin' || !user.emailVerified) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader className="h-10 w-10 text-primary" />
