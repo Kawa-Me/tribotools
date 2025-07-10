@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -55,11 +56,12 @@ export default function AffiliateDashboardPage() {
   };
 
   const handleWithdrawalRequest = async () => {
-    if (!affiliate || !db || affiliate.available_balance <= 0) {
+    const minWithdrawalAmount = 25;
+    if (!affiliate || !db || affiliate.available_balance < minWithdrawalAmount) {
         toast({
             variant: 'destructive',
             title: 'Saldo Insuficiente',
-            description: `Você não possui saldo disponível para sacar.`,
+            description: `Você precisa de pelo menos R$ ${minWithdrawalAmount.toFixed(2)} para solicitar um saque.`,
         });
         return;
     }
@@ -131,6 +133,8 @@ export default function AffiliateDashboardPage() {
       </Card>
     );
   }
+
+  const minWithdrawalAmount = 25;
 
   return (
     <div className="space-y-8">
@@ -225,9 +229,12 @@ export default function AffiliateDashboardPage() {
                     <div className="text-xs text-muted-foreground text-center">
                         Chave PIX cadastrada: <span className="font-mono">{affiliate.pix_key}</span> ({affiliate.pix_type})
                     </div>
+                    <div className="text-xs text-muted-foreground text-center">
+                        (Valor mínimo para saque: R$ {minWithdrawalAmount.toFixed(2)})
+                    </div>
                     <Button 
                         onClick={handleWithdrawalRequest} 
-                        disabled={isRequestingWithdrawal || affiliate.available_balance <= 0}
+                        disabled={isRequestingWithdrawal || affiliate.available_balance < minWithdrawalAmount}
                         className="w-full"
                         size="lg"
                     >
