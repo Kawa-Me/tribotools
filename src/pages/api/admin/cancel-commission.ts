@@ -61,6 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const paymentRef = db.collection('payments').doc(paymentId);
+    let n8nPayload: any = {};
     
     await db.runTransaction(async (transaction) => {
         const paymentDoc = await transaction.get(paymentRef);
@@ -89,6 +90,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const affiliateRef = affiliateDoc.ref;
         const affiliateData = affiliateDoc.data() as Affiliate;
         const commissionAmount = payment.commission || 0;
+        let balanceRevertedSuccessfully = false;
 
         if (commissionAmount > 0) {
              if (affiliateData.pending_balance >= commissionAmount) {
@@ -96,8 +98,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     pending_balance: admin.firestore.FieldValue.increment(-commissionAmount),
                     total_earned: admin.firestore.FieldValue.increment(-commissionAmount),
                 });
+                balanceRevertedSuccessfully = true;
             } else {
-                console.warn(`Cannot reverse R$${commissionAmount} from pending balance of R$${affiliateData.pending_balance} for affiliate ${payment.affiliateId}. Balance might be insufficient.`);
+                console.warn(`[cancel-commission] Cannot reverse R$${commissionAmount} from pending balance of R$${affiliateData.pending_balance} for affiliate ${payment.affiliateId}. Balance is insufficient.`);
+                balanceRevertedSuccessfully = false;
             }
         }
         
@@ -105,9 +109,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             commissionStatus: 'cancelled',
             processedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-
-        // Outside transaction, prepare and send webhook
-        const n8nPayload = {
+        
+        n8nPayload = {
             affiliate: {
               ref_code: affiliateData.ref_code,
               name: affiliateData.name,
@@ -124,10 +127,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               gatewayTransactionId: payment.pushinpayTransactionId,
               commissionAmount: commissionAmount,
               cancellationDate: new Date().toISOString(),
+              balance_reverted_successfully: balanceRevertedSuccessfully,
             }
         };
-        await notifyCommissionCancellation(n8nPayload);
     });
+
+    // Send the notification after the transaction is complete
+    await notifyCommissionCancellation(n8pPayload);
 
     res.status(200).json({ success: true, message: 'Commission cancelled successfully.' });
 
