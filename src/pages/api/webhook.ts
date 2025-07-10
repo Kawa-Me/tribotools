@@ -35,12 +35,12 @@ async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore): Promis
 
 // Helper to notify your automation system (n8n).
 async function notifyAutomationSystem(payload: any) {
-    const productionWebhookUrl = process.env.N8N_WEBHOOK_URL;
-    const testWebhookUrl = process.env.N8N_TEST_WEBHOOK_URL;
+    const productionWebhookUrl = process.env.N8N_WEBHOOK_PURCHASE_APPROVED_URL;
+    const testWebhookUrl = process.env.N8N_TEST_WEBHOOK_PURCHASE_APPROVED_URL;
 
     // A helper function to send the webhook to avoid code duplication
     const sendWebhook = async (url: string, type: 'Production' | 'Test') => {
-        console.log(`[webhook.ts] Attempting to send ${type} notification to n8n...`);
+        console.log(`[webhook.ts] Attempting to send ${type} purchase notification to n8n...`);
         console.log(`[webhook.ts] n8n ${type} Payload:`, JSON.stringify(payload, null, 2));
 
         try {
@@ -51,14 +51,14 @@ async function notifyAutomationSystem(payload: any) {
             });
 
             if (response.ok) {
-                console.log(`[webhook.ts] Successfully sent ${type} notification. Status: ${response.status}`);
+                console.log(`[webhook.ts] Successfully sent ${type} purchase notification. Status: ${response.status}`);
             } else {
                 const responseBody = await response.text();
-                console.error(`[webhook.ts] Failed to send ${type} notification. Status: ${response.status}`);
+                console.error(`[webhook.ts] Failed to send ${type} purchase notification. Status: ${response.status}`);
                 console.error(`[webhook.ts] n8n ${type} Response Body:`, responseBody);
             }
         } catch (error) {
-            console.error(`[webhook.ts] CRITICAL: Exception caught while sending ${type} notification:`, error);
+            console.error(`[webhook.ts] CRITICAL: Exception caught while sending ${type} purchase notification:`, error);
         }
     };
 
@@ -66,7 +66,7 @@ async function notifyAutomationSystem(payload: any) {
     if (productionWebhookUrl) {
         await sendWebhook(productionWebhookUrl, 'Production');
     } else {
-        console.warn('[webhook.ts] N8N_WEBHOOK_URL is not configured. Skipping production notification.');
+        console.warn('[webhook.ts] N8N_WEBHOOK_PURCHASE_APPROVED_URL is not configured. Skipping production notification.');
     }
     
     // Send test webhook if configured
@@ -308,10 +308,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
 
         console.log(`[webhook.ts] Successfully processed reversal for ${paymentRef.id}.`);
-        await notifyAutomationSystem({
-            type: 'payment_reversed', status, userId, userEmail, userName, userPhone, planIds,
-            transactionId: normalizedGatewayId,
-        });
+        // We are NOT sending a notification for reversals via this webhook.
+        // Reversals are handled manually by the admin, which has its own notification flow.
     }
 
     return res.status(200).json({ success: true });

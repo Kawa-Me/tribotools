@@ -39,6 +39,34 @@ interface CommissionData extends Payment {
   affiliateEmail?: string;
 }
 
+// Helper to notify your automation system (n8n) for commission cancellations.
+async function notifyCommissionCancellation(payload: any) {
+    const prodWebhookUrl = process.env.NEXT_PUBLIC_N8N_WEBHOOK_COMMISSION_CANCELLED_URL;
+    const testWebhookUrl = process.env.NEXT_PUBLIC_N8N_TEST_WEBHOOK_COMMISSION_CANCELLED_URL;
+
+    const sendWebhook = async (url: string, type: 'Production' | 'Test') => {
+        console.log(`[CommissionManager] Attempting to send ${type} cancellation notification...`);
+        console.log(`[CommissionManager] ${type} Payload:`, JSON.stringify(payload, null, 2));
+        try {
+            await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+        } catch(e) {
+            console.error(`[CommissionManager] Failed to send ${type} cancellation notification to n8n:`, e);
+        }
+    };
+
+    if (prodWebhookUrl) {
+        await sendWebhook(prodWebhookUrl, 'Production');
+    }
+    if (testWebhookUrl) {
+        await sendWebhook(testWebhookUrl, 'Test');
+    }
+}
+
+
 export function CommissionManager() {
   const [commissions, setCommissions] = useState<CommissionData[]>([]);
   const [affiliates, setAffiliates] = useState<Map<string, Affiliate>>(new Map());
@@ -147,34 +175,26 @@ export function CommissionManager() {
         
         await batch.commit();
 
-        const n8nWebhookUrl = 'https://n8nwebhook.juliaramos.store/webhook/d66f26f4-1c4b-4716-8475-ea17494dbddd';
-        
-        try {
-            await fetch(n8nWebhookUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    affiliate: {
-                      ref_code: affiliateData.ref_code,
-                      name: affiliateData.name,
-                      email: affiliateData.email,
-                    },
-                    buyer: {
-                      name: payment.userName,
-                      email: payment.userEmail,
-                      phone: payment.userPhone,
-                    },
-                    transaction: {
-                      localPaymentId: payment.id,
-                      gatewayTransactionId: payment.pushinpayTransactionId,
-                      commissionAmount: commissionAmount,
-                      cancellationDate: new Date().toISOString(),
-                    }
-                }),
-            });
-        } catch(e) {
-            console.error("Failed to send cancellation notification to n8n:", e);
-        }
+        const n8nPayload = {
+            affiliate: {
+              ref_code: affiliateData.ref_code,
+              name: affiliateData.name,
+              email: affiliateData.email,
+            },
+            buyer: {
+              name: payment.userName,
+              email: payment.userEmail,
+              phone: payment.userPhone,
+            },
+            transaction: {
+              localPaymentId: payment.id,
+              gatewayTransactionId: payment.pushinpayTransactionId,
+              commissionAmount: commissionAmount,
+              cancellationDate: new Date().toISOString(),
+            }
+        };
+
+        await notifyCommissionCancellation(n8nPayload);
 
         toast({ title: 'Sucesso!', description: 'Comissão cancelada e saldo do afiliado revertido.' });
     } catch (error) {
