@@ -46,7 +46,7 @@ export function UserTable({ users }: UserTableProps) {
     setIsDialogOpen(true);
   };
 
-  const handleSaveChanges = async (newSubscriptions: { [key: string]: UserSubscription }) => {
+  const handleSaveChanges = async (updatedUser: Pick<UserData, 'subscriptions' | 'phone'>) => {
     if (!selectedUser || !db) {
         toast({
             variant: 'destructive',
@@ -57,7 +57,7 @@ export function UserTable({ users }: UserTableProps) {
     }
 
     // Replace client-side placeholder Timestamps with server-side ones before saving
-    const subscriptionsToSave = { ...newSubscriptions };
+    const subscriptionsToSave = { ...updatedUser.subscriptions };
     for (const key in subscriptionsToSave) {
         if (subscriptionsToSave[key]?.startedAt === null) {
             (subscriptionsToSave[key] as any).startedAt = serverTimestamp();
@@ -69,6 +69,7 @@ export function UserTable({ users }: UserTableProps) {
       const userDocRef = doc(db, 'users', selectedUser.uid);
       await updateDoc(userDocRef, {
         subscriptions: subscriptionsToSave,
+        phone: updatedUser.phone || null,
       });
       toast({
         title: 'Sucesso!',
@@ -177,13 +178,13 @@ interface EditUserDialogProps {
   user: UserData;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (subscriptions: { [key: string]: UserSubscription }) => void;
+  onSave: (data: Pick<UserData, 'subscriptions' | 'phone'>) => void;
   products: Product[];
 }
 
 function EditUserDialog({ user, isOpen, onOpenChange, onSave, products }: EditUserDialogProps) {
-  // Deep copy to avoid mutating the original user object
   const [subscriptions, setSubscriptions] = useState(JSON.parse(JSON.stringify(user.subscriptions || {})));
+  const [phone, setPhone] = useState(user.phone || '');
 
   const handleSubscriptionChange = (
     productId: string,
@@ -199,8 +200,6 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave, products }: EditUs
           if (value === 'none') {
             updatedSub = { status: 'none', planId: null, expiresAt: null, startedAt: null };
           } else if (value === 'active' && !currentProductSub.startedAt) {
-              // Use null as a client-side placeholder for serverTimestamp()
-              // The real serverTimestamp will be set just before saving.
               updatedSub.startedAt = null; 
           }
       }
@@ -219,7 +218,6 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave, products }: EditUs
   };
 
   const handleSubmit = () => {
-    // Convert client-side Timestamps back to a format that can be saved
     const subscriptionsToSave = JSON.parse(JSON.stringify(subscriptions));
     Object.keys(subscriptionsToSave).forEach(key => {
         const sub = subscriptionsToSave[key];
@@ -230,96 +228,112 @@ function EditUserDialog({ user, isOpen, onOpenChange, onSave, products }: EditUs
             sub.expiresAt = new Timestamp(sub.expiresAt.seconds, sub.expiresAt.nanoseconds);
         }
     });
-    onSave(subscriptionsToSave);
+    onSave({ subscriptions: subscriptionsToSave, phone });
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Editar Assinaturas de Usuário</DialogTitle>
+          <DialogTitle>Editar Dados do Usuário</DialogTitle>
           <DialogDescription>
-            Gerencie todas as assinaturas para {user.email || 'este visitante'}.
+            Gerencie o telefone e as assinaturas para {user.email || 'este visitante'}.
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-[60vh] overflow-y-auto space-y-6 py-4 pr-3">
-          {products.map(product => {
-            const sub = subscriptions[product.id] || { status: 'none', planId: null, expiresAt: null, startedAt: null };
-            const availablePlans = product.plans;
-
-            // Convert server Timestamps to client-side friendly format
-            const clientSub = { ...sub };
-            if (clientSub.startedAt && typeof clientSub.startedAt.toDate === 'function') {
-                clientSub.startedAt = { seconds: clientSub.startedAt.seconds, nanoseconds: clientSub.startedAt.nanoseconds };
-            }
-            if (clientSub.expiresAt && typeof clientSub.expiresAt.toDate === 'function') {
-                clientSub.expiresAt = { seconds: clientSub.expiresAt.seconds, nanoseconds: clientSub.expiresAt.nanoseconds };
-            }
-
-            return (
-              <div key={product.id} className="space-y-4 rounded-md border bg-muted/30 p-4">
-                <h4 className="font-semibold text-primary">{product.name}</h4>
-                
+            <div className="space-y-4 rounded-md border bg-muted/30 p-4">
+                <h4 className="font-semibold text-primary">Informações Pessoais</h4>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor={`status-${product.id}`} className="text-right text-xs">Status</Label>
-                  <Select
-                    value={clientSub.status || 'none'}
-                    onValueChange={(value: UserSubscription['status']) => handleSubscriptionChange(product.id, 'status', value)}
-                  >
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Selecione o status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Ativo</SelectItem>
-                      <SelectItem value="expired">Expirado</SelectItem>
-                      <SelectItem value="none">Nenhum</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    <Label htmlFor="phone" className="text-right text-xs">Telefone (2FA)</Label>
+                    <Input
+                        id="phone"
+                        className="col-span-3"
+                        placeholder="+5511999998888"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                    />
                 </div>
+            </div>
 
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor={`plan-${product.id}`} className="text-right text-xs">Plano</Label>
-                  <Select
-                    disabled={clientSub.status === 'none'}
-                    value={clientSub.planId || ''}
-                    onValueChange={(value) => handleSubscriptionChange(product.id, 'planId', value)}
-                  >
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Selecione um plano" />
-                    </SelectTrigger>
-                    <SelectContent>
-                       {availablePlans.map(p => (
-                         <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor={`startedAt-${product.id}`} className="text-right text-xs">Início em</Label>
-                  <Input
-                    id={`startedAt-${product.id}`}
-                    type="text"
-                    className="col-span-3 bg-muted/50"
-                    disabled
-                    value={clientSub.startedAt ? format(new Timestamp(clientSub.startedAt.seconds, clientSub.startedAt.nanoseconds).toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 'Será definido ao salvar'}
-                  />
-                </div>
+            <div className="space-y-4">
+                <h4 className="font-semibold text-primary">Assinaturas</h4>
+                {products.map(product => {
+                    const sub = subscriptions[product.id] || { status: 'none', planId: null, expiresAt: null, startedAt: null };
+                    const availablePlans = product.plans;
 
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor={`expiresAt-${product.id}`} className="text-right text-xs">Expira em</Label>
-                  <Input
-                    id={`expiresAt-${product.id}`}
-                    type="datetime-local"
-                    className="col-span-3"
-                    disabled={clientSub.status === 'none'}
-                    value={clientSub.expiresAt ? format(new Timestamp(clientSub.expiresAt.seconds, clientSub.expiresAt.nanoseconds).toDate(), "yyyy-MM-dd'T'HH:mm") : ''}
-                    onChange={(e) => handleDateChange(product.id, e)}
-                  />
-                </div>
-              </div>
-            );
-          })}
+                    const clientSub = { ...sub };
+                    if (clientSub.startedAt && typeof clientSub.startedAt.toDate === 'function') {
+                        clientSub.startedAt = { seconds: clientSub.startedAt.seconds, nanoseconds: clientSub.startedAt.nanoseconds };
+                    }
+                    if (clientSub.expiresAt && typeof clientSub.expiresAt.toDate === 'function') {
+                        clientSub.expiresAt = { seconds: clientSub.expiresAt.seconds, nanoseconds: clientSub.expiresAt.nanoseconds };
+                    }
+
+                    return (
+                    <div key={product.id} className="space-y-4 rounded-md border bg-muted/30 p-4">
+                        <h4 className="font-semibold">{product.name}</h4>
+                        
+                        <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor={`status-${product.id}`} className="text-right text-xs">Status</Label>
+                        <Select
+                            value={clientSub.status || 'none'}
+                            onValueChange={(value: UserSubscription['status']) => handleSubscriptionChange(product.id, 'status', value)}
+                        >
+                            <SelectTrigger className="col-span-3">
+                            <SelectValue placeholder="Selecione o status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                            <SelectItem value="active">Ativo</SelectItem>
+                            <SelectItem value="expired">Expirado</SelectItem>
+                            <SelectItem value="none">Nenhum</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        </div>
+
+                        <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor={`plan-${product.id}`} className="text-right text-xs">Plano</Label>
+                        <Select
+                            disabled={clientSub.status === 'none'}
+                            value={clientSub.planId || ''}
+                            onValueChange={(value) => handleSubscriptionChange(product.id, 'planId', value)}
+                        >
+                            <SelectTrigger className="col-span-3">
+                            <SelectValue placeholder="Selecione um plano" />
+                            </SelectTrigger>
+                            <SelectContent>
+                            {availablePlans.map(p => (
+                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                            ))}
+                            </SelectContent>
+                        </Select>
+                        </div>
+                        
+                        <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor={`startedAt-${product.id}`} className="text-right text-xs">Início em</Label>
+                        <Input
+                            id={`startedAt-${product.id}`}
+                            type="text"
+                            className="col-span-3 bg-muted/50"
+                            disabled
+                            value={clientSub.startedAt ? format(new Timestamp(clientSub.startedAt.seconds, clientSub.startedAt.nanoseconds).toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 'Será definido ao salvar'}
+                        />
+                        </div>
+
+                        <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor={`expiresAt-${product.id}`} className="text-right text-xs">Expira em</Label>
+                        <Input
+                            id={`expiresAt-${product.id}`}
+                            type="datetime-local"
+                            className="col-span-3"
+                            disabled={clientSub.status === 'none'}
+                            value={clientSub.expiresAt ? format(new Timestamp(clientSub.expiresAt.seconds, clientSub.expiresAt.nanoseconds).toDate(), "yyyy-MM-dd'T'HH:mm") : ''}
+                            onChange={(e) => handleDateChange(product.id, e)}
+                        />
+                        </div>
+                    </div>
+                    );
+                })}
+            </div>
         </div>
         <DialogFooter>
           <Button onClick={handleSubmit}>Salvar Alterações</Button>
