@@ -2,21 +2,24 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/hooks';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Affiliate } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { DollarSign, Banknote, Hourglass, CheckCircle, Handshake, Copy, Rocket, Crown } from 'lucide-react';
+import { DollarSign, Banknote, Hourglass, CheckCircle, Handshake, Copy, Rocket, Crown, Coins } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import Link from 'next/link';
 import { FaWhatsapp } from 'react-icons/fa';
+import { Loader } from '@/components/loader';
+
+const MINIMUM_WITHDRAWAL_AMOUNT = 50;
 
 export default function AffiliateDashboardPage() {
   const { user } = useAuth();
   const [affiliate, setAffiliate] = useState<Affiliate | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRequestingWithdrawal, setIsRequestingWithdrawal] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -51,6 +54,44 @@ export default function AffiliateDashboardPage() {
       title: 'Link Copiado!',
       description: 'Seu link de afiliado foi copiado para a área de transferência.',
     });
+  };
+
+  const handleWithdrawalRequest = async () => {
+    if (!affiliate || !db || affiliate.available_balance < MINIMUM_WITHDRAWAL_AMOUNT) {
+        toast({
+            variant: 'destructive',
+            title: 'Saldo Insuficiente',
+            description: `Você precisa ter pelo menos R$ ${MINIMUM_WITHDRAWAL_AMOUNT.toFixed(2)} disponíveis para sacar.`,
+        });
+        return;
+    }
+
+    setIsRequestingWithdrawal(true);
+    try {
+        await addDoc(collection(db, 'withdraw_requests'), {
+            ref_code: affiliate.ref_code,
+            amount: affiliate.available_balance,
+            status: 'requested',
+            requested_at: serverTimestamp(),
+            paid_at: null,
+            pix_key: affiliate.pix_key,
+            pix_type: affiliate.pix_type,
+        });
+
+        toast({
+            title: 'Solicitação Enviada!',
+            description: 'Sua solicitação de saque foi enviada com sucesso e será processada em breve.',
+        });
+    } catch (error) {
+        console.error("Error requesting withdrawal: ", error);
+        toast({
+            variant: 'destructive',
+            title: 'Erro na Solicitação',
+            description: 'Não foi possível enviar sua solicitação de saque. Tente novamente mais tarde.',
+        });
+    } finally {
+        setIsRequestingWithdrawal(false);
+    }
   };
 
   if (loading) {
@@ -100,68 +141,109 @@ export default function AffiliateDashboardPage() {
         <p className="text-muted-foreground">Acompanhe seus ganhos e seu desempenho.</p>
       </div>
       
-      <Card>
-        <CardHeader>
-            <CardTitle className="text-lg font-headline flex items-center gap-2 text-primary">
-                <Handshake />
-                Seu Link de Afiliado
-            </CardTitle>
-             <CardDescription>
-                Compartilhe este link para registrar vendas e ganhar comissões.
-            </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col sm:flex-row items-center gap-4">
-            <div className="flex-grow w-full p-2 border rounded-md bg-muted text-center sm:text-left font-mono text-sm">
-                {`https://tribotools.site?ref=${affiliate.ref_code}`}
-            </div>
-            <Button onClick={handleCopyLink} className="w-full sm:w-auto">
-                <Copy className="mr-2" />
-                Copiar Link
-            </Button>
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-lg font-headline flex items-center gap-2 text-primary">
+                        <Handshake />
+                        Seu Link de Afiliado
+                    </CardTitle>
+                    <CardDescription>
+                        Compartilhe este link para registrar vendas e ganhar comissões.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col sm:flex-row items-center gap-4">
+                    <div className="flex-grow w-full p-2 border rounded-md bg-muted text-center sm:text-left font-mono text-sm">
+                        {`https://tribotools.site?ref=${affiliate.ref_code}`}
+                    </div>
+                    <Button onClick={handleCopyLink} className="w-full sm:w-auto">
+                        <Copy className="mr-2" />
+                        Copiar Link
+                    </Button>
+                </CardContent>
+            </Card>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ganhos Totais</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">R$ {affiliate.total_earned.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">Todo valor já gerado em comissões.</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Saldo Pendente</CardTitle>
-            <Hourglass className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">R$ {affiliate.pending_balance.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">Aguardando liberação de segurança (D+2).</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Saldo Disponível</CardTitle>
-            <Banknote className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">R$ {affiliate.available_balance.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">Pronto para saque.</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Pago</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">R$ {affiliate.paid_balance.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">Tudo que já foi pago a você.</p>
-          </CardContent>
-        </Card>
+            <div className="grid gap-4 md:grid-cols-2">
+                <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Ganhos Totais</CardTitle>
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">R$ {affiliate.total_earned.toFixed(2)}</div>
+                    <p className="text-xs text-muted-foreground">Todo valor já gerado em comissões.</p>
+                </CardContent>
+                </Card>
+                <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Saldo Pendente</CardTitle>
+                    <Hourglass className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">R$ {affiliate.pending_balance.toFixed(2)}</div>
+                    <p className="text-xs text-muted-foreground">Aguardando liberação de segurança (D+2).</p>
+                </CardContent>
+                </Card>
+                <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Saldo Disponível</CardTitle>
+                    <Banknote className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">R$ {affiliate.available_balance.toFixed(2)}</div>
+                    <p className="text-xs text-muted-foreground">Pronto para saque.</p>
+                </CardContent>
+                </Card>
+                <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Pago</CardTitle>
+                    <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">R$ {affiliate.paid_balance.toFixed(2)}</div>
+                    <p className="text-xs text-muted-foreground">Tudo que já foi pago a você.</p>
+                </CardContent>
+                </Card>
+            </div>
+        </div>
+        
+        <div className="space-y-6">
+            <Card className="bg-card/80 border-primary/20 shadow-lg shadow-primary/10">
+                <CardHeader>
+                    <CardTitle className="font-headline text-xl flex items-center gap-2">
+                        <Coins className="text-primary" />
+                        Solicitar Saque
+                    </CardTitle>
+                    <CardDescription>
+                        Transfira seu saldo disponível para sua chave PIX.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="text-center bg-muted/50 p-4 rounded-md">
+                        <p className="text-sm text-muted-foreground">Saldo Disponível para Saque</p>
+                        <p className="text-3xl font-bold text-primary">R$ {affiliate.available_balance.toFixed(2)}</p>
+                    </div>
+                    <div className="text-xs text-muted-foreground text-center">
+                        Chave PIX cadastrada: <span className="font-mono">{affiliate.pix_key}</span> ({affiliate.pix_type})
+                    </div>
+                    <Button 
+                        onClick={handleWithdrawalRequest} 
+                        disabled={isRequestingWithdrawal || affiliate.available_balance < MINIMUM_WITHDRAWAL_AMOUNT}
+                        className="w-full"
+                        size="lg"
+                    >
+                        {isRequestingWithdrawal ? <Loader className="mr-2" /> : null}
+                        Solicitar Saque
+                    </Button>
+                    {affiliate.available_balance < MINIMUM_WITHDRAWAL_AMOUNT && (
+                        <p className="text-xs text-center text-destructive">
+                           O valor mínimo para saque é de R$ {MINIMUM_WITHDRAWAL_AMOUNT.toFixed(2)}.
+                        </p>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
       </div>
 
       <div className="space-y-4">
@@ -169,7 +251,7 @@ export default function AffiliateDashboardPage() {
         <Card>
             <CardContent className="p-6">
                 <p className="text-center text-muted-foreground">
-                    O histórico detalhado de transações será implementado em breve.
+                    O histórico detalhado de transações e saques será implementado em breve.
                 </p>
             </CardContent>
         </Card>
