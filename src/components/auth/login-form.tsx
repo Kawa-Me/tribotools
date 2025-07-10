@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 
 import { auth, db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -49,37 +49,20 @@ export function LoginForm() {
       const userCredential = await signInWithEmailAndPassword(auth, values.email, values.password);
       const user = userCredential.user;
 
-      // Failsafe: Ensure the primary admin email always has the 'admin' role.
-      const isAdmin = user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+      const userDocRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userDocRef);
+      
+      const isAdmin = userDoc.exists() && userDoc.data()?.role === 'admin';
 
       if (isAdmin) {
-        try {
-            const userDocRef = doc(db, 'users', user.uid);
-            // This will create the document if it doesn't exist, or update it if it does.
-            // The merge: true option is crucial to avoid overwriting other fields like 'subscriptions'.
-            await setDoc(userDocRef, { 
-                email: user.email, 
-                role: 'admin'
-            }, { merge: true });
-            console.log("Admin role successfully verified/set in Firestore.");
-        } catch (firestoreError: any) {
-            console.error("CRITICAL: Failed to set admin role in Firestore.", firestoreError);
-            // This is a non-blocking error for the user, but critical for the admin.
-            toast({
-                variant: 'destructive',
-                title: 'Falha Crítica de Permissão',
-                description: `Não foi possível definir o status de admin. Erro: ${firestoreError.code}`,
-                duration: 9000,
-            });
-        }
+        // Admin user, redirect to 2FA verification page
+        router.push('/verify-2fa');
+      } else {
+        // Regular user, redirect to dashboard
+        router.push('/dashboard');
       }
-      
-      // The redirect logic is now handled by the DashboardLayout,
-      // which will direct the admin to the correct page automatically after login.
-      // We just need to push to the generic dashboard entry point.
-      router.push('/dashboard');
 
-      toast({ title: 'Sucesso!', description: 'Login realizado com sucesso.' });
+      toast({ title: 'Sucesso!', description: 'Login realizado com sucesso. Verificando acesso...' });
     } catch (error: any) {
       console.error("Login error:", error);
       let description = 'Ocorreu um erro. Tente novamente mais tarde.';
