@@ -116,36 +116,31 @@ export function AffiliateEditor() {
     setIsSaving(true);
     
     try {
-        if (!editingAffiliate) {
-            // This is a new affiliate, check for duplicate ref_code
-            const newDocRef = doc(db, 'affiliates', formData.ref_code);
-            const docSnap = await getDoc(newDocRef);
-            if (docSnap.exists()) {
-                toast({
-                    variant: 'destructive',
-                    title: 'Erro de Duplicidade',
-                    description: 'O código de referência (ID) do afiliado já existe. Por favor, escolha outro.',
-                });
-                setIsSaving(false);
-                return;
-            }
+        const docId = formData.ref_code;
+        const docRef = doc(db, 'affiliates', docId);
+        const docSnap = await getDoc(docRef);
+
+        const isNewAffiliate = !docSnap.exists();
+
+        // This is the CRITICAL check. If we are trying to create a NEW affiliate
+        // but an affiliate with that ID already exists, and we are NOT in edit mode,
+        // it means we are trying to create a duplicate.
+        if (docSnap.exists() && !editingAffiliate) {
+             toast({
+                variant: 'destructive',
+                title: 'Erro de Duplicidade',
+                description: 'O código de referência (ID) do afiliado já existe. Por favor, escolha outro.',
+            });
+            setIsSaving(false);
+            return;
         }
 
         const batch = writeBatch(db);
         
-        let docRef;
         let dataToSave: Partial<Affiliate>;
 
-        if (editingAffiliate) {
-            docRef = doc(db, 'affiliates', editingAffiliate.id);
-            dataToSave = { 
-                ...formData, 
-                updated_at: serverTimestamp() as Timestamp
-            };
-            batch.set(docRef, dataToSave, { merge: true });
-        } else {
-            const newDocId = formData.ref_code;
-            docRef = doc(db, 'affiliates', newDocId);
+        if (isNewAffiliate) {
+            // It's a brand new affiliate, set everything including initial balances
             dataToSave = {
                 ...formData,
                 total_earned: 0,
@@ -156,6 +151,14 @@ export function AffiliateEditor() {
                 updated_at: serverTimestamp() as Timestamp,
             };
             batch.set(docRef, dataToSave);
+        } else {
+            // It's an existing affiliate. Only update the form data and timestamp.
+            // Balances are preserved by using { merge: true }.
+            dataToSave = { 
+                ...formData, 
+                updated_at: serverTimestamp() as Timestamp
+            };
+            batch.set(docRef, dataToSave, { merge: true });
         }
 
         if (formData.userId) {
@@ -400,5 +403,3 @@ function AffiliateDialog({ isOpen, onOpenChange, onSave, affiliate, isSaving, al
       </Dialog>
     );
   }
-
-    
