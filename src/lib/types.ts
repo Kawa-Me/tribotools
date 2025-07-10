@@ -61,6 +61,18 @@ export interface Coupon {
   isActive: boolean;
 }
 
+export interface Affiliate {
+  id: string;
+  name: string;
+  ref_code: string;
+  pix_key: string;
+  commission_percent: number;
+  total_earned: number;
+  pending_balance: number;
+  paid_balance: number;
+  created_at: Timestamp;
+}
+
 export interface UserSubscription {
   status: 'active' | 'expired' | 'none';
   planId: string | null;
