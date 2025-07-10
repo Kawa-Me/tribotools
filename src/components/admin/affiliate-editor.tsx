@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
   collection,
   onSnapshot,
@@ -39,7 +40,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '../ui/skeleton';
-import { PlusCircle, Trash2, Edit, Loader2, Link2, Link2Off, Coins } from 'lucide-react';
+import { PlusCircle, Trash2, Edit, Loader2, Link2, Link2Off, Coins, Search } from 'lucide-react';
 import { Badge } from '../ui/badge';
 
 export function AffiliateEditor() {
@@ -50,6 +51,7 @@ export function AffiliateEditor() {
   const [isAdvanceBalanceDialogOpen, setIsAdvanceBalanceDialogOpen] = useState(false);
   const [editingAffiliate, setEditingAffiliate] = useState<Affiliate | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
 
@@ -128,8 +130,9 @@ export function AffiliateEditor() {
         const docSnap = await getDoc(docRef);
 
         const isNewAffiliate = !docSnap.exists();
+        const isCreating = !editingAffiliate;
 
-        if (docSnap.exists() && !editingAffiliate) {
+        if (isCreating && !isNewAffiliate) {
              toast({
                 variant: 'destructive',
                 title: 'Erro de Duplicidade',
@@ -215,10 +218,20 @@ export function AffiliateEditor() {
         }
     };
 
-
   const getUserForAffiliate = (affiliate: Affiliate): UserData | undefined => {
       return users.find(u => u.uid === affiliate.userId);
   }
+
+  const filteredAffiliates = useMemo(() => {
+    const lowercasedFilter = searchTerm.toLowerCase();
+    if (!lowercasedFilter) return affiliates;
+    return affiliates.filter(a => 
+      a.name.toLowerCase().includes(lowercasedFilter) ||
+      a.email.toLowerCase().includes(lowercasedFilter) ||
+      a.ref_code.toLowerCase().includes(lowercasedFilter) ||
+      a.pix_key.toLowerCase().includes(lowercasedFilter)
+    );
+  }, [searchTerm, affiliates]);
 
   if (loading || authLoading) {
     return <Skeleton className="h-48 w-full" />;
@@ -231,6 +244,16 @@ export function AffiliateEditor() {
           <PlusCircle className="mr-2" />
           Adicionar Afiliado
         </Button>
+      </div>
+
+       <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+        <Input 
+          placeholder="Buscar por nome, email, cód. ou chave pix..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="max-w-lg pl-10"
+        />
       </div>
 
       <div className="rounded-md border">
@@ -247,7 +270,7 @@ export function AffiliateEditor() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {affiliates.map((affiliate) => {
+            {filteredAffiliates.map((affiliate) => {
               const linkedUser = getUserForAffiliate(affiliate);
               return (
                 <TableRow key={affiliate.id}>
@@ -289,10 +312,10 @@ export function AffiliateEditor() {
                 </TableRow>
               )
             })}
-             {affiliates.length === 0 && (
+             {filteredAffiliates.length === 0 && (
                 <TableRow>
                     <TableCell colSpan={7} className="text-center text-muted-foreground">
-                        Nenhum afiliado encontrado.
+                        Nenhum afiliado encontrado com o termo "{searchTerm}".
                     </TableCell>
                 </TableRow>
             )}

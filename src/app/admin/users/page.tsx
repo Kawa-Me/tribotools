@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { collection, onSnapshot, query } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import type { UserData } from '@/lib/types';
@@ -11,14 +11,16 @@ import { useAuth } from '@/lib/hooks';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader } from '@/components/loader';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Input } from '@/components/ui/input';
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCleaning, setIsCleaning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
@@ -107,6 +109,12 @@ export default function AdminUsersPage() {
     }
   };
 
+  const filteredUsers = useMemo(() => {
+    const lowercasedFilter = searchTerm.toLowerCase();
+    if (!lowercasedFilter) return users;
+    return users.filter(u => u.email?.toLowerCase().includes(lowercasedFilter));
+  }, [searchTerm, users]);
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
@@ -120,6 +128,16 @@ export default function AdminUsersPage() {
             {isCleaning ? <Loader className="mr-2" /> : <Trash2 className="mr-2" />}
             {isCleaning ? 'Limpando...' : 'Limpar Anônimos'}
         </Button>
+      </div>
+
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+        <Input 
+          placeholder="Buscar por email do usuário..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="max-w-lg pl-10"
+        />
       </div>
       
       {loading && (
@@ -141,7 +159,7 @@ export default function AdminUsersPage() {
         </Card>
       )}
 
-      {!loading && !error && <UserTable users={users} />}
+      {!loading && !error && <UserTable users={filteredUsers} />}
     </div>
   );
 }
