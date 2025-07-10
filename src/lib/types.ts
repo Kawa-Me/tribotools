@@ -106,7 +106,7 @@ export interface Payment {
   pushinpayTransactionId?: string;
   pushinpayEndToEndId?: string;
   failureReason?: string;
-  affiliateId?: string | null; // Affiliate who brought the sale
-  commission?: number; // Commission amount for the affiliate
+  affiliateId?: string | null;
+  commission?: number;
   commissionStatus?: 'pending' | 'paid' | 'cancelled';
 }

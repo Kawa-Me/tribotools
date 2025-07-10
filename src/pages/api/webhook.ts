@@ -118,12 +118,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     const paymentDoc = querySnapshot.docs[0];
     const paymentRef = paymentDoc.ref;
-    const { userId, planIds, userName, userEmail, userPhone } = paymentDoc.data()!;
+    const { userId, planIds, userName, userEmail, userPhone, affiliateId, totalPrice } = paymentDoc.data()!;
     
     // Fetch all plans once before entering the transaction
     const allPlans = await getPlansFromFirestoreAdmin(db);
 
     if (status === 'paid') {
+      let commission = 0;
+      let affiliateData: any = null;
+
+      if (affiliateId) {
+        const affiliateRef = db.collection('affiliates').doc(affiliateId);
+        const affiliateDoc = await affiliateRef.get();
+        if (affiliateDoc.exists) {
+            affiliateData = affiliateDoc.data()!;
+            const commissionPercent = affiliateData.commission_percent || 0;
+            commission = (totalPrice * commissionPercent) / 100;
+        } else {
+            console.warn(`[webhook.ts] Affiliate with ID ${affiliateId} not found, but was on the payment. Commission will be 0.`);
+        }
+      }
+
       await db.runTransaction(async (transaction) => {
         const freshPaymentDoc = await transaction.get(paymentRef);
         if (!freshPaymentDoc.exists || freshPaymentDoc.data()?.status === 'completed') {
@@ -168,19 +183,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
         
         transaction.update(userRef, { subscriptions: existingSubscriptions });
-        transaction.update(paymentRef, { 
+        
+        const updatePayload: any = { 
             status: 'completed',
             processedAt: admin.firestore.FieldValue.serverTimestamp(),
             pushinpayEndToEndId: params.get('end_to_end_id'),
-        });
+        };
+
+        if (affiliateId) {
+          updatePayload.commission = commission;
+          updatePayload.commissionStatus = 'pending';
+        }
+
+        transaction.update(paymentRef, updatePayload);
       });
 
       console.log(`[webhook.ts] Successfully updated subscriptions for user ${userId}`);
-      await notifyAutomationSystem({
-        type: 'payment_success', userId, userEmail, userName, userPhone, planIds,
+      
+      const notificationPayload = {
+        type: 'payment_success',
+        userId,
+        userEmail,
+        userName,
+        userPhone,
+        planIds,
         selectedPlans: allPlans.filter(p => planIds.includes(p.id)),
         transactionId: normalizedGatewayId,
-      });
+        affiliate: affiliateData ? {
+            id: affiliateId,
+            name: affiliateData.name,
+            pix_key: affiliateData.pix_key,
+        } : null,
+        commission
+      };
+      await notifyAutomationSystem(notificationPayload);
 
     } else {
         // --- DEFAULT FAILURE/REVERSAL LOGIC ---
@@ -198,7 +234,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             }
 
             const paymentData = freshPaymentDoc.data()!;
-            const { userId, planIds } = paymentData;
+            const { userId, planIds, affiliateId } = paymentData;
 
             const userRef = db.collection('users').doc(userId);
             const userDoc = await transaction.get(userRef);
@@ -227,13 +263,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             } else {
                 console.error(`[webhook.ts] User ${userId} not found for reversal. Payment will be marked as failed, but subscription cannot be revoked.`);
             }
-
-            transaction.update(paymentRef, {
+            
+            const updatePayload: any = {
                 status: 'failed',
                 failureReason: `Pagamento revertido via webhook (status: ${status})`,
                 processedAt: admin.firestore.FieldValue.serverTimestamp(),
                 pushinpayEndToEndId: params.get('end_to_end_id'),
-            });
+            };
+
+            if (affiliateId) {
+              updatePayload.commissionStatus = 'cancelled';
+            }
+
+            transaction.update(paymentRef, updatePayload);
         });
 
         console.log(`[webhook.ts] Successfully processed reversal for ${paymentRef.id}.`);
