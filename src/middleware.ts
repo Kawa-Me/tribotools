@@ -6,14 +6,13 @@ export function middleware(request: NextRequest) {
   const refCode = request.nextUrl.searchParams.get('ref');
 
   // 2. If it doesn't exist, we don't need to do anything.
-  // We just let the request proceed as normal.
-  const response = NextResponse.next();
+  // We just let the request proceed as normal by returning.
   if (!refCode) {
-    return response;
+    return NextResponse.next();
   }
 
-  // 3. If 'ref' exists, set a cookie with the affiliate's code.
-  // This cookie will be sent with all subsequent requests from this user.
+  // 3. If 'ref' exists, create a response to set the cookie.
+  const response = NextResponse.next();
   response.cookies.set({
     name: 'affiliate_ref',
     value: refCode,
