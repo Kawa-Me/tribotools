@@ -43,7 +43,6 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
       return { error: 'Dados de formulário inválidos.', details: validation.error.format() };
     }
     
-    // Read affiliate cookie from the server-side request headers
     const cookieStore = cookies();
     const affiliateId = cookieStore.get('affiliate_ref')?.value || null;
     if (affiliateId) {
@@ -74,24 +73,35 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
     let appliedCoupon: Coupon | null = null;
     
     if (couponCode) {
-      const couponRef = db.collection('coupons').doc(couponCode);
+      const couponRef = db.collection('coupons').doc(couponCode.toUpperCase());
       const couponDoc = await couponRef.get();
       
       if (couponDoc.exists) {
         const coupon = { id: couponDoc.id, ...couponDoc.data() } as Coupon;
         const now = admin.firestore.Timestamp.now();
 
-        if (coupon.isActive && now >= coupon.startDate && now <= coupon.endDate) {
-          appliedCoupon = coupon;
-           const applicablePlans = selectedPlans.filter(plan => 
-            !coupon.applicableProductIds || coupon.applicableProductIds.length === 0 || coupon.applicableProductIds.includes(plan.productId)
-          );
-          const eligiblePrice = applicablePlans.reduce((sum, plan) => sum + plan.price, 0);
-          discountAmount = eligiblePrice * (coupon.discountPercentage / 100);
-          finalPrice = basePrice - discountAmount;
-        } else {
-          return { error: 'O cupom fornecido não é mais válido.' };
+        if (!coupon.isActive) {
+          return { error: "Este cupom não está mais ativo." };
         }
+        if (now.toDate() < coupon.startDate.toDate()) {
+          return { error: "Este cupom ainda não é válido." };
+        }
+        if (now.toDate() > coupon.endDate.toDate()) {
+          return { error: "Este cupom já expirou." };
+        }
+        
+        appliedCoupon = coupon;
+        const applicablePlans = selectedPlans.filter(plan => 
+          !coupon.applicableProductIds || coupon.applicableProductIds.length === 0 || coupon.applicableProductIds.includes(plan.productId)
+        );
+
+        if (applicablePlans.length === 0) {
+          return { error: 'Este cupom não se aplica aos itens selecionados.'};
+        }
+
+        const eligiblePrice = applicablePlans.reduce((sum, plan) => sum + plan.price, 0);
+        discountAmount = eligiblePrice * (coupon.discountPercentage / 100);
+        finalPrice = basePrice - discountAmount;
       } else {
         return { error: 'O cupom fornecido não existe.' };
       }
@@ -143,7 +153,7 @@ export async function createPixPayment(input: CreatePixPaymentInput) {
       status: 'pending',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       pushinpayTransactionId: gatewayTransactionId,
-      affiliateId: affiliateId || null, // Add the affiliate ID here
+      affiliateId: affiliateId || null,
     });
     console.log(`[checkout.ts] Created pending payment record ${paymentRef.id} for PushinPay ID ${gatewayTransactionId}`);
 
