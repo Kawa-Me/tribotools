@@ -18,7 +18,7 @@ export interface Lesson {
   accessEmail?: string;
   accessPassword?: string;
   cookies?: LessonCookie[];
-  isActive?: boolean;
+  status?: 'active' | 'maintenance' | 'coming_soon';
   hasCredentials?: boolean;
   hasCookies?: boolean;
 }

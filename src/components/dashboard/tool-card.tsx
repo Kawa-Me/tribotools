@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { Check, Lock, Wrench } from 'lucide-react';
+import { Check, Lock, Wrench, Rocket } from 'lucide-react';
 import type { Lesson } from '@/lib/types';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -16,16 +16,46 @@ interface ToolCardProps {
 
 export function ToolCard({ lesson, moduleId, isLocked }: ToolCardProps) {
   const isUnlocked = !isLocked;
-  // If isActive is undefined (for older data), default to true.
-  const isToolActive = lesson.isActive ?? true;
-  const canAccess = isUnlocked && isToolActive;
+  // If status is undefined (for older data), default to 'active'.
+  const toolStatus = lesson.status ?? 'active';
+  const canAccess = isUnlocked && toolStatus === 'active';
+
+  const renderBadge = () => {
+    if (!isUnlocked) return null;
+
+    switch (toolStatus) {
+      case 'active':
+        return (
+          <Badge variant="outline" className="mt-2 border-primary/50 bg-primary/10 text-primary">
+            <Check className="mr-1 h-3 w-3" />
+            ON
+          </Badge>
+        );
+      case 'maintenance':
+        return (
+          <Badge variant="destructive" className="mt-2">
+            <Wrench className="mr-1 h-3 w-3" />
+            MANUTENÇÃO
+          </Badge>
+        );
+      case 'coming_soon':
+        return (
+          <Badge variant="secondary" className="mt-2 border-purple-500/50 bg-purple-500/10 text-purple-400">
+            <Rocket className="mr-1 h-3 w-3" />
+            EM BREVE
+          </Badge>
+        );
+      default:
+        return null;
+    }
+  };
 
   const cardContent = (
     <Card
       className={cn(
         'group relative flex w-full flex-col overflow-hidden rounded-md border-2 bg-card/60 transition-all duration-300',
         canAccess ? 'border-transparent hover:border-primary hover:shadow-lg hover:shadow-primary/20' : 'border-transparent',
-        isUnlocked && !isToolActive && 'opacity-60 cursor-not-allowed'
+        isUnlocked && toolStatus !== 'active' && 'opacity-60 cursor-not-allowed'
       )}
     >
       <div className="relative w-full aspect-[4/5]">
@@ -45,19 +75,7 @@ export function ToolCard({ lesson, moduleId, isLocked }: ToolCardProps) {
 
       <div className="flex flex-col items-center justify-center p-4 text-center">
         <h3 className="font-bold text-foreground">{lesson.title}</h3>
-        {isUnlocked && (
-           isToolActive ? (
-            <Badge variant="outline" className="mt-2 border-primary/50 bg-primary/10 text-primary">
-              <Check className="mr-1 h-3 w-3" />
-              ON
-            </Badge>
-          ) : (
-            <Badge variant="destructive" className="mt-2">
-              <Wrench className="mr-1 h-3 w-3" />
-              MANUTENÇÃO
-            </Badge>
-          )
-        )}
+        {renderBadge()}
       </div>
     </Card>
   );

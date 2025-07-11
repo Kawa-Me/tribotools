@@ -199,6 +199,9 @@ export function ModuleEditor() {
               ...mod,
               lessons: mod.lessons.map(lesson => {
                 const cleanedLesson = { ...lesson };
+                
+                // Remove isActive which is now deprecated in favor of status
+                delete (cleanedLesson as any).isActive;
 
                 // Clean up data based on switches
                 if (!cleanedLesson.hasCredentials) {
@@ -212,6 +215,7 @@ export function ModuleEditor() {
                 // Ensure other fields are not undefined
                 return {
                     ...cleanedLesson,
+                    status: cleanedLesson.status || 'active',
                     imageUrl: cleanedLesson.imageUrl || '',
                     accessUrl: cleanedLesson.accessUrl || '',
                     buttonText: cleanedLesson.buttonText || '',
@@ -280,7 +284,7 @@ export function ModuleEditor() {
                   accessEmail: '',
                   accessPassword: '',
                   cookies: [],
-                  isActive: true,
+                  status: 'active',
                   hasCredentials: false,
                   hasCookies: false,
                 },
@@ -511,13 +515,18 @@ export function ModuleEditor() {
                            <Input value={lesson.title} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'title', e.target.value)} placeholder="Título da aula" />
                             <Input value={lesson.imageUrl || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'imageUrl', e.target.value)} placeholder="URL da Imagem da Capa" />
                             
-                            <div className="flex items-center space-x-2 pt-2 border-t mt-4">
-                              <Switch
-                                id={`isActive-${lesson.id}`}
-                                checked={lesson.isActive ?? true}
-                                onCheckedChange={(checked) => handleLessonChange(mod.id, lesson.id, 'isActive', checked)}
-                              />
-                              <Label htmlFor={`isActive-${lesson.id}`}>Ferramenta Ativa</Label>
+                            <div className="space-y-1">
+                                <Label>Status da Ferramenta</Label>
+                                <Select value={lesson.status || 'active'} onValueChange={(value) => handleLessonChange(mod.id, lesson.id, 'status', value as 'active' | 'maintenance' | 'coming_soon')}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecione o status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="active">Ativo</SelectItem>
+                                        <SelectItem value="maintenance">Em Manutenção</SelectItem>
+                                        <SelectItem value="coming_soon">Em Breve</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
 
                             <div className="space-y-1">
