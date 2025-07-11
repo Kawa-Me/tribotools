@@ -140,37 +140,29 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
     try {
         const docSnap = await getDoc(couponRef);
         if (!docSnap.exists()) {
-            setCouponError("Cupom inválido ou não encontrado.");
-            setCouponLoading(false);
-            return;
+            throw new Error("Cupom inválido ou não encontrado.");
         }
 
-        const couponData = docSnap.data();
-        const coupon = { id: docSnap.id, ...couponData } as Coupon;
-
-        // Convert Firestore Timestamps to JS Dates for comparison
+        const coupon = { id: docSnap.id, ...docSnap.data() } as Coupon;
         const now = new Date();
-        const startDate = (coupon.startDate as Timestamp).toDate();
-        const endDate = (coupon.endDate as Timestamp).toDate();
+        const startDate = coupon.startDate.toDate();
+        const endDate = coupon.endDate.toDate();
 
         if (!coupon.isActive) {
-            setCouponError("Este cupom não está mais ativo.");
-            setCouponLoading(false);
-            return;
+            throw new Error("Este cupom não está mais ativo.");
         }
         if (now < startDate) {
-            setCouponError("Este cupom ainda não é válido.");
-            setCouponLoading(false);
-            return;
+            throw new Error("Este cupom ainda não é válido.");
         }
         if (now > endDate) {
-            setCouponError("Este cupom já expirou.");
-            setCouponLoading(false);
-            return;
+            throw new Error("Este cupom já expirou.");
         }
 
         const selectedPlanIdsInForm = form.getValues('plans') || [];
-        if (coupon.applicableProductIds && coupon.applicableProductIds.length > 0 && selectedPlanIdsInForm.length > 0) {
+        if (coupon.applicableProductIds && coupon.applicableProductIds.length > 0) {
+             if (selectedPlanIdsInForm.length === 0) {
+                throw new Error("Selecione um plano antes de aplicar o cupom.");
+            }
             const isCouponApplicableToAnyCartItem = allPlans
                 .filter(plan => selectedPlanIdsInForm.includes(plan.id))
                 .some(cartPlan => coupon.applicableProductIds.includes(cartPlan.productId));
@@ -180,9 +172,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
                     .filter(p => coupon.applicableProductIds.includes(p.id))
                     .map(p => `"${p.name}"`)
                     .join(' ou ');
-                setCouponError(`Este cupom é válido apenas para: ${applicableProductNames}.`);
-                setCouponLoading(false);
-                return;
+                throw new Error(`Este cupom é válido apenas para: ${applicableProductNames}.`);
             }
         }
 
@@ -190,9 +180,9 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
         form.setValue('couponCode', coupon.id);
         toast({ title: 'Sucesso!', description: 'Cupom aplicado!' });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Coupon validation error:", error);
-        setCouponError("Ocorreu um erro ao validar o cupom.");
+        setCouponError(error.message || "Ocorreu um erro ao validar o cupom.");
     } finally {
         setCouponLoading(false);
     }
