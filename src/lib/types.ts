@@ -21,6 +21,8 @@ export interface Lesson {
   status?: 'active' | 'maintenance' | 'coming_soon';
   hasCredentials?: boolean;
   hasCookies?: boolean;
+  hasInstructionalVideo?: boolean;
+  instructionalVideoUrl?: string;
 }
 
 export interface Module {

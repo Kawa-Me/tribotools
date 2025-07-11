@@ -211,6 +211,9 @@ export function ModuleEditor() {
                 if (!cleanedLesson.hasCookies) {
                     cleanedLesson.cookies = [];
                 }
+                if (!cleanedLesson.hasInstructionalVideo) {
+                    cleanedLesson.instructionalVideoUrl = '';
+                }
                 
                 // Ensure other fields are not undefined
                 return {
@@ -287,6 +290,8 @@ export function ModuleEditor() {
                   status: 'active',
                   hasCredentials: false,
                   hasCookies: false,
+                  hasInstructionalVideo: false,
+                  instructionalVideoUrl: '',
                 },
               ],
             }
@@ -552,6 +557,25 @@ export function ModuleEditor() {
                                         <Input value={lesson.accessUrl || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'accessUrl', e.target.value)} placeholder="URL de Acesso / Link de Download" />
                                         <Input value={lesson.buttonText || ''} onChange={(e) => handleLessonChange(mod.id, lesson.id, 'buttonText', e.target.value)} placeholder="Texto do Botão (ex: Baixar Arquivo)" />
                                     </div>
+
+                                    <div className="flex items-center space-x-2 pt-2 border-t">
+                                      <Switch
+                                        id={`hasInstructionalVideo-${lesson.id}`}
+                                        checked={lesson.hasInstructionalVideo ?? false}
+                                        onCheckedChange={(checked) => handleLessonChange(mod.id, lesson.id, 'hasInstructionalVideo', checked)}
+                                      />
+                                      <Label htmlFor={`hasInstructionalVideo-${lesson.id}`}>Ativar Vídeo de Instruções</Label>
+                                    </div>
+
+                                    {lesson.hasInstructionalVideo && (
+                                      <div className="space-y-2">
+                                          <Textarea
+                                            value={lesson.instructionalVideoUrl || ''}
+                                            onChange={(e) => handleLessonChange(mod.id, lesson.id, 'instructionalVideoUrl', e.target.value)}
+                                            placeholder="URL de embed do vídeo de instruções (ex: https://www.youtube.com/embed/...)"
+                                          />
+                                      </div>
+                                    )}
                                     
                                     <div className="flex items-center space-x-2 pt-2 border-t">
                                       <Switch

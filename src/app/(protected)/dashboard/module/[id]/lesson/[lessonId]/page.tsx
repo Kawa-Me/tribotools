@@ -44,6 +44,23 @@ export default function LessonPage({ params: paramsPromise }: { params: Promise<
 
   const moduleTitle = module.title;
 
+  const renderVideo = (videoUrl: string, videoTitle: string) => (
+      <Card className="bg-card/60 backdrop-blur-sm border-border">
+          <CardContent className="p-6">
+              <div className="aspect-video">
+              <iframe
+                  className="w-full h-full rounded-md"
+                  src={videoUrl}
+                  title={videoTitle}
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+              ></iframe>
+              </div>
+          </CardContent>
+      </Card>
+  );
+
   return (
     <div className="space-y-6">
       <header>
@@ -58,23 +75,16 @@ export default function LessonPage({ params: paramsPromise }: { params: Promise<
         </p>
       </header>
       
-      {lesson.type === 'video' ? (
-        <Card className="bg-card/60 backdrop-blur-sm border-border">
-            <CardContent className="p-6">
-                <div className="aspect-video">
-                <iframe
-                    className="w-full h-full rounded-md"
-                    src={lesson.content}
-                    title={lesson.title}
-                    frameBorder="0"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                ></iframe>
-                </div>
-            </CardContent>
-        </Card>
-      ) : (
+      {lesson.type === 'video' ? renderVideo(lesson.content, lesson.title) : (
         <div className="space-y-6">
+            
+            {lesson.hasInstructionalVideo && lesson.instructionalVideoUrl && (
+              <>
+                <h3 className="font-headline text-lg text-primary">Vídeo de Instruções</h3>
+                {renderVideo(lesson.instructionalVideoUrl, `Instruções para ${lesson.title}`)}
+              </>
+            )}
+
             <Card className="bg-card/60 backdrop-blur-sm border-border">
                 <CardContent className="p-6 space-y-4">
                     {lesson.accessUrl && (
