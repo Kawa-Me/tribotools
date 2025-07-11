@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -144,20 +145,25 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
             return;
         }
 
-        const coupon = { id: docSnap.id, ...docSnap.data() } as Coupon;
-        const now = Timestamp.now();
+        const couponData = docSnap.data();
+        const coupon = { id: docSnap.id, ...couponData } as Coupon;
+
+        // Convert Firestore Timestamps to JS Dates for comparison
+        const now = new Date();
+        const startDate = (coupon.startDate as Timestamp).toDate();
+        const endDate = (coupon.endDate as Timestamp).toDate();
 
         if (!coupon.isActive) {
             setCouponError("Este cupom não está mais ativo.");
             setCouponLoading(false);
             return;
         }
-        if (now < coupon.startDate) {
+        if (now < startDate) {
             setCouponError("Este cupom ainda não é válido.");
             setCouponLoading(false);
             return;
         }
-        if (now > coupon.endDate) {
+        if (now > endDate) {
             setCouponError("Este cupom já expirou.");
             setCouponLoading(false);
             return;
@@ -185,6 +191,7 @@ export function CheckoutModal({ children }: { children: React.ReactNode }) {
         toast({ title: 'Sucesso!', description: 'Cupom aplicado!' });
 
     } catch (error) {
+        console.error("Coupon validation error:", error);
         setCouponError("Ocorreu um erro ao validar o cupom.");
     } finally {
         setCouponLoading(false);
