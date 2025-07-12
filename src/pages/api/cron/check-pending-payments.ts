@@ -4,8 +4,33 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import * as admin from 'firebase-admin';
 import { initializeAdminApp } from '@/lib/firebase-admin';
-import type { Plan, Product, Payment } from '@/lib/types';
+import type { Plan, Product, Payment, Affiliate } from '@/lib/types';
 import { Timestamp } from 'firebase-admin/firestore';
+
+// Helper to notify n8n when balance is automatically released
+async function notifyBalanceReleased(payload: any) {
+    const prodWebhookUrl = process.env.N8N_PROD_BALANCE_RELEASED_URL;
+    const testWebhookUrl = process.env.N8N_TEST_BALANCE_RELEASED_URL;
+
+    const sendWebhook = async (url: string, type: 'Production' | 'Test') => {
+        try {
+            await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+        } catch(e) {
+            console.error(`[CRON] Failed to send ${type} balance released notification to n8n:`, e);
+        }
+    };
+
+    if (prodWebhookUrl) {
+        await sendWebhook(prodWebhookUrl, 'Production');
+    }
+    if (testWebhookUrl) {
+        await sendWebhook(testWebhookUrl, 'Test');
+    }
+}
 
 // Helper to fetch plans from Firestore with the Admin SDK
 async function getPlansFromFirestoreAdmin(db: admin.firestore.Firestore): Promise<(Plan & { productId: string, productName: string })[]> {
@@ -66,6 +91,76 @@ async function processSuccessfulPayment(db: admin.firestore.Firestore, paymentRe
     });
 
     console.log(`[CRON] Successfully updated subscriptions for user ${userId} for payment ${paymentRef.id}`);
+}
+
+async function releaseCommissions(db: admin.firestore.Firestore) {
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const commissionsToReleaseQuery = db.collection('payments')
+        .where('commissionStatus', '==', 'pending')
+        .where('createdAt', '<=', Timestamp.fromDate(twoDaysAgo));
+        
+    const snapshot = await commissionsToReleaseQuery.get();
+
+    if (snapshot.empty) {
+        return { releasedCount: 0 };
+    }
+
+    const affiliatesToUpdate: { [key: string]: number } = {};
+    const paymentsToUpdateRefs: admin.firestore.DocumentReference[] = [];
+
+    snapshot.docs.forEach(doc => {
+        const payment = doc.data() as Payment;
+        if (payment.affiliateId && payment.commission && payment.commission > 0) {
+            if (!affiliatesToUpdate[payment.affiliateId]) {
+                affiliatesToUpdate[payment.affiliateId] = 0;
+            }
+            affiliatesToUpdate[payment.affiliateId] += payment.commission;
+            paymentsToUpdateRefs.push(doc.ref);
+        }
+    });
+
+    for (const affiliateId in affiliatesToUpdate) {
+        const amountToRelease = affiliatesToUpdate[affiliateId];
+        const affiliatesQuery = db.collection('affiliates').where('ref_code', '==', affiliateId).limit(1);
+        const affiliateSnapshot = await affiliatesQuery.get();
+        
+        if (!affiliateSnapshot.empty) {
+            const affiliateDoc = affiliateSnapshot.docs[0];
+            const affiliateRef = affiliateDoc.ref;
+            const affiliateData = affiliateDoc.data() as Affiliate;
+
+            await db.runTransaction(async (transaction) => {
+                transaction.update(affiliateRef, {
+                    pending_balance: admin.firestore.FieldValue.increment(-amountToRelease),
+                    available_balance: admin.firestore.FieldValue.increment(amountToRelease),
+                });
+            });
+
+            // Notify n8n for automatic payout
+            await notifyBalanceReleased({
+                affiliate: {
+                    ref_code: affiliateData.ref_code,
+                    name: affiliateData.name,
+                    email: affiliateData.email,
+                    phone: affiliateData.phone || null,
+                    pix_key: affiliateData.pix_key,
+                    pix_type: affiliateData.pix_type,
+                },
+                payout: {
+                    amount: amountToRelease,
+                    released_at: new Date().toISOString(),
+                }
+            });
+        }
+    }
+    
+    const batch = db.batch();
+    paymentsToUpdateRefs.forEach(ref => {
+        batch.update(ref, { commissionStatus: 'released' });
+    });
+    await batch.commit();
+
+    return { releasedCount: paymentsToUpdateRefs.length };
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -145,73 +240,82 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // --- Step 2: Check status of recent pending payments ---
-    if (recentDocsToCheck.length === 0) {
-      return res.status(200).json({ message: 'No recent pending payments to check.', checked: 0, updated: 0, cleaned: cleanedCount });
-    }
-
     let checkedCount = 0;
     let updatedCount = 0;
+    if (recentDocsToCheck.length > 0) {
+        for (const doc of recentDocsToCheck) {
+          checkedCount++;
+          const paymentData = doc.data() as Payment;
+          const pushinpayTransactionId = paymentData.pushinpayTransactionId;
 
-    for (const doc of recentDocsToCheck) {
-      checkedCount++;
-      const paymentData = doc.data() as Payment;
-      const pushinpayTransactionId = paymentData.pushinpayTransactionId;
+          if (!pushinpayTransactionId) {
+            console.warn(`[CRON] Pending payment ${doc.id} is missing a pushinpayTransactionId. Skipping.`);
+            continue;
+          }
 
-      if (!pushinpayTransactionId) {
-        console.warn(`[CRON] Pending payment ${doc.id} is missing a pushinpayTransactionId. Skipping.`);
-        continue;
-      }
+          const response = await fetch(`https://api.pushinpay.com.br/api/transactions/${pushinpayTransactionId}`, {
+            headers: { 'Authorization': `Bearer ${apiToken}`, 'Accept': 'application/json' },
+          });
 
-      const response = await fetch(`https://api.pushinpay.com.br/api/transactions/${pushinpayTransactionId}`, {
-        headers: { 'Authorization': `Bearer ${apiToken}`, 'Accept': 'application/json' },
-      });
+          if (!response.ok) {
+            console.error(`[CRON] Failed to fetch status for transaction ${pushinpayTransactionId}. Status: ${response.status}`);
+            if (response.status === 404) {
+                 await doc.ref.update({
+                    status: 'failed',
+                    failureReason: `Transaction not found on PushinPay (404). Verified via cron job.`,
+                    processedAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+                updatedCount++;
+            }
+            continue;
+          }
 
-      if (!response.ok) {
-        console.error(`[CRON] Failed to fetch status for transaction ${pushinpayTransactionId}. Status: ${response.status}`);
-        if (response.status === 404) {
-             await doc.ref.update({
-                status: 'failed',
-                failureReason: `Transaction not found on PushinPay (404). Verified via cron job.`,
-                processedAt: admin.firestore.FieldValue.serverTimestamp(),
-            });
-            updatedCount++;
+          const transactionDetails = await response.json();
+          const newStatus = transactionDetails.status?.toLowerCase();
+          const expirationDateStr = transactionDetails.pix_details?.expiration_date;
+
+          let isExpired = false;
+          if (expirationDateStr) {
+              const expirationDate = new Date(expirationDateStr.replace(' ', 'T') + 'Z');
+              if (!isNaN(expirationDate.getTime()) && new Date() > expirationDate) {
+                  isExpired = true;
+              }
+          }
+
+          if ((newStatus && newStatus !== 'pending' && newStatus !== 'created') || isExpired) {
+              updatedCount++;
+              if (newStatus === 'paid') {
+                console.log(`[CRON] Transaction ${pushinpayTransactionId} is now 'paid'. Processing...`);
+                await processSuccessfulPayment(db, doc.ref, paymentData);
+              } else {
+                const failureReason = isExpired
+                  ? `Pagamento expirado. Verificado via cron job.`
+                  : `Status atualizado para '${newStatus}' pelo cron job.`;
+                
+                console.log(`[CRON] Transaction ${pushinpayTransactionId} has failed with reason: ${failureReason}. Updating...`);
+                await doc.ref.update({
+                  status: 'failed',
+                  failureReason: failureReason,
+                  processedAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+              }
+          }
         }
-        continue;
-      }
-
-      const transactionDetails = await response.json();
-      const newStatus = transactionDetails.status?.toLowerCase();
-      const expirationDateStr = transactionDetails.pix_details?.expiration_date;
-
-      let isExpired = false;
-      if (expirationDateStr) {
-          const expirationDate = new Date(expirationDateStr.replace(' ', 'T') + 'Z');
-          if (!isNaN(expirationDate.getTime()) && new Date() > expirationDate) {
-              isExpired = true;
-          }
-      }
-
-      if ((newStatus && newStatus !== 'pending' && newStatus !== 'created') || isExpired) {
-          updatedCount++;
-          if (newStatus === 'paid') {
-            console.log(`[CRON] Transaction ${pushinpayTransactionId} is now 'paid'. Processing...`);
-            await processSuccessfulPayment(db, doc.ref, paymentData);
-          } else {
-            const failureReason = isExpired
-              ? `Pagamento expirado. Verificado via cron job.`
-              : `Status atualizado para '${newStatus}' pelo cron job.`;
-            
-            console.log(`[CRON] Transaction ${pushinpayTransactionId} has failed with reason: ${failureReason}. Updating...`);
-            await doc.ref.update({
-              status: 'failed',
-              failureReason: failureReason,
-              processedAt: admin.firestore.FieldValue.serverTimestamp(),
-            });
-          }
-      }
     }
 
-    res.status(200).json({ message: 'Cron job completed successfully.', checked: checkedCount, updated: updatedCount, cleaned: cleanedCount });
+    // --- Step 3: Release commissions older than 2 days ---
+    const { releasedCount } = await releaseCommissions(db);
+    if (releasedCount > 0) {
+      console.log(`[CRON] Released ${releasedCount} commissions.`);
+    }
+
+    res.status(200).json({ 
+        message: 'Cron job completed successfully.', 
+        checked: checkedCount, 
+        updated: updatedCount, 
+        cleaned: cleanedCount,
+        commissionsReleased: releasedCount
+    });
 
   } catch (error: any) {
     console.error('---!!! ERROR in check-pending-payments CRON !!!---', error);

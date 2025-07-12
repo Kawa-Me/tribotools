@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/hooks';
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Affiliate } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +13,30 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { FaWhatsapp } from 'react-icons/fa';
 import { Loader } from '@/components/loader';
+
+async function notifyWithdrawalRequested(payload: any) {
+    const prodWebhookUrl = process.env.NEXT_PUBLIC_N8N_PROD_WITHDRAWAL_REQUEST_URL;
+    const testWebhookUrl = process.env.NEXT_PUBLIC_N8N_TEST_WITHDRAWAL_REQUEST_URL;
+
+    const sendWebhook = async (url: string, type: 'Production' | 'Test') => {
+        try {
+            await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+        } catch(e) {
+            console.error(`[affiliate-dashboard] Failed to send ${type} withdrawal request notification to n8n:`, e);
+        }
+    };
+
+    if (prodWebhookUrl) {
+        await sendWebhook(prodWebhookUrl, 'Production');
+    }
+    if (testWebhookUrl) {
+        await sendWebhook(testWebhookUrl, 'Test');
+    }
+}
 
 export default function AffiliateDashboardPage() {
   const { user } = useAuth();
@@ -68,7 +92,12 @@ export default function AffiliateDashboardPage() {
 
     setIsRequestingWithdrawal(true);
     try {
-        await addDoc(collection(db, 'withdraw_requests'), {
+        const batch = writeBatch(db);
+
+        // 1. Create a document in withdraw_requests
+        const requestRef = doc(collection(db, 'withdraw_requests'));
+        batch.set(requestRef, {
+            id: requestRef.id,
             ref_code: affiliate.ref_code,
             amount: affiliate.available_balance,
             status: 'requested',
@@ -76,6 +105,32 @@ export default function AffiliateDashboardPage() {
             paid_at: null,
             pix_key: affiliate.pix_key,
             pix_type: affiliate.pix_type,
+        });
+
+        // 2. Update affiliate's balance
+        const affiliateRef = doc(db, 'affiliates', affiliate.id);
+        batch.update(affiliateRef, {
+            paid_balance: affiliate.paid_balance + affiliate.available_balance,
+            available_balance: 0,
+        });
+
+        await batch.commit();
+        
+        // 3. Notify n8n via webhook
+        await notifyWithdrawalRequested({
+            affiliate: {
+                ref_code: affiliate.ref_code,
+                name: affiliate.name,
+                email: affiliate.email,
+                phone: affiliate.phone || null,
+                pix_key: affiliate.pix_key,
+                pix_type: affiliate.pix_type,
+            },
+            withdrawal: {
+                requestId: requestRef.id,
+                amount: affiliate.available_balance,
+                requested_at: new Date().toISOString(),
+            }
         });
 
         toast({
