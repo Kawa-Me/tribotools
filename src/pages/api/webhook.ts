@@ -71,6 +71,38 @@ async function notifyPurchaseApproved(payload: any) {
     }
 }
 
+// Helper to notify an affiliate about a new sale.
+async function notifyAffiliateOfSale(payload: any) {
+    const prodWebhookUrl = process.env.N8N_PROD_AFFILIATE_SALE_URL;
+    const testWebhookUrl = process.env.N8N_TEST_AFFILIATE_SALE_URL;
+
+    if (!prodWebhookUrl && !testWebhookUrl) {
+        console.log('[webhook.ts] No affiliate sale webhooks configured. Skipping.');
+        return;
+    }
+
+    const sendWebhook = async (url: string, type: 'Production' | 'Test') => {
+        console.log(`[webhook.ts] Attempting to send ${type} affiliate sale notification...`);
+        console.log(`[webhook.ts] Affiliate Sale ${type} Payload:`, JSON.stringify(payload, null, 2));
+        try {
+            await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+        } catch (e) {
+            console.error(`[webhook.ts] Failed to send ${type} affiliate sale notification to n8n:`, e);
+        }
+    };
+
+    if (prodWebhookUrl) {
+        await sendWebhook(prodWebhookUrl, 'Production');
+    }
+    if (testWebhookUrl) {
+        await sendWebhook(testWebhookUrl, 'Test');
+    }
+}
+
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -226,6 +258,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         commission
       };
       await notifyPurchaseApproved(notificationPayload);
+
+      // Notify affiliate if there was one
+      if (affiliateData) {
+          const affiliateSalePayload = {
+              ...notificationPayload,
+              affiliate: { // Resend a more complete affiliate object for this specific webhook
+                  id: affiliateId,
+                  name: affiliateData.name,
+                  email: affiliateData.email,
+                  phone: affiliateData.phone || null,
+                  pix_key: affiliateData.pix_key,
+              }
+          };
+          await notifyAffiliateOfSale(affiliateSalePayload);
+      }
 
     } else {
         // --- DEFAULT FAILURE/REVERSAL LOGIC ---
